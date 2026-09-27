@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, Inject, Param, ParseIntPipe, Post, Query, Req, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Delete, Get, Inject, Param, ParseIntPipe, Post, Query, Req, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
 import { ApiBearerAuth, ApiConsumes, ApiTags } from "@nestjs/swagger";
 import { FileInterceptor } from "@nestjs/platform-express";
 import { ok } from "../../common/api-response";
@@ -49,6 +49,7 @@ import {
   RandomMenuQuotaModel,
   RandomMenuModel,
   ReplaceRandomMenuSlotModel,
+  RecordDiningMemoryShareStartedModel,
   SharePreviewModel,
   SharePreviewViewerModel,
   UnlockMealCookAssistantResponseModel
@@ -551,6 +552,22 @@ export class MealController {
       .then(result => ok(result));
   }
 
+  @Delete("dining-events/:eventId/wishes/:wishItemId/menu")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(DiningEventModel, "主家把一道我想吃从本次菜单移除")
+  removeDiningEventWishFromMenu(
+    @Req() request: RequestWithUser,
+    @Param("eventId", ParseIntPipe) eventId: number,
+    @Param("wishItemId", ParseIntPipe) wishItemId: number,
+    @ReadIdempotencyKey() operationId: string
+  ) {
+    return this.mealService
+      .removeDiningEventWishFromMenu(request.user.userId, eventId, wishItemId, operationId)
+      .then(result => ok(result));
+  }
+
   @Post("dining-events/:eventId/bring")
   @UseGuards(UserAuthGuard)
   @ApiBearerAuth("UserBearerAuth")
@@ -676,6 +693,20 @@ export class MealController {
         body.caption ?? null
       )
       .then(result => ok(result));
+  }
+
+  @Post("dining-events/:eventId/memory-share-started")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(RecordDiningMemoryShareStartedModel, "记录饭局发起人成功调起回忆分享")
+  recordDiningMemoryShareStarted(
+    @Req() request: RequestWithUser,
+    @Param("eventId", ParseIntPipe) eventId: number,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() _body: CompleteDiningEventDto
+  ) {
+    return this.mealService.recordDiningMemoryShareStarted(request.user.userId, eventId, operationId).then(result => ok(result));
   }
 
   @Get("share/:shareToken/preview")

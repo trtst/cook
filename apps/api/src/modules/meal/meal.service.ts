@@ -46,6 +46,7 @@ import type {
   RandomRecipeSourceType,
   RandomReplaceConstraint,
   RandomSlotPlan,
+  RecordDiningMemoryShareStartedResponse,
   ReplaceRandomMenuCurrentItem,
   ReplaceRandomMenuSlotResponse,
   RecipeAssistantSnapshot,
@@ -536,8 +537,8 @@ function normalizeOptionalText(value?: string | null) {
   return normalized ? normalized : null;
 }
 
-function normalizeEventRecipeIds(recipeIds: UUID[]) {
-  if (!Array.isArray(recipeIds) || recipeIds.length < 1 || recipeIds.length > 3) {
+function normalizeEventRecipeIds(recipeIds: UUID[], minCount = 1) {
+  if (!Array.isArray(recipeIds) || recipeIds.length < minCount || recipeIds.length > 3) {
     throw new BadRequestException("本次最多选择 3 道菜");
   }
   if (recipeIds.some(recipeId => !Number.isInteger(recipeId) || recipeId < 1)) {
@@ -1629,6 +1630,9 @@ export class MealService {
       });
       if (!current || current.userId !== userId) throw new NotFoundException("计划不存在");
       if (current.status === "CANCELLED") throw new ConflictException("已取消计划不能结束");
+      if (current.diningEvent && current.diningEvent.status !== "COMPLETED") {
+        throw new ConflictException("关联饭局需由发起人确认完成用餐");
+      }
 
       const item =
         current.status === "COMPLETED"
@@ -2485,6 +2489,17 @@ export class MealService {
         throw new NotFoundException("这道我想吃不存在");
       }
 
+      if (normalizedAction === "UNSUPPORT" && wishItem.suggestedByUserId === userId) {
+        const menuItem = await tx.diningEventMenuItem.findFirst({
+          where: {
+            diningEventId: eventId,
+            recipeVersionId: wishItem.recipeVersionId
+          },
+          select: { id: true }
+        });
+        if (menuItem) throw new ConflictException("这道菜已加入本次菜单，不能撤回建议");
+      }
+
       const support = await tx.diningEventWishSupport.findUnique({
         where: {
           wishItemId_userId: {
@@ -2628,8 +2643,82 @@ export class MealService {
     });
   }
 
+  async removeDiningEventWishFromMenu(userId: UUID, eventId: UUID, wishItemId: UUID, operationId: OperationId) {
+    const requestHash = `${eventId}:${wishItemId}`;
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getIdempotentResult<DiningEventSummary>(tx, operationId, "dining-event:wish-menu-remove", userId, null, requestHash);
+      if (repeated) return repeated;
+      await startIdempotentOperation(tx, operationId, "dining-event:wish-menu-remove", userId, null, requestHash);
+
+      await tx.$queryRaw`SELECT "id" FROM "dining_events" WHERE "id" = ${eventId} FOR UPDATE`;
+      const event = await tx.diningEvent.findUnique({ where: { id: eventId } });
+      if (!event || event.userId !== userId) throw new NotFoundException("饭局不存在");
+      if (event.status === "CANCELLED" || event.status === "COMPLETED" || event.status === "CONFIRMED") {
+        throw new ConflictException("当前饭局状态不能调整菜单");
+      }
+      if (!event.mealPlanItemId) {
+        throw new ConflictException("当前饭局还没有绑定可编辑餐次");
+      }
+
+      const wishItem = await tx.diningEventWishItem.findUnique({ where: { id: wishItemId } });
+      if (!wishItem || wishItem.diningEventId !== eventId) {
+        throw new NotFoundException("这道我想吃不存在");
+      }
+
+      const plan = await this.getMealPlanOrThrow(tx, event.mealPlanItemId);
+      if (plan.userId !== userId) throw new NotFoundException("计划不存在");
+      if (plan.status === "COMPLETED") {
+        throw new ConflictException("已完成餐次不能修改");
+      }
+      if (plan.menuLockedAt) {
+        throw new ConflictException("菜单已固定，不能再从我想吃池移除");
+      }
+
+      const currentMenus = await this.resolveStoredPlanMenuItems(tx, plan);
+      const removedIndex = currentMenus.findIndex(item => item.menu.recipeVersionId === wishItem.recipeVersionId);
+      if (removedIndex >= 0) {
+        if (currentMenus.length <= 1) {
+          throw new ConflictException("菜单至少保留一道菜");
+        }
+        const nextMenus = currentMenus.filter((_item, index) => index !== removedIndex).map((item, index) => ({
+          ...item,
+          sortOrder: index
+        }));
+        const menuSnapshot = buildMenuSnapshot(nextMenus.map(item => item.menu));
+        const updatedPlan = await tx.mealPlanItem.updateMany({
+          where: { id: plan.id, version: plan.version },
+          data: {
+            menuSnapshot: toJson(menuSnapshot),
+            version: { increment: 1 }
+          }
+        });
+        if (updatedPlan.count !== 1) {
+          throw new ConflictException("计划已被更新，请刷新后重试");
+        }
+        await this.replaceMealPlanDishes(tx, plan.id, nextMenus);
+        await tx.diningEventMenuItem.deleteMany({
+          where: {
+            diningEventId: eventId,
+            recipeVersionId: wishItem.recipeVersionId
+          }
+        });
+        await tx.diningEvent.update({
+          where: { id: eventId },
+          data: {
+            menuSnapshot: toJson(menuSnapshot),
+            version: { increment: 1 }
+          }
+        });
+      }
+
+      const result = await this.getDiningEvent(userId, eventId, tx);
+      await completeIdempotentOperation(tx, operationId, "dining-event:wish-menu-remove", userId, null, requestHash, result);
+      return result;
+    });
+  }
+
   async chooseBringRecipe(userId: UUID, eventId: UUID, recipeIds: UUID[], operationId: OperationId) {
-    const selectedRecipeIds = normalizeEventRecipeIds(recipeIds);
+    const selectedRecipeIds = normalizeEventRecipeIds(recipeIds, 0);
     const requestHash = `${eventId}:${selectedRecipeIds.join(",")}`;
     return this.prisma.$transaction(async tx => {
       const repeated = await getIdempotentResult<DiningEventSummary>(tx, operationId, "dining-event:bring", userId, null, requestHash);
@@ -2678,14 +2767,16 @@ export class MealService {
         }
       });
       await tx.diningEventParticipantBringRecipe.deleteMany({ where: { participantId: participant.id } });
-      await tx.diningEventParticipantBringRecipe.createMany({
-        data: recipes.map((item, index) => ({
-          participantId: participant.id,
-          recipeId: item.recipe.id,
-          recipeVersionId: item.recipeVersion.id,
-          sortOrder: index
-        }))
-      });
+      if (recipes.length) {
+        await tx.diningEventParticipantBringRecipe.createMany({
+          data: recipes.map((item, index) => ({
+            participantId: participant.id,
+            recipeId: item.recipe.id,
+            recipeVersionId: item.recipeVersion.id,
+            sortOrder: index
+          }))
+        });
+      }
 
       if (event.diningGroupId) {
         await this.writeActivity(tx, {
@@ -2694,7 +2785,7 @@ export class MealService {
           state: "DONE",
           actorUserId: userId,
           title: "更新了我带菜",
-          detail: recipes.map(item => item.recipe.title).join("、"),
+          detail: recipes.length ? recipes.map(item => item.recipe.title).join("、") : "清空了带菜安排",
           diningEventId: eventId,
           dedupeKey: `bring-updated:${eventId}:${userId}`
         });
@@ -2894,6 +2985,10 @@ export class MealService {
       this.assertDiningEventPreparationOpen(current, false, true);
       let event: DiningEventRow | null = current;
       if (!current.ingredientsReadyAt) {
+        const preparationItems = await this.pantryService.previewEventGap(userId, eventId);
+        if (preparationItems.some(item => item.preparationStatus === "OPEN")) {
+          throw new ConflictException("请先将所有所需食材标记为已买或家里已有");
+        }
         await tx.diningEvent.update({
           where: { id: current.id },
           data: { ingredientsReadyAt: new Date(), version: { increment: 1 } }
@@ -3075,6 +3170,54 @@ export class MealService {
     }
 
     throw new ConflictException("饭搭子卡已被更新，请重试");
+  }
+
+  async recordDiningMemoryShareStarted(
+    userId: UUID,
+    eventId: UUID,
+    operationId: OperationId
+  ): Promise<RecordDiningMemoryShareStartedResponse> {
+    const requestHash = String(eventId);
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getIdempotentResult<RecordDiningMemoryShareStartedResponse>(
+        tx,
+        operationId,
+        "dining-event:memory-share-started",
+        userId,
+        null,
+        requestHash
+      );
+      if (repeated) return repeated;
+      await startIdempotentOperation(tx, operationId, "dining-event:memory-share-started", userId, null, requestHash);
+      await tx.$queryRaw`SELECT "id" FROM "dining_events" WHERE "id" = ${eventId} FOR UPDATE`;
+      const event = await tx.diningEvent.findUnique({
+        where: { id: eventId },
+        select: {
+          id: true,
+          userId: true,
+          status: true,
+          memoryShareStartedAt: true,
+          memoryShares: { take: 1, select: { id: true } }
+        }
+      });
+      if (!event || event.userId !== userId) throw new NotFoundException("饭局不存在");
+      if (event.status !== "COMPLETED") throw new ConflictException("完成饭局后才能记录回忆分享");
+      if (!event.memoryShares.length) throw new BadRequestException("请先生成活动回忆卡");
+
+      let recorded = false;
+      if (!event.memoryShareStartedAt) {
+        const startedAt = new Date();
+        const updated = await tx.diningEvent.updateMany({
+          where: { id: eventId, userId, status: "COMPLETED", memoryShareStartedAt: null },
+          data: { memoryShareStartedAt: startedAt }
+        });
+        recorded = updated.count === 1;
+        if (recorded) await this.medalService.awardMemoryShareStarted(tx, userId, startedAt);
+      }
+      const result = { recorded };
+      await completeIdempotentOperation(tx, operationId, "dining-event:memory-share-started", userId, null, requestHash, result);
+      return result;
+    });
   }
 
   private async prepareDiningMemoryShare(
