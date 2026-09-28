@@ -308,7 +308,7 @@ function togglePasswordVisible() {
 }
 
 function openAgreement(slug: "terms" | "privacy") {
-  void uniPlatform.navigation.navigateTo(`/pages_web/content/index?slug=${slug}`).catch(() => undefined);
+  void uniPlatform.navigation.navigateTo(`/pages_me/${slug}/index`).catch(() => undefined);
 }
 
 async function ensureAgreementAccepted() {

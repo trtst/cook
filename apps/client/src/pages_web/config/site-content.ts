@@ -2,9 +2,6 @@ import { cfg } from "@/config/env";
 
 export type SiteContentSlug =
   | "membership"
-  | "about"
-  | "privacy"
-  | "terms"
   | "faq"
   | "kitchen-prep"
   | "cooking-skills"
@@ -20,9 +17,6 @@ interface SiteContentMeta {
 
 const siteContentMap: Record<SiteContentSlug, SiteContentMeta> = {
   membership: { title: "权益中心", path: "/membership" },
-  about: { title: "关于炊火记", path: "https://www.trtst.com/about" },
-  privacy: { title: "隐私政策", path: "/privacy" },
-  terms: { title: "用户协议", path: "/terms" },
   faq: { title: "常见问题", path: "/faq" },
   "kitchen-prep": { title: "厨房准备", path: "/guides/kitchen-prep" },
   "cooking-skills": { title: "烹饪技巧", path: "/guides/cooking-skills" },
