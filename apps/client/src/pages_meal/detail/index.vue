@@ -353,7 +353,10 @@
                     }"
                   >
                     <view class="menu-confirm__item-main">
-                      <text class="menu-confirm__item-name">{{ row.item.name }}</text>
+                      <view class="meal-shopping-preview__item-title">
+                        <text class="menu-confirm__item-name">{{ row.item.name }}</text>
+                        <text v-if="row.item.preparationStatus !== 'OPEN'" class="cookfont icon-done meal-shopping-preview__prepared-icon" />
+                      </view>
                       <text class="menu-confirm__item-meta">{{ row.item.quantityText || "未填数量" }}</text>
                     </view>
                     <view
@@ -371,9 +374,6 @@
                       >
                         {{ preparationSubmittingKey === row.item.key ? "处理中" : row.item.preparationStatus === "HOME" ? "撤销" : "我已备好" }}
                       </view>
-                    </view>
-                    <view v-if="row.item.preparationStatus !== 'OPEN'" class="meal-shopping-preview__prepared-mark">
-                      <text class="cookfont icon-done-circle meal-shopping-preview__prepared-icon" />
                     </view>
                   </view>
                   <view
@@ -565,14 +565,36 @@
                   <text class="meal-memory-entry__text">{{ memoryPanelText }}</text>
                 </view>
               </view>
-              <view v-if="showDetailCancelAction" class="meal-panel meal-cancel-panel">
-                <button class="meal-inline-action meal-inline-action--ghost" :disabled="submitting" @click="handleDetailCancelAction">
-                  {{ eventDetail ? "取消饭局" : "取消计划" }}
-                </button>
-              </view>
             </view>
           </view>
         </scroll-view>
+
+        <view v-if="detailDockVisible" class="detail-floating-dock">
+          <view v-if="detailDockOpen" class="detail-floating-dock__backdrop" @click="closeDetailDock" />
+          <view class="detail-manage-dock" :style="detailDockPositionStyle">
+            <view class="detail-manage-dock__actions">
+              <button
+                v-for="(action, index) in detailDockActions"
+                :key="action.key"
+                class="detail-manage-dock__action"
+                :open-type="action.key === 'share-invite' && inviteShareReady && !inviteSharing ? 'share' : ''"
+                :disabled="action.disabled || submitting"
+                :class="{
+                  'detail-manage-dock__action--open': detailDockOpen,
+                  'detail-manage-dock__action--disabled': action.disabled || submitting
+                }"
+                :style="detailDockActionStyle(index)"
+                @click="handleDetailDockAction(action.key)"
+              >
+                <text class="cookfont detail-manage-dock__action-icon" :class="action.iconClass" />
+                <text class="detail-manage-dock__action-label">{{ action.label }}</text>
+              </button>
+            </view>
+            <view class="detail-manage-dock__button" @click="toggleDetailDock">
+              <text class="cookfont icon-manage detail-manage-dock__icon" :class="{ 'detail-manage-dock__icon--open': detailDockOpen }" />
+            </view>
+          </view>
+        </view>
 
         <view v-if="footerVisible" id="meal-footer-panel" class="meal-footer" :class="{ 'meal-footer--focus': focusedSection === 'footer' }">
           <view v-if="showFooterStatus" class="meal-footer__status">
@@ -616,15 +638,14 @@
         <MealFooterActions
           v-else
           meal
-          :quick-action="footerQuickAction"
+          :quick-action="reminderQuickAction"
+          :quick-status="reminderStatusText"
           :secondary-action="footerSecondaryAction"
           :primary-action="footerPrimaryAction"
           :primary-gap-text="footerPrimaryGapText"
           :single-button="footerButtonCount === 1"
           :submitting="submitting"
-          :quick-as-button="footerQuickAction?.key === 'share-invite'"
-          :quick-open-type="inviteShareReady && !inviteSharing ? 'share' : ''"
-          @quick="footerQuickAction && handleFooterAction(footerQuickAction.key)"
+          @quick="handleMealReminderAction"
           @secondary="footerSecondaryAction && handleFooterAction(footerSecondaryAction.key)"
           @primary="footerPrimaryAction && handleFooterAction(footerPrimaryAction.key)"
         />
@@ -888,7 +909,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue";
 import { onHide, onLoad, onShareAppMessage, onShow, onUnload } from "@dcloudio/uni-app";
-import { mealApi, type DiningEventSummary, type MealPlanCookAssistant, type MealPlanSummary } from "../apis/meal";
+import { mealApi, MEAL_REMINDER_TEMPLATE_ID, type DiningEventSummary, type MealPlanCookAssistant, type MealPlanSummary, type MealReminderSummary } from "../apis/meal";
 import { UnauthorizedError, type UUID } from "@/apis/http";
 import emptyStateArt from "@/assets/empty.png";
 import { recipeApi, type MyRecipeSummary } from "@/apis/recipe";
@@ -1012,6 +1033,7 @@ type FooterActionKey =
   | "cook-assistant"
   | "share-memory"
   | "view-memory";
+type DetailDockActionKey = FooterActionKey | "cancel-detail";
 type FooterAction = {
   key: FooterActionKey;
   label: string;
@@ -1047,6 +1069,11 @@ const shoppingWriting = ref(false);
 const planItemId = ref<UUID | "">("");
 const planDate = ref("");
 const eventId = ref<UUID | "">("");
+const detailDockOpen = ref(false);
+const reminderState = ref<MealReminderSummary | null>(null);
+const reminderStateUnavailable = ref(false);
+const reminderLoading = ref(false);
+const reminderSubmitting = ref(false);
 const planDetail = ref<MealPlanSummary | null>(null);
 const eventDetail = ref<DiningEventSummary | null>(null);
 const menuExpanded = ref(false);
@@ -1594,7 +1621,8 @@ const footerCountdownParts = computed(() => {
 const menuDeadlineText = computed(() => (eventDetail.value ? "调整时间" : "设置时间"));
 const showMenuDeadlineAction = computed(() => Boolean(eventDetail.value && canManageParticipants.value && !eventClosed.value));
 const footerVisible = computed(() => {
-  if (!planDetail.value || footerStage.value === "CANCELLED") return false;
+  if (!planDetail.value && !eventDetail.value) return false;
+  if (footerStage.value === "CANCELLED") return false;
   if (footerStage.value === "TIME_UP" && !eventDetail.value) return false;
   return Boolean(
     endedActionsVisible.value ||
@@ -1604,6 +1632,33 @@ const footerVisible = computed(() => {
     footerPrimaryAction.value
   );
 });
+const reminderQuickAction = computed(() => ({
+  label: "微信提醒",
+  iconClass: "icon-notice",
+  disabled: reminderLoading.value || reminderSubmitting.value || Boolean(
+    eventDetail.value
+      ? eventClosed.value || eventDetail.value.status === "CANCELLED" || eventDetail.value.status === "COMPLETED"
+      : planDetail.value?.status !== "PLANNED" || planDetail.value.planDate < formatDateOnly(new Date(nowMs.value))
+  )
+}));
+const reminderStatusText = computed(() => {
+  if (reminderLoading.value) return "读取中";
+  if (reminderStateUnavailable.value) return "暂不可用";
+  if (reminderState.value?.status === "SCHEDULED") return "已预约";
+  if (reminderState.value?.status === "SENT") return "已发送";
+  if (reminderState.value?.status === "FAILED") return "发送失败";
+  return "未预约";
+});
+const detailDockActions = computed(() => {
+  const actions: Array<{ key: DetailDockActionKey; label: string; iconClass?: string; disabled?: boolean }> = [];
+  if (footerQuickAction.value) actions.push({ ...footerQuickAction.value, key: footerQuickAction.value.key });
+  if (showDetailCancelAction.value) {
+    actions.push({ key: "cancel-detail", label: eventDetail.value ? "取消饭局" : "取消计划", iconClass: "icon-close" });
+  }
+  return actions;
+});
+const detailDockVisible = computed(() => detailDockActions.value.length > 0);
+const detailDockPositionStyle = computed(() => ({ bottom: footerVisible.value ? "calc(280rpx + env(safe-area-inset-bottom))" : "calc(40rpx + env(safe-area-inset-bottom))" }));
 const showFooterStatus = computed(() => Boolean(eventDetail.value && footerStage.value !== "TIME_UP"));
 const footerStatusIcon = computed(() => {
   if (eventDetail.value?.scheduledAt && !eventClosed.value) return "icon-time";
@@ -1721,6 +1776,13 @@ function isFooterActionDisabled(action: FooterActionKey) {
   if (submitting.value) return true;
   const currentActions = [footerQuickAction.value, footerSecondaryAction.value, footerPrimaryAction.value, endedMemoryAction.value];
   return currentActions.some(item => item?.key === action && Boolean(item.disabled));
+}
+
+function detailDockActionStyle(index: number) {
+  const total = detailDockActions.value.length;
+  return {
+    transitionDelay: detailDockOpen.value ? `${index * 44}ms` : `${(total - index - 1) * 28}ms`
+  };
 }
 const shareHeadline = computed(() => eventDetail.value?.title?.trim() || detailTitle.value);
 const recipePendingAddCount = computed(() => {
@@ -1966,10 +2028,12 @@ onShow(() => {
 
 onHide(() => {
   stopFooterTimer();
+  closeDetailDock();
 });
 
 onUnload(() => {
   stopFooterTimer();
+  closeDetailDock();
 });
 
 watch(
@@ -2003,6 +2067,7 @@ async function loadDetail() {
         eventId.value = eventDetail.value.id;
         activeSharePath.value = eventDetail.value.shareTokenPath || "";
         showEventEditor.value = false;
+        await loadMealReminderState("event", eventDetail.value.id);
       } catch (error) {
         eventDetail.value = null;
         activeSharePath.value = "";
@@ -2049,6 +2114,7 @@ async function loadDetail() {
       activeSharePath.value = "";
       eventGapItems.value = null;
       gapErrorText.value = "";
+      await loadMealReminderState("plan", nextPlan.id);
       await loadGapPreview();
       await applyEntryFocus();
       return;
@@ -2069,6 +2135,7 @@ async function loadDetail() {
         eventId.value = eventDetail.value.id;
         activeSharePath.value = eventDetail.value.shareTokenPath || "";
         showEventEditor.value = false;
+        await loadMealReminderState("event", nextEvent.id);
       } catch (error) {
         eventDetail.value = null;
         activeSharePath.value = "";
@@ -2095,6 +2162,96 @@ async function showLoadErrorToast(title: string) {
   await uniPlatform.feedback.toast({ title, icon: "none" }).catch(() => undefined);
 }
 
+async function loadMealReminderState(target: "event" | "plan", targetId: UUID) {
+  if (!targetId) return;
+  reminderLoading.value = true;
+  reminderStateUnavailable.value = false;
+  const requestKey = `${target}:${targetId}`;
+  try {
+    const result = target === "event"
+      ? await mealApi.getDiningEventReminder(targetId)
+      : await mealApi.getPlanReminder(targetId);
+    const currentKey = eventDetail.value ? `event:${eventDetail.value.id}` : planDetail.value ? `plan:${planDetail.value.id}` : "";
+    if (currentKey === requestKey) reminderState.value = result;
+  } catch {
+    if (target === "event" && eventDetail.value?.id === targetId) {
+      reminderStateUnavailable.value = true;
+      reminderState.value = null;
+    }
+    if (target === "plan" && !eventDetail.value && planDetail.value?.id === targetId) {
+      reminderStateUnavailable.value = true;
+      reminderState.value = null;
+    }
+  } finally {
+    if ((target === "event" && eventDetail.value?.id === targetId) || (target === "plan" && !eventDetail.value && planDetail.value?.id === targetId)) {
+      reminderLoading.value = false;
+    }
+  }
+}
+
+async function handleMealReminderAction() {
+  if (reminderSubmitting.value || reminderLoading.value) return;
+  if (!sessionStore.isLoggedIn) {
+    openLogin();
+    return;
+  }
+  if (reminderState.value?.status === "SCHEDULED") {
+    await showLoadErrorToast("这条微信提醒已预约");
+    return;
+  }
+  if (reminderState.value?.status === "SENT") {
+    await showLoadErrorToast("这条微信提醒已发送");
+    return;
+  }
+  if (!eventDetail.value && !planDetail.value) return;
+
+  reminderSubmitting.value = true;
+  try {
+    const authorization = await uniPlatform.messaging.requestSubscribeMessage([MEAL_REMINDER_TEMPLATE_ID]);
+    const status = authorization[MEAL_REMINDER_TEMPLATE_ID];
+    if (status !== "accept") {
+      const title = status === "ban" ? "微信已限制该模板订阅，请检查微信设置" : "未开启微信提醒";
+      await showLoadErrorToast(title);
+      return;
+    }
+    const result = eventDetail.value
+      ? await mealApi.subscribeDiningEventReminder(eventDetail.value.id, createOperationId())
+      : await mealApi.subscribePlanReminder(planDetail.value!.id, createOperationId());
+    reminderState.value = result;
+    if (result.status === "SCHEDULED") {
+      await uniPlatform.feedback.toast({ title: "微信提醒已预约", icon: "success" });
+    } else if (result.status === "SENT") {
+      await showLoadErrorToast("这条微信提醒已发送");
+    }
+  } catch (error) {
+    await showLoadErrorToast(error instanceof Error ? error.message : "微信提醒预约失败");
+  } finally {
+    reminderSubmitting.value = false;
+  }
+}
+
+function toggleDetailDock() {
+  if (!sessionStore.isLoggedIn) {
+    openLogin();
+    return;
+  }
+  detailDockOpen.value = !detailDockOpen.value;
+}
+
+function closeDetailDock() {
+  detailDockOpen.value = false;
+}
+
+function handleDetailDockAction(action: DetailDockActionKey) {
+  if (submitting.value) return;
+  closeDetailDock();
+  if (action === "cancel-detail") {
+    void handleDetailCancelAction();
+    return;
+  }
+  void handleFooterAction(action);
+}
+
 function clearPageState() {
   loading.value = false;
   submitting.value = false;
@@ -2111,6 +2268,11 @@ function clearPageState() {
   clearFocusedSection();
   planDetail.value = null;
   eventDetail.value = null;
+  detailDockOpen.value = false;
+  reminderState.value = null;
+  reminderStateUnavailable.value = false;
+  reminderLoading.value = false;
+  reminderSubmitting.value = false;
   cookAssistant.value = null;
   cookAssistantUnlockState.value = "locked";
   cookAssistantLoading.value = false;
@@ -3348,23 +3510,17 @@ async function handleCancelEventAction() {
   if (!eventDetail.value || !canCancelEvent.value || eventClosed.value || submitting.value) return;
   const confirmed = await uniPlatform.feedback.confirm({
     title: "取消饭局",
-    content: "取消后不会进入回忆，原计划和菜单会保留，之后还可以重新发起饭局。确定取消吗？"
+    content: "取消后，这场饭局及对应计划、菜单和未买采购项会删除，分享邀请失效；已买食材和冰箱记录保留。删除后无法恢复，确定取消吗？"
   });
   if (!confirmed) return;
 
   submitting.value = true;
   try {
     await mealApi.cancelDiningEvent(eventDetail.value.id, createOperationId());
-    eventDetail.value = null;
-    eventId.value = "";
-    activeSharePath.value = "";
-    planDetail.value = planDetail.value
-      ? { ...planDetail.value, hasDiningEvent: false, diningEventId: null }
-      : null;
-    eventGapItems.value = null;
-    gapErrorText.value = "";
-    await loadDetail();
-    await uniPlatform.feedback.toast({ title: "饭局已取消，可重新发起", icon: "success" });
+    await uniPlatform.feedback.toast({ title: "饭局及计划已删除", icon: "success" });
+    await uniPlatform.navigation.redirectTo("/pages_meal/event/index").catch(() => {
+      void uniPlatform.navigation.navigateTo("/pages_meal/event/index");
+    });
   } catch (error) {
     await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "取消饭局失败", icon: "none" });
   } finally {
@@ -5399,28 +5555,24 @@ function clearFocusedSection() {
   font-size: 22rpx;
 }
 
-.meal-shopping-preview__prepared-mark {
-  position: absolute;
-  bottom: 6rpx;
-  left: 24rpx;
-  z-index: 1;
+.meal-shopping-preview__item-title {
   display: flex;
   align-items: center;
-  justify-content: center;
-  color: var(--color-text-tertiary);
-  opacity: 0.1;
-  box-sizing: border-box;
+  flex: 1;
+  gap: 8rpx;
+  min-width: 0;
+  color: var(--color-primary);
+}
+
+.meal-shopping-preview__item-title .menu-confirm__item-name {
+  flex: 0 1 auto;
+  min-width: 0;
 }
 
 .meal-shopping-preview__prepared-icon {
+  flex-shrink: 0;
   line-height: 1;
-  font-size: 100rpx;
-  color: var(--color-text-tertiary);
-}
-
-.meal-cancel-panel {
-  display: flex;
-  justify-content: center;
+  font-size: 24rpx;
 }
 
 .meal-shopping-preview__row--extra {
@@ -5495,6 +5647,119 @@ function clearFocusedSection() {
 
 .meal-menu__deadline-action {
   color: var(--color-support-action);
+}
+
+.detail-floating-dock {
+  position: fixed;
+  right: 24rpx;
+  bottom: calc(40rpx + env(safe-area-inset-bottom));
+  z-index: 42;
+}
+
+.detail-floating-dock__backdrop {
+  position: fixed;
+  inset: 0;
+  background: transparent;
+}
+
+.detail-manage-dock {
+  position: fixed;
+  right: 24rpx;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  width: 92rpx;
+  min-height: 92rpx;
+  padding-bottom: 52rpx;
+}
+
+.detail-manage-dock__actions {
+  position: absolute;
+  top: 0;
+  right: calc(100% + 50rpx);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 50rpx;
+  pointer-events: none;
+}
+
+.detail-manage-dock__action {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 92rpx;
+  align-items: center;
+  justify-content: center;
+  width: 92rpx;
+  height: 92rpx;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--button-secondary-bg);
+  box-shadow: var(--material-card-shadow);
+  color: var(--color-text);
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateX(26rpx) scale(0.92);
+  pointer-events: none;
+  -webkit-backdrop-filter: var(--button-secondary-filter);
+  backdrop-filter: var(--button-secondary-filter);
+  transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1), opacity 180ms ease;
+}
+
+.detail-manage-dock__action--open {
+  opacity: 1;
+  transform: translateX(0) scale(1);
+  pointer-events: auto;
+}
+
+.detail-manage-dock__action--disabled {
+  opacity: 0.58;
+}
+
+.detail-manage-dock__action-icon {
+  color: var(--color-icon-active);
+  font-size: 34rpx;
+}
+
+.detail-manage-dock__action-label {
+  position: absolute;
+  top: calc(100% + 14rpx);
+  left: 50%;
+  transform: translateX(-50%);
+  color: var(--color-text);
+  font-size: 24rpx;
+  line-height: 1.3;
+  font-weight: var(--font-weight-semibold);
+  text-align: center;
+  white-space: nowrap;
+}
+
+.detail-manage-dock__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 92rpx;
+  height: 92rpx;
+  border-radius: 50%;
+  background: var(--button-primary-bg);
+  box-shadow: var(--button-primary-shadow);
+}
+
+.detail-manage-dock__icon {
+  color: var(--button-primary-text);
+  font-size: 34rpx;
+  transition: transform 240ms ease;
+}
+
+.detail-manage-dock__icon--open {
+  transform: rotate(90deg);
+}
+
+.detail-manage-dock__action::after {
+  display: none;
 }
 
 .meal-footer {

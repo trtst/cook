@@ -14,7 +14,7 @@
                 <view class="setting-row setting-row--switch">
                   <view class="setting-row__copy">
                     <text class="setting-row__title">餐次提醒</text>
-                    <text class="setting-row__desc">目前仅保存偏好，微信通知尚未接入。</text>
+                    <text class="setting-row__desc">饭局和计划的微信提醒，请在对应详情页预约。</text>
                   </view>
                   <view class="setting-toggle" :class="{ 'setting-toggle--on': settings.meal.enabled }" @click="toggleMeal">
                     <view class="setting-toggle__thumb" />

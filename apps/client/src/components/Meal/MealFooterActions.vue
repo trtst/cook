@@ -5,20 +5,23 @@
         v-if="quickAsButton"
         class="meal-footer__quick meal-footer__quick--button"
         :class="{ 'meal-footer__quick--disabled': quickAction.disabled || submitting }"
+        :disabled="quickAction.disabled || submitting"
         :open-type="quickOpenType"
         @click="emit('quick')"
       >
         <text class="cookfont meal-footer__quick-icon" :class="quickAction.iconClass" />
         <text class="meal-footer__quick-label">{{ quickAction.label }}</text>
+        <text v-if="quickStatus" class="meal-footer__quick-status">{{ quickStatus }}</text>
       </button>
       <view
         v-else
         class="meal-footer__quick"
         :class="{ 'meal-footer__quick--disabled': quickAction.disabled || submitting }"
-        @click="quickBlocked || submitting ? undefined : emit('quick')"
+        @click="quickBlocked || quickAction.disabled || submitting ? undefined : emit('quick')"
       >
         <text class="cookfont meal-footer__quick-icon" :class="quickAction.iconClass" />
         <text class="meal-footer__quick-label">{{ quickAction.label }}</text>
+        <text v-if="quickStatus" class="meal-footer__quick-status">{{ quickStatus }}</text>
       </view>
     </template>
 
@@ -34,7 +37,7 @@
       <button
         v-if="primaryAction"
         class="meal-footer__button meal-footer__button--primary"
-        :class="{ 'meal-footer__button--disabled': primaryAction.disabled || submitting }"
+        :class="{ 'meal-footer__button--disabled': primaryAction.disabled || (primaryVisualDisabled ?? submitting) }"
         :disabled="primaryNativeDisabled"
         @click="emit('primary')"
       >
@@ -48,12 +51,14 @@
 <script setup lang="ts">
 defineProps<{
   quickAction?: { label: string; iconClass?: string; disabled?: boolean } | null;
+  quickStatus?: string;
   secondaryAction?: { label: string; disabled?: boolean } | null;
   primaryAction?: { label: string; disabled?: boolean } | null;
   meal?: boolean;
   primaryGapText?: string;
   singleButton?: boolean;
   submitting?: boolean;
+  primaryVisualDisabled?: boolean;
   quickBlocked?: boolean;
   quickAsButton?: boolean;
   quickOpenType?: string;
@@ -114,6 +119,12 @@ const emit = defineEmits<{
   color: var(--color-text-secondary);
   font-size: 22rpx;
   line-height: 1.4;
+}
+
+.meal-footer__quick-status {
+	color: var(--color-text-secondary);
+	font-size: 20rpx;
+	line-height: 1.2;
 }
 
 .meal-footer__buttons {

@@ -80,6 +80,9 @@ interface ClientPlatform {
 		getPhoneNumberCode(event: unknown): Promise<string>;
 		getDeviceId(): string;
 	};
+	messaging: {
+		requestSubscribeMessage(templateIds: string[]): Promise<Record<string, string>>;
+	};
 	/**
 	 * 剪贴板能力。
 	 * 目前只需要写入；读取能力没有真实场景时不提前增加。
@@ -252,6 +255,14 @@ interface UniSystemApi {
 	getMenuButtonBoundingClientRect?: () => MenuButtonRect;
 	getAppBaseInfo?: () => AppBaseInfo;
 	onThemeChange?: (listener: (result: ThemeChangeResult) => void) => void;
+}
+
+interface UniSubscribeMessageApi {
+	requestSubscribeMessage?: (options: {
+		tmplIds: string[];
+		success: (result: Record<string, string>) => void;
+		fail: (error: unknown) => void;
+	}) => void;
 }
 
 interface UniFileSystemApi {
@@ -784,6 +795,22 @@ export const uniPlatform: ClientPlatform = {
 		login,
 		getPhoneNumberCode,
 		getDeviceId
+	},
+	messaging: {
+		requestSubscribeMessage(templateIds) {
+			return callUni<Record<string, string>>((resolve, reject) => {
+				if (getRuntimeChannel() !== "mini_program") {
+					reject(new Error("请在微信小程序中开启微信提醒"));
+					return;
+				}
+				const api = uni as unknown as UniSubscribeMessageApi;
+				if (!api.requestSubscribeMessage) {
+					reject(new Error("当前微信版本暂不支持订阅提醒"));
+					return;
+				}
+				api.requestSubscribeMessage({ tmplIds: templateIds, success: resolve, fail: reject });
+			});
+		}
 	},
 	clipboard: {
 		set: setClipboardData

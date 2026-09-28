@@ -93,11 +93,11 @@ describe("pages/me/index", () => {
     expect(modalState.codeButtonText).toBe("发送验证码");
   });
 
-  it("未登录时通知中心、我的口味、最近看过、提醒设置、我的勋章和账号设置都在入口层拦登录", async () => {
+  it("未登录时通知中心、我的口味、最近看过、我的勋章和账号设置都在入口层拦登录", async () => {
     expect(await page.callMethod("automatorResolveEntryAuth", "通知中心")).toEqual({ found: true, requiresLogin: true });
     expect(await page.callMethod("automatorResolveEntryAuth", "我的口味")).toEqual({ found: true, requiresLogin: true });
     expect(await page.callMethod("automatorResolveEntryAuth", "最近看过")).toEqual({ found: true, requiresLogin: true });
-    expect(await page.callMethod("automatorResolveEntryAuth", "提醒设置")).toEqual({ found: true, requiresLogin: true });
+    expect(await page.callMethod("automatorResolveEntryAuth", "提醒设置")).toEqual({ found: false });
     expect(await page.callMethod("automatorResolveEntryAuth", "我的勋章")).toEqual({ found: true, requiresLogin: true });
     expect(await page.callMethod("automatorResolveEntryAuth", "账号设置")).toEqual({ found: true, requiresLogin: true });
     expect(await page.callMethod("automatorResolveEntryAuth", "饭局")).toEqual({ found: true, requiresLogin: false });
@@ -106,17 +106,14 @@ describe("pages/me/index", () => {
     expect(await page.callMethod("automatorResolveEntryAuth", "食材")).toEqual({ found: true, requiresLogin: false });
   });
 
-  it("已登录点击提醒设置进入设置页，不再呼起登录弹窗", async () => {
+  it("提醒设置隐藏后不再从我的页打开", async () => {
     await page.callMethod("automatorApplySession", {
       token: "automator-reminder-token",
       uid: 1001,
       expiresAt: "2099-01-01T00:00:00.000Z"
     });
 
-    expect(await page.callMethod("automatorOpenReminder")).toEqual({
-      path: "/pages_me/reminder/index",
-      loginVisible: false
-    });
+    expect(await page.callMethod("automatorOpenReminder")).toBeNull();
   });
 
   it("我的页的主题摘要和页面底色固定使用默认主题与色系", async () => {

@@ -195,9 +195,6 @@
 								</view>
 							</template>
 						</view>
-						<view class="service-version">
-							<text class="service-version__text"> version {{ APP_VERSION }} </text>
-						</view>
 					</view>
 				</template>
 			</view>
@@ -220,7 +217,7 @@ import { KNOWLEDGE_CHANNELS, buildKnowledgeListPath, type KnowledgeChannelCode }
 import { uniPlatform } from "@/platform/uni";
 import { useSystemInfo } from "@/composables/useSystemInfo";
 import { useTheme } from "@/composables/useTheme";
-import { APP_NAME, APP_VERSION } from "@/config/app";
+import { APP_NAME } from "@/config/app";
 import { useLoginModalStore } from "@/stores/login-modal";
 import {
 	EMPTY_BADGE_SNAPSHOT,
@@ -376,14 +373,15 @@ const knowledgeEntries = computed<PageEntry[]>(() => knowledgeChannelCodes.map(c
 }));
 
 const settingEntries = computed<PageEntry[]>(() => [
-	{
-		title: "提醒设置",
-		iconClass: "icon-reminder-settings",
-		description: "看看现在有哪些提醒入口",
-		url: "/pages_me/reminder/index",
-		requiresLogin: true,
-		loginOnlyWhenGuest: true
-	},
+	// 暂时隐藏：提醒尚无实际投递能力，需求确认后再恢复入口。
+	// {
+	// 	title: "提醒设置",
+	// 	iconClass: "icon-reminder-settings",
+	// 	description: "看看现在有哪些提醒入口",
+	// 	url: "/pages_me/reminder/index",
+	// 	requiresLogin: true,
+	// 	loginOnlyWhenGuest: true
+	// },
 	{
 		title: "主题皮肤",
 		iconClass: "icon-theme-skin",
@@ -406,24 +404,10 @@ const settingEntries = computed<PageEntry[]>(() => [
 		requiresLogin: true
 	},
 	{
-		title: "隐私政策",
-		iconClass: "icon-policy-privacy",
-		description: "了解你的信息会如何被使用",
-		url: `/pages_web/content/index?url=${encodeURIComponent("https://www.trtst.com/privacy")}`,
-		requiresLogin: false
-	},
-	{
-		title: "用户协议",
-		iconClass: "icon-policy-user",
-		description: "查看产品使用说明和规则",
-		url: `/pages_web/content/index?url=${encodeURIComponent("https://www.trtst.com/terms")}`,
-		requiresLogin: false
-	},
-	{
 		title: `关于${APP_NAME}`,
 		iconClass: "icon-about-app",
 		description: "看看产品介绍和当前版本",
-		url: `/pages_web/content/index?url=${encodeURIComponent("https://www.trtst.com/about")}`,
+		url: "/pages_me/about/index",
 		requiresLogin: false
 	}
 ]);
@@ -1217,17 +1201,6 @@ function showComingSoon(name: string) {
 	font-weight: var(--font-weight-medium);
 	text-overflow: ellipsis;
 	white-space: nowrap;
-}
-
-.service-version {
-	display: flex;
-	justify-content: center;
-	padding: var(--space-xl) 0 0;
-}
-
-.service-version__text {
-	color: var(--color-text-tertiary);
-	font-size: var(--font-size-md);
 }
 
 .option-chip--active .option-chip__text {

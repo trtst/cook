@@ -25,6 +25,7 @@ function expectSelectorIncludes(selector: string, snippets: string[], content = 
 }
 
 expectIncludes("<MealFooterActions");
+expectIncludes("if (!planDetail.value && !eventDetail.value) return false;");
 expectIncludes(":primary-action=\"footerPrimaryAction\"");
 expectIncludes('import ImageEmpty from "@/components/ImageEmpty.vue";');
 expectIncludes('<ImageEmpty v-else class="meal-hero__cover-empty" copy="封面图" ratio="fill" />');
@@ -58,8 +59,9 @@ expectSelectorIncludes(".meal-hero--plan", [
 expectSelectorIncludes(".meal-hero::before", [
   "background: var(--color-surface-primary-panel-strong);"
 ]);
-expectIncludes('class="cookfont icon-done-circle meal-shopping-preview__prepared-icon"');
-assert.ok(fontSource.includes('.icon-done-circle::before {\n    content: "\\e6bc";\n}'));
+expectIncludes('class="cookfont icon-done meal-shopping-preview__prepared-icon"');
+assert.ok(fontSource.includes('.icon-done::before {\n    content: "\\e614";\n}'));
+expectExcludes("meal-shopping-preview__prepared-mark");
 expectIncludes(".meal-shopping-preview__row {\n  position: relative;");
 expectSelectorIncludes(".meal-shopping-preview__state--status-only", [
   "justify-content: flex-end;"
@@ -67,17 +69,15 @@ expectSelectorIncludes(".meal-shopping-preview__state--status-only", [
 expectSelectorIncludes(".meal-shopping-preview__state", [
   "color: var(--color-text-tertiary);"
 ]);
-expectSelectorIncludes(".meal-shopping-preview__prepared-mark", [
-  "position: absolute;",
-  "bottom: 6rpx;",
-  "left: 24rpx;",
-  "opacity: 0.1;",
-  "box-sizing: border-box;"
+expectSelectorIncludes(".meal-shopping-preview__item-title", [
+  "display: flex;",
+  "align-items: center;",
+  "gap: 8rpx;",
+  "color: var(--color-primary);"
 ]);
 expectSelectorIncludes(".meal-shopping-preview__prepared-icon", [
   "line-height: 1;",
-  "font-size: 100rpx;",
-  "color: var(--color-text-tertiary);"
+  "font-size: 24rpx;"
 ]);
 expectExcludes("wx-button[disabled]");
 expectExcludes("button[disabled]");

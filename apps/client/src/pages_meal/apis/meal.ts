@@ -34,6 +34,13 @@ export interface MealPlanSummary {
   createdAt: IsoDateTime;
 }
 
+export interface MealReminderSummary {
+  status: "NOT_SCHEDULED" | "SCHEDULED" | "SENT" | "FAILED";
+  scheduledAt: IsoDateTime | null;
+}
+
+export const MEAL_REMINDER_TEMPLATE_ID = "LJwjRWjXD6Hod0iJnswKX91ZTyq3bqQM6HtDb1FiiDo";
+
 export type DiningEventListRole = "ALL" | "ORGANIZER" | "PARTICIPANT";
 export type DiningEventListStage = "TODO" | "ACTIVE" | "DONE";
 export type DiningEventListStageFilter = DiningEventListStage | "ALL";
@@ -210,6 +217,11 @@ export interface DiningEventSummary {
   createdAt: IsoDateTime;
 }
 
+export interface CancelDiningEventResponse {
+  id: UUID;
+  status: "CANCELLED";
+}
+
 export interface DiningEventShareLinkResponse {
   shareTokenPath: string;
   expiresAt: IsoDateTime | null;
@@ -240,7 +252,7 @@ export interface CreateMealPlanRequest {
   menuItems: Array<{
     slotType: "MEAT" | "VEGETABLE" | "SOUP" | "STAPLE" | "BREAKFAST_STAPLE" | "BREAKFAST_PROTEIN" | "BREAKFAST_SIDE" | null;
     sortOrder: number;
-    recipeId: UUID;
+    recipeId: UUID | null;
     recipeVersionId: UUID;
     purchaseState: "READY" | "PENDING";
   }>;
@@ -402,6 +414,12 @@ export const mealApi = {
       { idempotencyKey: operationId }
     );
   },
+  getPlanReminder(planItemId: UUID) {
+    return get<MealReminderSummary>(`${cfg.domain}/api/meal-plans/${encodeURIComponent(planItemId)}/reminder`);
+  },
+  subscribePlanReminder(planItemId: UUID, operationId: OperationId) {
+    return post<MealReminderSummary>(`${cfg.domain}/api/meal-plans/${encodeURIComponent(planItemId)}/reminder`, undefined, { idempotencyKey: operationId });
+  },
   createDiningEvent(planItemId: UUID, body: CreateDiningEventRequest) {
     const { operationId, ...payload } = body;
     return post<DiningEventSummary>(`${cfg.domain}/api/meal-plans/${encodeURIComponent(planItemId)}/dining-event`, payload, {
@@ -430,6 +448,12 @@ export const mealApi = {
   },
   getDiningEvent(eventId: UUID) {
     return get<DiningEventSummary>(`${cfg.domain}/api/dining-events/${encodeURIComponent(eventId)}`);
+  },
+  getDiningEventReminder(eventId: UUID) {
+    return get<MealReminderSummary>(`${cfg.domain}/api/dining-events/${encodeURIComponent(eventId)}/reminder`);
+  },
+  subscribeDiningEventReminder(eventId: UUID, operationId: OperationId) {
+    return post<MealReminderSummary>(`${cfg.domain}/api/dining-events/${encodeURIComponent(eventId)}/reminder`, undefined, { idempotencyKey: operationId });
   },
   createDiningEventShareLink(eventId: UUID, operationId: OperationId) {
     return post<DiningEventShareLinkResponse>(
@@ -500,7 +524,7 @@ export const mealApi = {
     );
   },
   cancelDiningEvent(eventId: UUID, operationId: OperationId) {
-    return post<DiningEventSummary>(
+    return post<CancelDiningEventResponse>(
       `${cfg.domain}/api/dining-events/${encodeURIComponent(eventId)}/cancel`,
       undefined,
       { idempotencyKey: operationId }
