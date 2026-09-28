@@ -39,6 +39,7 @@ import {
   ApiOkPage,
   DiningMemorySharePreviewModel,
   DiningMemoryShareSnapshotModel,
+  CancelDiningEventModel,
   DiningEventModel,
   DiningEventListPageModel,
   DiningEventShareLinkModel,
@@ -46,6 +47,7 @@ import {
   MealCookContextResponseModel,
   MealPlanCookAssistantModel,
   MealPlanModel,
+  MealReminderModel,
   RandomMenuQuotaModel,
   RandomMenuModel,
   ReplaceRandomMenuSlotModel,
@@ -55,11 +57,49 @@ import {
   UnlockMealCookAssistantResponseModel
 } from "../../contracts/openapi";
 import { MealService } from "./meal.service";
+import { MealReminderService } from "./meal-reminder.service";
 
 @ApiTags("meal")
 @Controller()
 export class MealController {
-  constructor(@Inject(MealService) private readonly mealService: MealService) {}
+  constructor(
+    @Inject(MealService) private readonly mealService: MealService,
+    @Inject(MealReminderService) private readonly mealReminderService: MealReminderService
+  ) {}
+
+  @Get("meal-plans/:planItemId/reminder")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiOkModel(MealReminderModel, "读取当前用户在计划餐次上的微信提醒状态")
+  getMealPlanReminder(@Req() request: RequestWithUser, @Param("planItemId", ParseIntPipe) planItemId: number) {
+    return this.mealReminderService.getMealPlanReminder(request.user.userId, planItemId).then(result => ok(result));
+  }
+
+  @Post("meal-plans/:planItemId/reminder")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(MealReminderModel, "为当前用户预约计划餐次的微信提醒")
+  subscribeMealPlanReminder(@Req() request: RequestWithUser, @Param("planItemId", ParseIntPipe) planItemId: number, @ReadIdempotencyKey() operationId: string) {
+    return this.mealReminderService.subscribeMealPlan(request.user.userId, planItemId, operationId).then(result => ok(result));
+  }
+
+  @Get("dining-events/:eventId/reminder")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiOkModel(MealReminderModel, "读取当前用户在饭局上的微信提醒状态")
+  getDiningEventReminder(@Req() request: RequestWithUser, @Param("eventId", ParseIntPipe) eventId: number) {
+    return this.mealReminderService.getDiningEventReminder(request.user.userId, eventId).then(result => ok(result));
+  }
+
+  @Post("dining-events/:eventId/reminder")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(MealReminderModel, "为当前用户预约饭局的微信提醒")
+  subscribeDiningEventReminder(@Req() request: RequestWithUser, @Param("eventId", ParseIntPipe) eventId: number, @ReadIdempotencyKey() operationId: string) {
+    return this.mealReminderService.subscribeDiningEvent(request.user.userId, eventId, operationId).then(result => ok(result));
+  }
 
   @Get("meal-plans")
   @UseGuards(UserAuthGuard)
@@ -618,7 +658,7 @@ export class MealController {
   @UseGuards(UserAuthGuard)
   @ApiBearerAuth("UserBearerAuth")
   @ApiIdempotencyKey()
-  @ApiOkModel(DiningEventModel, "饭局发起人取消一场尚未开始且无人接受的饭局")
+  @ApiOkModel(CancelDiningEventModel, "删除一场尚未开始且无人接受的饭局及其对应计划")
   cancelDiningEvent(
     @Req() request: RequestWithUser,
     @Param("eventId", ParseIntPipe) eventId: number,

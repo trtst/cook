@@ -166,10 +166,12 @@
 | Meal | POST | `/meal-plans/{planItemId}/title` | 更新一个计划餐次标题 |
 | Meal | POST | `/meal-plans/{planItemId}/complete` | 完成一个计划餐次 |
 | Meal | POST | `/meal-plans/{planItemId}/cancel` | 保留计划与菜单并取消计划餐次 |
+| MealReminder | GET/POST | `/meal-plans/{planItemId}/reminder` | 读取或预约当前用户的计划微信提醒 |
 | Meal | POST | `/meal-plans/{planItemId}/title` | 单独修改一个计划餐次标题 |
 | DiningEvent | POST | `/meal-plans/{planItemId}/dining-event` | 从计划创建饭局 |
 | DiningEvent | GET | `/dining-events` | 分页查询当前用户可见的饭局摘要列表 |
 | DiningEvent | GET | `/dining-events/{eventId}` | 饭局详情 |
+| MealReminder | GET/POST | `/dining-events/{eventId}/reminder` | 读取或预约当前用户的饭局微信提醒 |
 | DiningEvent | POST | `/dining-events/{eventId}/schedule` | 修改饭局时间 |
 | DiningEvent | POST | `/dining-events/{eventId}/note` | 修改饭局公开备注 |
 | DiningEvent | POST | `/dining-events/{eventId}/my-note` | 参与人修改本次饭局专属备注 |

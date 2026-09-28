@@ -48,7 +48,7 @@
 17. `runbook.md`
    - 启动、调试、验证、三端联合开发流程、联调和交付说明。
 18. `apps/worker/README.md`
-   - Worker 禁用态骨架、命令和 V1 不启动异步任务边界。
+   - Worker 仅消费已确认的饭局提醒 `MEAL_REMINDER_SEND`；其他异步任务保持禁用。
 19. `docs/cook/`
    - 需要追溯完整产品方案、Prisma Schema 或手写 SQL 时再阅读。
 20. `plans/business-development-todo.md`
@@ -123,7 +123,7 @@
 - `runbook.md`
   - 启动基线、调试顺序、三端联合开发流程、联调清单和交付说明。
 - `../apps/worker/README.md`
-  - Worker 禁用态骨架、命令和运行边界。
+  - 饭局提醒专用 Worker 命令、`MEAL_REMINDER_SEND` 消费范围和运行边界。
 - `cook/`
   - 产品方案、技术实施方案、Prisma Schema 和手写 SQL 约束。
 - `templates/`

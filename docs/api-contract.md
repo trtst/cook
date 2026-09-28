@@ -620,7 +620,7 @@ interface RedeemMembershipCodeResult {
 
 `GET /home/week-overview` 只服务首页左侧“这周吃饭安排”状态聚合主卡，职责上与 `GET /home-entries`、`GET /home/recent-arrangement` 分离。它返回当前登录用户首页主卡真正需要的最小摘要：`status + title + summary + actionText + targetType + targetValue + notificationTime + plannedDayCount + totalDayCount + activeListCount + expiringCount + arrangement + days[]`。其中 `status` 只允许 `NO_ARRANGEMENT / EMPTY_MENU / PENDING_CONFIRM / PENDING_SHOPPING / READY_TO_COOK / COMPLETED`；`targetType` 当前固定为 `PAGE`，`targetValue` 由服务端按当前最值得处理的状态给出真实落地页；`notificationTime` 是给通知中心排序和已读游标对齐用的服务端时间，不要求首页卡片直接展示；`plannedDayCount` 与 `days[]` 只覆盖从今天起未来 `7` 天的轻量周视图，不扩成完整计划详情；`arrangement` 复用现有首页最近安排最小摘要，供主卡在存在近期餐次时显示更具体的时间与状态。该接口不得返回完整菜单、购物清单明细、冰箱明细、参与人 UID、运营样式或通用任务流字段；首页左侧主卡点击后只跳转到真实页面继续处理，不在首页直接写入。
 
-`GET /home/fridge-recipes` 只服务首页“按冰箱食材”菜谱区，要求登录，并基于近期明确标记为“有”的食材痕迹与可访问菜谱做最小匹配；超过食材展示窗口的记录不参与匹配。服务端只返回首页卡片需要的菜谱摘要、匹配数量、缺失数量和 `fridgeFit`，不返回数量、单位换算结果或采购缺口决策。接口最多返回 `9` 个匹配候选，客户端首页每屏展示 `3` 个，右侧“换一换”只在这些菜谱候选里轮换。
+`GET /home/fridge-recipes?page=1` 只服务首页“按冰箱食材”菜谱区，要求登录，并基于近期明确标记为“有”的食材痕迹与可访问菜谱做最小匹配；超过食材展示窗口的记录不参与匹配。服务端只返回首页卡片需要的菜谱摘要、匹配数量、缺失数量、`fridgeFit` 和 `hasNext`，不返回数量、单位换算结果或采购缺口决策。每次按稳定推荐顺序返回最多 `3` 个候选；客户端首页每屏展示当前响应中的菜谱，点击“换一换”时请求下一页，候选用尽后从第 `1` 页重新开始。加载期间显示三张菜谱 skeleton，成功后整体替换为本次响应。
 
 `GET /home/recent-arrangement` 只服务首页“最近安排”条件卡，和 `GET /home-entries` 的运营入口配置职责分离。它只返回当前登录用户最近一顿、且还有下一步动作的计划或饭局摘要；若当前没有符合窗口与权限条件的候选，则返回 `data = null`。候选窗口固定为：先看未来 `24` 小时，若没有再补看未来 `24~36` 小时；在同一窗口内若同时存在饭局和计划候选，统一优先饭局，再按状态优先级 `TIME_UP_SHARE > READY_TO_COOK > PENDING_SHOPPING > PENDING_CONFIRM > EMPTY_MENU` 和离当前时间更近排序。接口最小只返回当前首页卡真正需要的字段：`sourceType + planItemId + planDate + eventId + title + scheduledAt + participantCount + menuCount + gapCount + status`。其中 `planDate` 用于客户端继续复用现有统一餐次详情页路由；`participantCount` 对饭局返回当前参与人数，对纯计划固定返回 `1`；`gapCount` 只有在当前服务端已存在可靠缺口事实时才返回数字，否则返回 `null`。该接口不得返回菜单明细、投票明细、冰箱明细、购物清单明细、参与人 UID、内部备注，也不直接返回首页按钮文案或跳转 URL；客户端根据 `status` 本地映射“去加菜 / 确认菜单 / 去采购 / 开始做饭 / 分享回忆”等主动作。
 
@@ -1384,13 +1384,14 @@ interface FridgeTraceIngredientSummary {
 
 interface FridgeTraceSummaryResponse {
   totalCount: number;
+  recentCount: number;
   latestTime: IsoDateTime | null;
 }
 ```
 
-`GET /fridge-traces?page=1&pageSize=20` 按食材聚合返回当前用户的状态痕迹，在数据库内完成状态归并并分页，单页最多 100 项。蔬菜、水果等易腐食材 7 天、其他或未知分类 15 天后降为“未确认”；超过 30 天移入折叠区但不删除。最近购买提示仅保留 3 天。痕迹不包含数量、单位、批次或到期日，不参与采购差额计算。
+`GET /fridge-traces?page=1&pageSize=20&categoryId=5001` 按食材聚合返回当前用户的状态痕迹，在数据库内完成状态归并后筛选和分页；`categoryId` 可省略以读取全部分类，或传正式食材分类 ID 进行服务端筛选。单页最多 100 项。蔬菜、水果等易腐食材 7 天、其他或未知分类 15 天后降为“未确认”；超过 30 天移入折叠区但不删除。最近购买提示仅保留 3 天。痕迹不包含数量、单位、批次或到期日，不参与采购差额计算。未关联到当前有效食材分类的历史痕迹只出现在未筛选列表中。
 
-`POST /fridge-traces/present` 与 `POST /fridge-traces/empty` 使用 `Idempotency-Key`，请求体为 `{ ingredientId?: UUID | null, name, categoryName?: string | null }`，分别记录用户明确确认的“有”与“没有”。食材 ID 仅在对应食材为系统可用或当前用户 ACTIVE 个人食材时关联；其他 ID 按名称痕迹保存。分类由服务端从已验证食材读取，忽略客户端分类。`POST /fridge-traces/present/batch` 与 `POST /fridge-traces/empty/batch` 使用 `Idempotency-Key`，请求体为 `{ items: Array<{ ingredientId?: UUID | null, name, categoryName?: string | null }> }`，最多 100 项；服务端在单个事务中去重并写入，分别用于批量确认“有”和批量标记“没有”，重复请求返回同一结果。购物项勾选“已买”会记录 `PURCHASED` 痕迹；饭局完成后的逐项确认调用对应单项状态接口。`GET /fridge-traces/summary` 只返回近期痕迹数量和最近记录时间。
+`POST /fridge-traces/present` 与 `POST /fridge-traces/empty` 使用 `Idempotency-Key`，请求体为 `{ ingredientId?: UUID | null, name, categoryName?: string | null }`，分别记录用户明确确认的“有”与“没有”。食材 ID 仅在对应食材为系统可用或当前用户 ACTIVE 个人食材时关联；其他 ID 按名称痕迹保存。分类由服务端从已验证食材读取，忽略客户端分类。`POST /fridge-traces/present/batch` 与 `POST /fridge-traces/empty/batch` 使用 `Idempotency-Key`，请求体为 `{ items: Array<{ ingredientId?: UUID | null, name, categoryName?: string | null }> }`，最多 100 项；服务端在单个事务中去重并写入，分别用于批量确认“有”和批量标记“没有”，重复请求返回同一结果。购物项勾选“已买”会记录 `PURCHASED` 痕迹；饭局完成后的逐项确认调用对应单项状态接口。`GET /fridge-traces/summary` 返回不同食材的最新痕迹总数 `totalCount`、仍在 7/15 天确认窗口内的食材数 `recentCount`，以及最近记录时间 `latestTime`。两个计数都是食材种类记录数，不代表可用数量或精确库存。
 
 `POST /meal-plans` 继续用于创建或更新本人某一天某餐次的计划，但当前一个餐次可同时承载多道菜；请求体固定提交：
 
@@ -1403,7 +1404,7 @@ interface CreateMealPlanRequest {
   menuItems: Array<{
     slotType: "MEAT" | "VEGETABLE" | "SOUP" | "STAPLE" | "BREAKFAST_STAPLE" | "BREAKFAST_PROTEIN" | "BREAKFAST_SIDE";
     sortOrder: number;
-    recipeId: UUID;
+    recipeId: UUID | null;
     recipeVersionId: UUID;
     purchaseState: "READY" | "PENDING";
   }>;
@@ -1411,7 +1412,7 @@ interface CreateMealPlanRequest {
 }
 ```
 
-同一用户同一 `planDate + mealSlot` 同时只允许一条非取消计划；取消记录保留菜单与状态，不占用该日期餐次，新计划会创建独立记录；公开 `menuItems[]` 写入表示“按本次整顿菜单覆盖当前餐次”。新建时若未显式传 `title`，服务端默认写成 `餐次 + 饮食计划`，例如 `早餐饮食计划`、`晚餐饮食计划`；后续整餐更新若不传 `title`，继续保留现有标题。计划页新增“添加计划”时，允许用空数组 `menuItems = []` 先创建一条当前日期 + 餐次的空白计划壳子，菜单快照默认写成 `餐次待补充`，后续再去详情页补菜；但这条放宽只适用于“当前餐次原本不存在计划”的新建场景。覆盖已有计划时必须提交当前 `expectedVersion`，版本不一致返回业务 `code=409`；已有计划不允许用空数组把菜单整体清空，已经完成的餐次也不允许再被覆盖。旧 `recipeIds[]` 不再接受。当前历史老计划项允许 `slotType = null`，新写入必须显式提交 `slotType / recipeVersionId / purchaseState`。`POST /meal-plans/{planItemId}/complete` 只允许计划拥有者调用，并把该餐次从 `PLANNED` 推进到 `COMPLETED`，语义为计划拥有者明确确认这顿饭已完成；若计划仍关联未完成饭局，则必须先由饭局发起人完成饭局，不能借计划接口代替饭局确认。取消计划不计入开饭打卡。`POST /meal-plans/{planItemId}/cancel` 只允许所有者在计划日期结束前、且未关联有效饭局时调用；计划状态改为 `CANCELLED`，菜单和历史保留，不进入完成后的食材更新流程。同日期同餐次可以另建计划，取消记录保留但不占用餐次。`POST /meal-plans/{planItemId}/dining-event` 继续从计划餐次创建饭局，但已完成餐次不得再发起新饭局；若当前计划已经固定菜单，新饭局直接以 `CONFIRMED` 状态创建。若该餐次已经挂有未结束饭局，后续继续改计划菜单时，服务端会同步刷新这场饭局的标题、菜单快照和菜单项，避免计划与饭局各自漂移成两份事实。
+同一用户同一 `planDate + mealSlot` 同时只允许一条非取消计划；取消记录保留菜单与状态，不占用该日期餐次，新计划会创建独立记录；公开 `menuItems[]` 写入表示“按本次整顿菜单覆盖当前餐次”。`recipeId = null` 仅可用于保留当前同一计划中已存在且 `recipeId` 为空的菜品，服务端按原菜品保留菜位与采购状态；不能用它新增或引用其他计划的菜谱版本。新建时若未显式传 `title`，服务端默认写成 `餐次 + 饮食计划`，例如 `早餐饮食计划`、`晚餐饮食计划`；后续整餐更新若不传 `title`，继续保留现有标题。计划页新增“添加计划”时，允许用空数组 `menuItems = []` 先创建一条当前日期 + 餐次的空白计划壳子，菜单快照默认写成 `餐次待补充`，后续再去详情页补菜；但这条放宽只适用于“当前餐次原本不存在计划”的新建场景。覆盖已有计划时必须提交当前 `expectedVersion`，版本不一致返回业务 `code=409`；已有计划不允许用空数组把菜单整体清空，已经完成的餐次也不允许再被覆盖。旧 `recipeIds[]` 不再接受。当前历史老计划项允许 `slotType = null`，新写入必须显式提交 `slotType / recipeVersionId / purchaseState`。`POST /meal-plans/{planItemId}/complete` 只允许计划拥有者调用，并把该餐次从 `PLANNED` 推进到 `COMPLETED`，语义为计划拥有者明确确认这顿饭已完成；若计划仍关联未完成饭局，则必须先由饭局发起人完成饭局，不能借计划接口代替饭局确认。取消计划不计入开饭打卡。`POST /meal-plans/{planItemId}/cancel` 只允许所有者在计划日期结束前、且未关联有效饭局时调用；计划状态改为 `CANCELLED`，菜单和历史保留，不进入完成后的食材更新流程。同日期同餐次可以另建计划，取消记录保留但不占用餐次。`POST /meal-plans/{planItemId}/dining-event` 继续从计划餐次创建饭局，但已完成餐次不得再发起新饭局；若当前计划已经固定菜单，新饭局直接以 `CONFIRMED` 状态创建。若该餐次已经挂有未结束饭局，后续继续改计划菜单时，服务端会同步刷新这场饭局的标题、菜单快照和菜单项，避免计划与饭局各自漂移成两份事实。
 
 详情页单独改标题不再复用整餐覆盖接口，而是走独立写口：
 
@@ -1706,7 +1707,7 @@ interface CreateMealPlanRequestV2 {
   menuItems: Array<{
     slotType: "MEAT" | "VEGETABLE" | "SOUP" | "STAPLE" | "BREAKFAST_STAPLE" | "BREAKFAST_PROTEIN" | "BREAKFAST_SIDE";
     sortOrder: number;
-    recipeId: UUID;
+    recipeId: UUID | null;
     recipeVersionId: UUID;
     purchaseState: "READY" | "PENDING";
   }>;
@@ -2270,7 +2271,11 @@ interface UpdateDiningEventWishSupportRequest {
 
 `POST /dining-events/{eventId}/bring` 继续用于“我带菜”，请求体为 0～3 道不重复的 `recipeIds`，每次提交完整替换当前参与人的带菜集合；空数组用于清空自己的带菜安排，非空菜谱必须属于当前参与人并引用其固定版本。`POST /dining-events/{eventId}/complete` 只允许饭局发起人调用；当且仅当该饭局至少已有 1 位状态为 `ACCEPTED` 的参与人时才允许完成。已取消饭局不得完成，已完成饭局重复调用时直接返回当前摘要，不再次改写状态。
 
-`POST /dining-events/{eventId}/cancel` 只允许饭局发起人取消尚未到开饭时间、且没有任何 `ACCEPTED` 参与人的饭局。服务端在同一事务内将饭局置为 `CANCELLED`、立即让当前 `ACTIVE / OPENED` 分享邀请失效，并把已取消饭局与原计划解绑；原计划、已确认菜单和已取消饭局的菜单快照保留，不生成回忆、不派发完成勋章、不触发做饭库存消耗。取消后的同一计划可以再次创建新的饭局，已取消饭局本身不可恢复、不可完成；重复提交同一幂等键返回已取消摘要，重复使用其他幂等键也返回当前已取消摘要。
+`POST /dining-events/{eventId}/cancel` 只允许饭局发起人取消尚未到开饭时间、且没有任何 `ACCEPTED` 参与人的饭局。取消会在同一事务内删除饭局及其对应计划和内容，包括饭局子项、计划菜单和活动摘要；并删除这场饭局与计划产生的未购买采购来源，更新受影响的采购清单版本。已购买采购项及已写入冰箱的痕迹属于独立事实，继续保留；关联投票解除已确认资源关联。取消不生成回忆、不派发完成勋章、不触发做饭库存消耗。事务提交后清理饭局封面对象。响应仅为 `{ id, status: "CANCELLED" }`，不回传已删除内容；幂等记录也仅保存该最小结果。同一幂等键重放返回该结果；资源删除后以其他幂等键请求返回不存在。客户端二次确认说明饭局、对应计划和菜单内容将删除且无法恢复，并在成功后回到“我的饭局”列表。
+
+饭局与纯计划详情另提供 `GET /dining-events/{eventId}/reminder`、`POST /dining-events/{eventId}/reminder`、`GET /meal-plans/{planItemId}/reminder` 和 `POST /meal-plans/{planItemId}/reminder`。状态响应只包含 `status: NOT_SCHEDULED | SCHEDULED | SENT | FAILED` 与 `scheduledAt: IsoDateTime | null`；写接口不接收用户、时间或模板字段，必须携带数字字符串 `Idempotency-Key`。饭局发起人和状态为 `ACCEPTED` 的参与人只能为自己预约；计划只允许计划所有者预约。服务端要求当前用户已有与 `WECHAT_APP_ID` 匹配的微信身份，并在同一事务保存用户提醒和 `MEAL_REMINDER_SEND` Outbox 项。
+
+饭局按 `scheduledAt - 2 小时` 投递；纯计划按服务端参考时点（早餐 08:00、午餐 12:00、下午茶 15:30、晚餐 18:30、夜宵 21:30，Asia/Shanghai）提前两小时投递，但模板预约时间只展示计划日期。若目标时间不足两小时，不创建预约。模板 ID 为 `LJwjRWjXD6Hod0iJnswKX91ZTyq3bqQM6HtDb1FiiDo`，模板 2233「预约到期提醒」，字段为 `date2.DATA` 与 `thing3.DATA`；饭局备注按微信 `thing` 字段最多 20 字的限制压缩为类似 `18:30开饭，约2小时后开始，可准备。`，计划备注类似 `今天有晚餐计划，可提前准备。`。饭局调整时间时重排未发提醒；饭局/计划完成或取消时删除待发提醒及未处理 Outbox 工作。Worker 只消费 `MEAL_REMINDER_SEND`，不得处理其他 Outbox 类型。
 
 `POST /dining-events/{eventId}/memory-shares` 用于在已到开饭时间或已完成的饭局上生成一张不可变餐桌回忆卡快照。当前只允许饭局发起人调用，请求体只接收：
 
@@ -2309,7 +2314,7 @@ interface CreateDiningMemoryShareRequest {
 
 ### 菜谱
 
-菜谱当前链路冻结为：`草稿 -> 发布到私房菜`、`灵感系统菜谱 -> 改编为私房菜`，以及“灵感/周刊直接加入计划时，必要时先保存到私房菜”。灵感系统菜谱只读；用户创建、编辑和保存不会自动进入系统库，只有推荐审核通过后才生成系统菜谱。合集不再是前台菜谱入口，历史合集接口暂不删除，以保留已有固定引用。
+菜谱当前链路冻结为：`草稿 -> 发布到私房菜`、`灵感系统菜谱 -> 改编为私房菜`，以及“灵感菜谱按固定版本直接加入计划”。加入计划不创建或更新私房菜；用户创建、编辑和保存不会自动进入系统库，只有推荐审核通过后才生成系统菜谱。合集不再是前台菜谱入口，历史合集接口暂不删除，以保留已有固定引用。
 
 当前规则补充：系统菜谱统一使用 `isInspiration = true` 且挂系统分类作为业务口径，不能仅以 owner 判断灵感菜谱。每条菜谱都必须有 owner；后台直接创建和导入发布从 100 人公共内容用户池随机选择 active owner，用户推荐审核收录则保留推荐者为 owner。池成员必须保持 `ACTIVE`，后台不得将其禁用；初始化脚本会先移除已禁用成员，再补足至 100 人。菜谱创建时冻结 owner 昵称快照，后续改名不回写。用户菜谱满足发布必填项即可发布，标签、营养、Wiki 和完整度等派生事实由服务端按当前 `RecipeContentVersion` 持久化；Wiki 发布时只登记 `PENDING`，不在发布事务内同步生成。正式菜谱用量接受互斥的精确结构 `EXACT(quantity + unitId)` 与唯一模糊结构 `FUZZY(text = "适量")`；“适量”不是系统单位，所有食材类别均可使用，服务端仍校验模糊用量与精确数量、单位互斥。
 
@@ -2825,7 +2830,7 @@ POST /recipes/reorder
   GET /users/me/recipe-history
 ```
 
-`GET /recipes` 只返回本人已发布私房菜，支持分页、关键词、个人分类、系统分类、难度和时长筛选。查询参数为 `page`、`pageSize`、`keyword`、`categoryId`、`inspirationCategoryId`、`difficulty` 和 `duration`。私房菜固定按个人分类顺序、更新时间返回，不提供灵感专属的推荐/最新排序；加入计划时从灵感同步保存的菜谱允许 `category = null`，客户端展示为“未分类”，用户可之后在编辑时归类。新建和编辑正文统一经过草稿发布，系统分类可由用户在高级设置中选择。
+`GET /recipes` 只返回本人已发布私房菜，支持分页、关键词、个人分类、系统分类、难度和时长筛选。查询参数为 `page`、`pageSize`、`keyword`、`categoryId`、`inspirationCategoryId`、`difficulty` 和 `duration`。私房菜固定按个人分类顺序、更新时间返回，不提供灵感专属的推荐/最新排序；用户显式保存到私房菜但未指定分类时允许 `category = null`，客户端展示为“未分类”，用户可之后在编辑时归类。加入计划不创建私房菜。新建和编辑正文统一经过草稿发布，系统分类可由用户在高级设置中选择。
 
 `GET /recipes/{recipeId}` 是菜谱详情的可选登录读取接口，响应使用 `RecipeDetail`。接口始终返回普通菜谱数据：标题、封面、正文固定版本、难度、时长、系统灵感分类、营养结果、做饭助手可用状态和更新时间；`personal` 只在请求带有效 `Authorization` 且当前用户是该菜谱持有人时返回，内容包括个人分类、场景、计划关联、编辑用食材/单位引用、自荐状态、持有人快照、状态、版本和创建时间。匿名请求、失效 token 匿名重试以及非持有人请求的 `personal` 均为 `null`，服务端不得为这些请求查询上述个人关系；页面正文仍正常展示。需要登录的编辑、计划、采购和助手操作由用户点击后再触发登录，不在详情读取阶段弹出登录。`POST /recipe-drafts/{draftId}/publish` 等仍返回 `MyRecipeDetail`，其顶层个人字段只供已识别的当前用户流程使用。
 
@@ -2852,7 +2857,7 @@ GET /recipes
 POST /recipes/{recipeId}/recommendations
 ```
 
-`POST /recipes/from-inspiration` 请求体只接收灵感来源和可选个人分类；加入计划 Sheet 允许不传分类或传 `null`，服务端保存为未分类私房菜，不接收 `sceneIds`。
+`POST /recipes/from-inspiration` 请求体只接收灵感来源和可选个人分类，用于用户显式保存到私房菜，不接收 `sceneIds`。加入计划通过 `POST /meal-plans` 直接引用可访问菜谱及固定正文版本，不调用此接口。
 
 ```json
 {
@@ -2946,7 +2951,7 @@ GET /admin/users/{userId}/collections/{sceneId}/recipes
 
 `GET /admin/users/{userId}/recipe-domain` 返回用户菜谱域概览；`/recipes` 与 `/recipe-drafts` 继续返回分页摘要；历史 `/collections` 路径仍返回该用户合集场景摘要，供旧固定引用治理。后台本轮只读，不返回编辑、发布、移出合集或改场景入口。
 
-`GET /ingredient-categories` 允许匿名读取，只返回系统食材正式分类的最小摘要 `id + name`，隐藏兜底分类 `待归类` 不下发给前台录入入口。`GET /ingredients` 支持 `page`、`pageSize`、`keyword`、`categoryId` 和 `source`。`source` 只允许 `SYSTEM`、`PERSONAL` 或 `ALL`；登录态保持原有三种口径，匿名态服务端会强制按 `SYSTEM` 处理，因此不会混入任何个人食材。`SYSTEM` 和 `ALL` 都只返回当前启用中且分类可选的系统食材，`PERSONAL` 只返回本人仍可直接使用的个人食材，不返回已归并条目；当请求命中“全部食材”口径时，系统食材部分按后台全局展示顺序返回；当传了真实 `categoryId` 时，系统食材仍按该分类内顺序返回。食材摘要新增 `imageUrl`，仅系统食材在后台已补图时返回可读图片地址，个人食材固定返回 `null`；同时新增 `recommendationStatus`，当前只返回 `PENDING | REJECTED | null`，用于“我的食材”选择态最小展示 `审核中 / 拒绝后隐藏推荐入口`。`POST /ingredients` 新建一个个人食材，并在创建时拦截与现有系统食材重名的重复项，包括已下架但仍保留治理身份的系统食材；同时禁止使用隐藏兜底分类。`PUT /ingredients/{ingredientId}` 只允许编辑本人未处于审核中的个人食材，并继续禁止切到隐藏兜底分类。`POST /ingredients/{ingredientId}/recommendations` 是显式推荐入口：若系统库已存在启用中的同名食材，则服务端直接归并并生成一条“已归并”记录；否则进入待审核队列。`POST /ingredients/{ingredientId}/feedbacks` 是系统食材纠错入口，只允许对当前可用系统食材提交，请求体固定提交 `name + categoryId + note?`，并要求“名字、分类、备注”至少有一项真正发生变化；同一用户对同一系统食材同一时间只允许保留一条 `PENDING` 纠错。成功后返回 `IngredientFeedbackResult`，前台只做成功提示，不在当前页展开审核态。`GET /ingredient-recommendations` 分页返回“我的推荐”记录，用于显示 `审核中 / 已拒绝 / 已收录 / 已归并`；当状态为 `REJECTED` 时，响应额外返回 `reviewNote + reviewAdvice`，分别承载后台拒绝原因和修改建议。`GET /units` 支持 `page`、`pageSize`、`keyword`、`type` 和 `source`，并允许匿名读取系统单位；登录态保持原有口径，匿名态服务端同样强制按 `SYSTEM` 处理，因此只会返回系统单位。`POST /units` 不再创建个人单位，而是提交一条单位建议；若系统库已存在同名系统单位，则服务端直接归并并生成一条 `MERGED` 记录，否则进入待审核队列。`GET /unit-recommendations` 分页返回“我的单位建议”记录，用于显示 `审核中 / 已拒绝 / 已收录 / 已归并`；当状态为 `REJECTED` 时，同样返回 `reviewNote + reviewAdvice`。`GET /recipe-drafts` 只返回本人草稿箱，查询参数为 `page`、`pageSize` 和 `keyword`；`GET /recipes`、`GET /inspiration-recipes`、`GET /collections/recipes` 与它统一使用同一搜索语义，`keyword` 都按 `菜名 + 故事 + 食材名` 匹配，其中合集基于已收藏固定版本正文检索。`POST /recipe-drafts` 与 `PUT /recipe-drafts/{draftId}` 只返回最小保存结果 `id + recipeId + version + updatedAt`。`GET /recipe-drafts/{draftId}` 与 `GET /recipes/{recipeId}` 额外返回当前内容实际引用到的 `ingredientRefs`、`unitRefs`，用于编辑页补齐超出首屏分页的历史食材与单位；其中 `ingredientRefs.defaultUnit` 只表示食材默认单位，不等于正文里所有真实 `unitId`，因此详情接口仍需单独返回 `unitRefs`。`GET /recipes/{recipeId}`、`GET /inspiration-recipes/{recipeId}` 与 `GET /collections/recipes/{collectionRecipeId}` 现统一补充只读 `nutrition` block，字段固定为 `status / qualityLabel / perServing / perRecipe / calculatedAt / sourceVersion`；前台只展示 `热量 / 蛋白质 / 脂肪 / 碳水` 四项结果，不上传、也不回写任何营养值。`status = COMPLETE` 表示当前固定正文的主要系统食材映射和重量换算较完整；`ESTIMATED` 表示至少一部分食材通过代表值或近似单位换算得出；`INSUFFICIENT` 表示当前仍无法稳定算出结果；`NONE` 只用于当前库里还没有可读营养源版本时的静默空态。该营养结果属于平台派生快照，不进入草稿正文，也不把原始营养库明细、映射候选、人工审校记录暴露给前台。`GET /recipes/{recipeId}` 还返回布尔字段 `canRecommend`，由服务端统一结算当前版本是否允许继续“自荐美食”，前台只按这个结论显示或隐藏入口，不再自行根据来源字段猜测。`POST /recipes/from-inspiration` 是灵感详情和加入计划 Sheet 同步保存私房菜的入口：请求体固定提交 `sourceRecipeId / sourceVersionId / categoryId?`，其中 `categoryId` 可省略或传 `null`，不再接收 `sceneIds`；服务端直接把当前灵感固定版本加入“我的”，未传分类时保存为“未分类”，不先创建草稿，也不要求客户端跳转编辑页。若同一用户已持有同一 `sourceVersionId` 的有效“我的”菜谱，本轮直接返回已有入口，不再额外创建第二条。`POST /recipes/{recipeId}/recommendations` 是显式“推荐到灵感”入口：只允许本人对当前已发布个人菜谱提交当前固定正文版本，请求体只提交建议系统分类 `inspirationCategoryId`；服务端创建独立推荐记录，并把 `GET /recipes/{recipeId}` 的 `recommendation` 字段更新为最新推荐摘要。审核中时，该个人菜谱不允许继续创建编辑草稿、发布编辑草稿或删除，保证后台审核的固定内容不漂移；用户可通过 `POST /recipe-recommendations/{recommendationId}/withdraw` 撤回待审推荐，撤回后恢复可编辑/可删除。若该个人菜谱最初来自灵感菜谱升级为“我的”，且当前正文与封面仍与当时来源版本完全一致，服务端直接拒绝推荐，不允许把未改动的灵感菜谱再次作为个人投稿提交；对于历史上还没有来源快照的旧个人菜谱，服务端会按“是否与现有系统菜谱的正文和封面完全一致”做同样的识别与拦截。后台审核通过后，服务端复制一份 `sourceVersionId` 指向的固定正文到系统菜谱，新建 `isInspiration = true`、挂系统分类的系统菜谱，并保留来源菜谱的 owner 与冻结昵称快照；原个人菜谱继续保留在“我的”下，不被替换或删除。
+`GET /ingredient-categories` 允许匿名读取，只返回系统食材正式分类的最小摘要 `id + name`，隐藏兜底分类 `待归类` 不下发给前台录入入口。`GET /ingredients` 支持 `page`、`pageSize`、`keyword`、`categoryId` 和 `source`。`source` 只允许 `SYSTEM`、`PERSONAL` 或 `ALL`；登录态保持原有三种口径，匿名态服务端会强制按 `SYSTEM` 处理，因此不会混入任何个人食材。`SYSTEM` 和 `ALL` 都只返回当前启用中且分类可选的系统食材，`PERSONAL` 只返回本人仍可直接使用的个人食材，不返回已归并条目；当请求命中“全部食材”口径时，系统食材部分按后台全局展示顺序返回；当传了真实 `categoryId` 时，系统食材仍按该分类内顺序返回。食材摘要新增 `imageUrl`，仅系统食材在后台已补图时返回可读图片地址，个人食材固定返回 `null`；同时新增 `recommendationStatus`，当前只返回 `PENDING | REJECTED | null`，用于“我的食材”选择态最小展示 `审核中 / 拒绝后隐藏推荐入口`。`POST /ingredients` 新建一个个人食材，并在创建时拦截与现有系统食材重名的重复项，包括已下架但仍保留治理身份的系统食材；同时禁止使用隐藏兜底分类。`PUT /ingredients/{ingredientId}` 只允许编辑本人未处于审核中的个人食材，并继续禁止切到隐藏兜底分类。`POST /ingredients/{ingredientId}/recommendations` 是显式推荐入口：若系统库已存在启用中的同名食材，则服务端直接归并并生成一条“已归并”记录；否则进入待审核队列。`POST /ingredients/{ingredientId}/feedbacks` 是系统食材纠错入口，只允许对当前可用系统食材提交，请求体固定提交 `name + categoryId + note?`，并要求“名字、分类、备注”至少有一项真正发生变化；同一用户对同一系统食材同一时间只允许保留一条 `PENDING` 纠错。成功后返回 `IngredientFeedbackResult`，前台只做成功提示，不在当前页展开审核态。`GET /ingredient-recommendations` 分页返回“我的推荐”记录，用于显示 `审核中 / 已拒绝 / 已收录 / 已归并`；当状态为 `REJECTED` 时，响应额外返回 `reviewNote + reviewAdvice`，分别承载后台拒绝原因和修改建议。`GET /units` 支持 `page`、`pageSize`、`keyword`、`type` 和 `source`，并允许匿名读取系统单位；登录态保持原有口径，匿名态服务端同样强制按 `SYSTEM` 处理，因此只会返回系统单位。`POST /units` 不再创建个人单位，而是提交一条单位建议；若系统库已存在同名系统单位，则服务端直接归并并生成一条 `MERGED` 记录，否则进入待审核队列。`GET /unit-recommendations` 分页返回“我的单位建议”记录，用于显示 `审核中 / 已拒绝 / 已收录 / 已归并`；当状态为 `REJECTED` 时，同样返回 `reviewNote + reviewAdvice`。`GET /recipe-drafts` 只返回本人草稿箱，查询参数为 `page`、`pageSize` 和 `keyword`；`GET /recipes`、`GET /inspiration-recipes`、`GET /collections/recipes` 与它统一使用同一搜索语义，`keyword` 都按 `菜名 + 故事 + 食材名` 匹配，其中合集基于已收藏固定版本正文检索。`POST /recipe-drafts` 与 `PUT /recipe-drafts/{draftId}` 只返回最小保存结果 `id + recipeId + version + updatedAt`。`GET /recipe-drafts/{draftId}` 与 `GET /recipes/{recipeId}` 额外返回当前内容实际引用到的 `ingredientRefs`、`unitRefs`，用于编辑页补齐超出首屏分页的历史食材与单位；其中 `ingredientRefs.defaultUnit` 只表示食材默认单位，不等于正文里所有真实 `unitId`，因此详情接口仍需单独返回 `unitRefs`。`GET /recipes/{recipeId}`、`GET /inspiration-recipes/{recipeId}` 与 `GET /collections/recipes/{collectionRecipeId}` 现统一补充只读 `nutrition` block，字段固定为 `status / qualityLabel / perServing / perRecipe / calculatedAt / sourceVersion`；前台只展示 `热量 / 蛋白质 / 脂肪 / 碳水` 四项结果，不上传、也不回写任何营养值。`status = COMPLETE` 表示当前固定正文的主要系统食材映射和重量换算较完整；`ESTIMATED` 表示至少一部分食材通过代表值或近似单位换算得出；`INSUFFICIENT` 表示当前仍无法稳定算出结果；`NONE` 只用于当前库里还没有可读营养源版本时的静默空态。该营养结果属于平台派生快照，不进入草稿正文，也不把原始营养库明细、映射候选、人工审校记录暴露给前台。`GET /recipes/{recipeId}` 还返回布尔字段 `canRecommend`，由服务端统一结算当前版本是否允许继续“自荐美食”，前台只按这个结论显示或隐藏入口，不再自行根据来源字段猜测。`POST /recipes/from-inspiration` 是用户显式将灵感菜谱保存到私房菜的入口：请求体固定提交 `sourceRecipeId / sourceVersionId / categoryId?`，其中 `categoryId` 可省略或传 `null`，不再接收 `sceneIds`；服务端直接把当前灵感固定版本加入“我的”，未传分类时保存为“未分类”，不先创建草稿，也不要求客户端跳转编辑页。若同一用户已持有同一 `sourceVersionId` 的有效“我的”菜谱，本轮直接返回已有入口，不再额外创建第二条。 加入计划通过 `POST /meal-plans` 直接引用可访问菜谱及固定正文版本，不调用此接口。`POST /recipes/{recipeId}/recommendations` 是显式“推荐到灵感”入口：只允许本人对当前已发布个人菜谱提交当前固定正文版本，请求体只提交建议系统分类 `inspirationCategoryId`；服务端创建独立推荐记录，并把 `GET /recipes/{recipeId}` 的 `recommendation` 字段更新为最新推荐摘要。审核中时，该个人菜谱不允许继续创建编辑草稿、发布编辑草稿或删除，保证后台审核的固定内容不漂移；用户可通过 `POST /recipe-recommendations/{recommendationId}/withdraw` 撤回待审推荐，撤回后恢复可编辑/可删除。若该个人菜谱最初来自灵感菜谱升级为“我的”，且当前正文与封面仍与当时来源版本完全一致，服务端直接拒绝推荐，不允许把未改动的灵感菜谱再次作为个人投稿提交；对于历史上还没有来源快照的旧个人菜谱，服务端会按“是否与现有系统菜谱的正文和封面完全一致”做同样的识别与拦截。后台审核通过后，服务端复制一份 `sourceVersionId` 指向的固定正文到系统菜谱，新建 `isInspiration = true`、挂系统分类的系统菜谱，并保留来源菜谱的 owner 与冻结昵称快照；原个人菜谱继续保留在“我的”下，不被替换或删除。
 
 详情字段边界补充：上文在菜谱接口总览中提到的 `ingredientRefs / unitRefs / canRecommend / recommendation`，对于 `GET /recipes/{recipeId}` 均归属于 `personal`，不属于匿名返回的普通数据；只有 `POST /recipe-drafts/{draftId}/publish` 等仍返回 `MyRecipeDetail` 的流程，才使用顶层个人字段。
 
@@ -2971,5 +2976,5 @@ GET /admin/users/{userId}/collections/{sceneId}/recipes
 4. 邀请、成员状态和幂等记录使用数据库约束保护。
 5. 菜谱生命周期、版本正数、非负计数和空间、冰箱消费状态、购物来源、饭局参与人来源及带菜引用配对由数据库 Check 约束兜底。
 6. 同一用户对同一菜谱最多存在一条 `OPEN` 举报，由数据库部分唯一索引保证。
-7. 重要生命周期写入 `AuditEvent` 和 `OutboxEvent`；V1 不启动完整 Worker。
+7. 重要生命周期写入 `AuditEvent` 和 `OutboxEvent`；Worker 仅针对已确认的饭局微信提醒 `MEAL_REMINDER_SEND` 启用专用消费者，其他 Outbox 类型保持未消费。
 8. 客户端隐藏按钮不是安全边界，所有权限必须在服务端验证。

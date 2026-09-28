@@ -23,7 +23,7 @@ Keep every feature tied to meals, recipes, fridge state, shopping, sharing, or h
 - Database: PostgreSQL 15+.
 - ORM: Prisma 5.22.0.
 - Cache and queue: Redis + BullMQ.
-- Reliable async delivery: PostgreSQL Outbox. V1 creates tables but does not run the worker.
+- Reliable async delivery: PostgreSQL Outbox. The confirmed meal reminder is the V1 exception with a dedicated `MEAL_REMINDER_SEND` worker; unrelated Outbox types remain unconsumed.
 - Admin: Vue 3 + Element Plus.
 - API contract: OpenAPI 3.0.
 
@@ -74,7 +74,7 @@ Rules:
 Build the confirmed personal-data meal loop:
 
 1. Personal data stays user-owned; the current product does not use a dining-group shared space or a standalone relationship module.
-2. Recipes use Private Recipes / Inspiration: editable personal recipes are the default menu, while reviewed system recipes are read-only inspiration. Adding inspiration to a plan creates or reuses a private recipe first; source versions remain fixed for references.
+2. Recipes use Private Recipes / Inspiration: editable personal recipes are the default menu, while reviewed system recipes are read-only inspiration. An inspiration recipe can be added to a plan by directly referencing its fixed version; adapting it into a private recipe is a separate action.
 3. Fridge data are user-owned and never become long-term shared objects.
 4. Shopping lists stay user-owned and may allow confirmed per-list collaboration.
 5. Sparse weekly plans remain personal; dining events handle invitations, participants, menus, bring-a-dish coordination, and memory sharing.
@@ -89,7 +89,7 @@ V1 does not implement receipt scanning, OCR, AI, fridge-item photos, owner trans
 - In development: Recipe, Inspiration review, Ingredient/Unit, Meal, Fridge, Shopping, Share, Entitlement, Storage, and Admin governance. Each feature must return to the business-flow and page-behavior gates before its contract or database constraints are treated as frozen.
 - User profile and home background image upload remain deferred. User responses keep nullable URL fields and capability flags, and those user-background fields currently return `null` and `false`. The admin-managed login popup image is a separate `app-config` surface, not a generic asset-management reopening.
 - Deferred business decisions and known risks are tracked in `plans/business-development-todo.md`. That list prevents omissions but does not confirm a contract.
-- Disabled until a separate contract is confirmed: generic public-user discovery outside the reviewed Inspiration flow and Worker/Outbox runtime behavior.
+- Disabled until a separate contract is confirmed: generic public-user discovery outside the reviewed Inspiration flow and Worker/Outbox runtime behavior beyond the dedicated `MEAL_REMINDER_SEND` consumer.
 - In development: the medal wall slice is contracted. It stays non-monetary, user-owned, and derived only from server-confirmed meal, dining-event, shopping, and adopted recommendation facts. Admin may manage medal templates and visibility, but must not issue user medals manually. Broader activities and achievements remain unfrozen; do not add ranking, progress-center, or reward surfaces without a separate contract.
 - Reserved: Points, meal tickets, receipt scanning, OCR, AI, owner transfer, and generic fine-grained permission management. Do not add placeholder services or client entry points.
 

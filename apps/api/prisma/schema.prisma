@@ -242,6 +242,12 @@ enum DiningEventStatus {
   COMPLETED
 }
 
+enum MealReminderStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
 enum DiningEventParticipantSource {
   DINING_GROUP
   SHARE
@@ -762,6 +768,7 @@ model User {
   mealPollSuggestions       MealPollCandidate[]       @relation("MealPollCandidateSuggester")
   mealPollResponses         MealPollResponse[]
   diningEvents              DiningEvent[]              @relation("DiningEventOwner")
+  mealReminders              MealReminder[]
   diningEventParticipants   DiningEventParticipant[]   @relation("DiningEventParticipantUser")
   invitedDiningEventParticipants DiningEventParticipant[] @relation("DiningEventParticipantInviter")
   diningEventCookItems      DiningEventMenuItem[]      @relation("DiningEventMenuItemCook")
@@ -1979,6 +1986,7 @@ model MealPlanItem {
   cookAssistant MealPlanCookAssistant?
   cookAssistantUnlocks CookAssistantUnlock[]
   diningEvent   DiningEvent?
+  reminders     MealReminder[]
   shoppingList  ShoppingList?         @relation(fields: [shoppingListId], references: [id], onDelete: SetNull)
   confirmedPolls MealPoll[]           @relation("MealPollConfirmedPlanItem")
   activities    DiningGroupActivity[]
@@ -2085,6 +2093,7 @@ model DiningEvent {
   wishItems    DiningEventWishItem[]
   shareInvites DiningEventShareInvite[]
   memoryShares DiningEventMemoryShare[]
+  reminders     MealReminder[]
 
   @@index([userId, scheduledAt])
   @@index([userId, memoryShareStartedAt])
@@ -2660,4 +2669,27 @@ model OutboxEvent {
   @@index([status, nextRunAt])
   @@index([aggregateType, aggregateId])
   @@map("outbox_events")
+}
+
+model MealReminder {
+  id             Int                @id @default(autoincrement())
+  userId         Int                @map("user_id")
+  mealPlanItemId Int?               @map("meal_plan_item_id")
+  diningEventId  Int?               @map("dining_event_id")
+  status         MealReminderStatus @default(PENDING)
+  acceptedAt     DateTime           @map("accepted_at") @db.Timestamptz(3)
+  scheduledAt    DateTime           @map("scheduled_at") @db.Timestamptz(3)
+  sentAt         DateTime?          @map("sent_at") @db.Timestamptz(3)
+  lastError      String?            @map("last_error") @db.VarChar(255)
+  createdAt      DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mealPlanItem MealPlanItem? @relation(fields: [mealPlanItemId], references: [id], onDelete: Cascade)
+  diningEvent  DiningEvent?  @relation(fields: [diningEventId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, mealPlanItemId])
+  @@unique([userId, diningEventId])
+  @@index([status, scheduledAt])
+  @@map("meal_reminders")
 }

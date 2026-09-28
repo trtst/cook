@@ -656,7 +656,7 @@ Idempotency-Key: 172251000003
 
 ### 5.5 从灵感保存到私房菜
 
-`POST /api/recipes/from-inspiration` 供灵感详情和加入计划 Sheet 复用；分类可稍后再分，不再提交场景。
+`POST /api/recipes/from-inspiration` 仅用于用户显式把灵感菜谱保存到私房菜；加入计划直接引用灵感菜谱的固定正文版本，不调用此接口。
 
 ```text
 POST /api/recipes/from-inspiration

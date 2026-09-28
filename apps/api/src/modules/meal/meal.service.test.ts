@@ -41,6 +41,51 @@ test("only a non-empty random result consumes quota", () => {
   assert.equal(shouldConsumeRandomMenuQuota([{ recipeVersionId: 1 }]), true);
 });
 
+test("retaining a recipe-less plan dish uses its existing slot and purchase state", async () => {
+  const service = new MealService({} as never, {} as never, {} as never, {} as never, {} as never, {} as never, {} as never);
+  (service as any).resolveMenuVersions = async (_tx: unknown, recipeVersionIds: number[]) =>
+    recipeVersionIds.map(recipeVersionId => ({
+      recipeId: null,
+      recipeVersionId,
+      coverUrl: null,
+      title: "饭局征集菜",
+      content: {},
+      assistant: null
+    }));
+  const existingPlan = {
+    dishes: [{ recipeId: null, recipeVersionId: 700, slotType: "SOUP", sortOrder: 0, purchaseState: "PENDING" }]
+  };
+
+  const result = await (service as any).resolvePlanMenuItems(
+    {} as never,
+    9,
+    [{ recipeId: null, recipeVersionId: 700, slotType: "MEAT", sortOrder: 1, purchaseState: "READY" }],
+    existingPlan
+  );
+
+  assert.deepEqual(result.map((item: any) => ({
+    recipeId: item.menu.recipeId,
+    recipeVersionId: item.menu.recipeVersionId,
+    slotType: item.slotType,
+    sortOrder: item.sortOrder,
+    purchaseState: item.purchaseState
+  })), [{ recipeId: null, recipeVersionId: 700, slotType: "SOUP", sortOrder: 1, purchaseState: "PENDING" }]);
+});
+
+test("a recipe-less plan item cannot introduce a version absent from the current plan", async () => {
+  const service = new MealService({} as never, {} as never, {} as never, {} as never, {} as never, {} as never, {} as never);
+
+  await assert.rejects(
+    (service as any).resolvePlanMenuItems(
+      {} as never,
+      9,
+      [{ recipeId: null, recipeVersionId: 701, slotType: null, sortOrder: 0, purchaseState: "READY" }],
+      { dishes: [{ recipeId: null, recipeVersionId: 700, slotType: null, sortOrder: 0, purchaseState: "READY" }] }
+    ),
+    /只能保留当前计划已有的菜品/
+  );
+});
+
 test("cancelling a future plan preserves the row and marks it cancelled", async () => {
   const future = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000);
   const planDate = new Date(Date.UTC(future.getUTCFullYear(), future.getUTCMonth(), future.getUTCDate()));
@@ -88,7 +133,8 @@ test("cancelling a future plan preserves the row and marks it cancelled", async 
     {} as never,
     {} as never,
     {} as never,
-    {} as never
+    {} as never,
+    { clearTarget: async () => {} } as never
   );
   (service as any).toMealPlanSummary = (row: typeof plan) => ({ id: row.id, status: row.status });
 
@@ -222,8 +268,8 @@ test("dining-event share token is stable per invite and rejects tampering", () =
   assert.equal(parseDiningEventShareInviteId(`${token}x`), null);
 });
 
-test("cancelling an unaccepted dining event expires invites and releases its plan", async () => {
-  const inviteUpdates: unknown[] = [];
+test("cancelling an unaccepted dining event deletes it and its linked plan", async () => {
+  const deleted: string[] = [];
   let event = {
     id: 82,
     userId: 9,
@@ -241,18 +287,19 @@ test("cancelling an unaccepted dining event expires invites and releases its pla
       create: async () => ({}),
       updateMany: async () => ({ count: 1 })
     },
+    mealReminder: { findMany: async () => [] },
+    mealPlanItem: {
+      findUnique: async () => ({ userId: 9 }),
+      delete: async () => { deleted.push("plan"); }
+    },
+    shoppingItem: { findMany: async () => [] },
+    mealPoll: { updateMany: async () => ({ count: 0 }) },
+    diningGroupActivity: { deleteMany: async () => ({ count: 0 }) },
+    storageLedger: { deleteMany: async () => ({ count: 0 }) },
+    outboxEvent: { deleteMany: async () => ({ count: 0 }) },
     diningEvent: {
       findUnique: async () => event,
-      update: async ({ data }: { data: Record<string, unknown> }) => {
-        event = { ...event, ...data, version: event.version + 1 };
-        return event;
-      }
-    },
-    diningEventShareInvite: {
-      updateMany: async (args: unknown) => {
-        inviteUpdates.push(args);
-        return { count: 1 };
-      }
+      delete: async () => { deleted.push("event"); }
     }
   };
   const service = new MealService(
@@ -262,27 +309,14 @@ test("cancelling an unaccepted dining event expires invites and releases its pla
     {} as never,
     {} as never,
     {} as never,
-    {} as never
+    {} as never,
+    { clearTarget: async () => {} } as never
   );
-  (service as any).toDiningEventSummary = (row: typeof event) => ({
-    id: row.id,
-    status: row.status,
-    planItemId: row.mealPlanItemId
-  });
 
   const result = await (service as any).cancelDiningEvent(9, 82, "1001");
 
-  assert.deepEqual(result, { id: 82, status: "CANCELLED", planItemId: null });
-  assert.equal(event.status, "CANCELLED");
-  assert.equal(event.mealPlanItemId, null);
-  assert.equal(inviteUpdates.length, 1);
-  const inviteUpdate = inviteUpdates[0] as any;
-  assert.deepEqual(inviteUpdate.where, {
-    diningEventId: 82,
-    status: { in: ["ACTIVE", "OPENED"] }
-  });
-  assert.equal(inviteUpdate.data.status, "EXPIRED");
-  assert.ok(inviteUpdate.data.expiredAt instanceof Date);
+  assert.deepEqual(result, { id: 82, status: "CANCELLED" });
+  assert.deepEqual(deleted, ["event", "plan"]);
 });
 
 test("confirming a menu does not create shopping items before the user chooses to shop", async () => {
@@ -874,6 +908,15 @@ class FakeDiningSchedulePrisma {
 
   diningEvent = {
     findUnique: async () => this.event,
+    updateMany: async ({ where, data }: { where: { id: number; version: number }; data: Record<string, unknown> }) => {
+      if (where.id !== this.event.id || where.version !== this.event.version) return { count: 0 };
+      this.event = this.eventRow({
+        scheduledAt: data.scheduledAt as Date,
+        location: (data.location as string | null | undefined) ?? this.event.location,
+        version: this.event.version + 1
+      });
+      return { count: 1 };
+    },
     update: async ({ data }: { data: Record<string, unknown> }) => {
       this.event = this.eventRow({
         scheduledAt: data.scheduledAt as Date,
@@ -963,7 +1006,9 @@ test("dining event menu summaries expose keywords from the fixed recipe version"
 
 test("dining event schedule update moves the linked plan to the scheduled time range", async () => {
   const prisma = new FakeDiningSchedulePrisma();
-  const service = new MealService(prisma as never, {} as never, {} as never, {} as never, {} as never, {} as never, {} as never);
+  const service = new MealService(prisma as never, {} as never, {} as never, {} as never, {} as never, {} as never, {} as never, {
+    rescheduleEventReminder: async () => {}
+  } as never);
 
   await service.updateDiningEventSchedule({}, 9, 901, "2001", 1, "2026-10-01T15:10:00.000Z", null);
 

@@ -6,12 +6,13 @@ import { UserModule } from "../user/user.module";
 import { WechatModule } from "../wechat/wechat.module";
 import { PantryModule } from "../pantry/pantry.module";
 import { MealController } from "./meal.controller";
+import { MealReminderService } from "./meal-reminder.service";
 import { MealService } from "./meal.service";
 
 @Module({
   imports: [CookAssistantModule, EntitlementModule, UploadModule, UserModule, WechatModule, PantryModule],
   controllers: [MealController],
-  providers: [MealService],
+  providers: [MealService, MealReminderService],
   exports: [MealService]
 })
 export class MealModule {}

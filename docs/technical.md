@@ -30,7 +30,7 @@
 - 数据库：PostgreSQL 15+
 - ORM：Prisma 5.22.0
 - 缓存与队列：Redis + BullMQ
-- 异步可靠交付：PostgreSQL Outbox，V1 建表但不启动 Worker
+- 异步可靠交付：PostgreSQL Outbox；V1 专用 Worker 仅消费已确认的 `MEAL_REMINDER_SEND`，其他事件不消费
 - API 契约：OpenAPI 3.0
 - 返回格式：统一 JSON 返回结构
 - 契约基线：见 `docs/api-contract.md`
