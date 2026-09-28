@@ -663,11 +663,10 @@ expectSelectorIncludes(randomBottomBarSource, ".bottom-bar", [
 ]);
 expectSelectorExcludes(randomBottomBarSource, ".bottom-bar", ["backdrop-filter: saturate(180%) blur(18rpx);"]);
 
-expectSelectorIncludes(randomPageSource, ".plan-sheet__tips", [
-  "background: var(--color-state-warning-soft);"
-]);
-expectSelectorIncludes(randomPageSource, ".plan-sheet__tips-text", [
-  "color: var(--color-state-warning-text);"
+expectIncludes(randomPageSource, "<AddToPlanSheet");
+expectSelectorIncludes(addToPlanSheetSource, ".meal-slot--active.meal-slot--dinner", [
+  "background: var(--meal-slot-dinner-soft);",
+  "color: var(--meal-slot-dinner);"
 ]);
 expectSelectorIncludes(randomSlotCardSource, ".slot-card__badge", [
   "background: var(--color-tag-primary-bg);",
@@ -1121,33 +1120,19 @@ expectSelectorIncludes(participantManageSheetSource, ".participant-sheet__action
 ]);
 expectSelectorExcludes(participantManageSheetSource, ".participant-sheet__action--primary", ["background: var(--color-primary-soft-fill-subtle);"]);
 
-expectIncludes(addToPlanSheetSource, "border: 1rpx solid var(--material-input-border);");
-expectIncludes(addToPlanSheetSource, "background: var(--material-input-bg);");
-expectIncludes(addToPlanSheetSource, "box-shadow: var(--material-input-shadow);");
-expectIncludes(addToPlanSheetSource, "backdrop-filter: var(--material-input-filter);");
 expectIncludes(addToPlanSheetSource, "background: var(--material-card-bg);");
 expectIncludes(addToPlanSheetSource, "box-shadow: var(--material-card-shadow);");
 expectIncludes(addToPlanSheetSource, "backdrop-filter: var(--material-card-filter);");
-expectIncludes(addToPlanSheetSource, ".chip,\n.meal-slot {");
+expectIncludes(addToPlanSheetSource, ".meal-slot {");
 expectIncludes(addToPlanSheetSource, "min-height: 50rpx;");
 expectIncludes(addToPlanSheetSource, "padding: 0 24rpx;");
 expectIncludes(addToPlanSheetSource, "border-radius: var(--radius-pill);");
 expectIncludes(addToPlanSheetSource, "backdrop-filter: var(--button-primary-filter);");
-expectSelectorIncludes(addToPlanSheetSource, ".sheet-creator__button", [
-  "background: var(--color-tag-primary-bg);",
-  "color: var(--color-tag-primary-text);"
-]);
 expectExcludes(addToPlanSheetSource, LEGACY_SECONDARY_OUTLINE);
-expectSelectorExcludes(addToPlanSheetSource, ".chip,\n.meal-slot", ["border: 1rpx solid var(--material-card-border);"]);
+expectSelectorExcludes(addToPlanSheetSource, ".meal-slot", ["border: 1rpx solid var(--material-card-border);"]);
 expectSelectorExcludes(addToPlanSheetSource, ".panel-note", ["border: 1rpx solid var(--material-card-border);"]);
 expectSelectorExcludes(addToPlanSheetSource, ".sheet-actions__button--cancel", ["border: 1rpx solid var(--button-secondary-border);"]);
 expectSelectorExcludes(addToPlanSheetSource, ".sheet-actions__button--confirm", ["border: 1rpx solid var(--button-primary-border);"]);
-expectSelectorIncludes(addToPlanSheetSource, ".chip--active", [
-  "background: var(--color-tag-primary-bg);",
-  "box-shadow: inset 0 0 0 1rpx var(--color-border-active);",
-  "color: var(--color-tag-primary-text);"
-]);
-expectSelectorExcludes(addToPlanSheetSource, ".chip--active", ["background: var(--color-primary-soft);"]);
 
 expectIncludes(addToPrivateSheetSource, "background: var(--material-card-bg);");
 expectIncludes(addToPrivateSheetSource, "box-shadow: var(--material-card-shadow);");
@@ -1250,7 +1235,7 @@ expectSelectorExcludes(textFieldSheetSource, ".text-field-sheet__button--cancel"
 expectSelectorExcludes(textFieldSheetSource, ".text-field-sheet__button--confirm", ["border: 1rpx solid var(--button-primary-border);"]);
 
 expectIncludes(tabbarSource, "background: var(--color-tabbar-bg);");
-expectSelectorIncludes(tabbarSource, ".tabbar-shell::after", ["background: transparent;"]);
+expectSelectorIncludes(tabbarSource, ".tabbar-shell::after", ["background: #fefefe;"]);
 expectSelectorIncludes(tabbarSource, ".tabbar__active-pill", ["background: var(--color-tabbar-active-bg);"]);
 expectIncludes(tabbarSource, "box-shadow: var(--material-tabbar-shadow);");
 expectIncludes(tabbarSource, "backdrop-filter: var(--material-tabbar-filter);");

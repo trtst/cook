@@ -345,7 +345,7 @@
 
   --overlay-hero-banner-shade: linear-gradient(180deg, var(--color-overlay-medium), var(--color-overlay-stage)), radial-gradient(circle at right top, var(--color-overlay-control), transparent 36%);
   --overlay-image-mask: linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.18) 28%, rgba(0, 0, 0, 0.92) 100%);
-  --frosted-mask-image: linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.1) 36%, rgba(0, 0, 0, 1) 100%);
+  --frosted-mask-image: linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.1) 50%, rgba(0, 0, 0, 1) 100%);
   --feedback-glow-start: #{rgba(theme-value($dark, $text, $surface), 0)};
   --feedback-glow-primary-end: var(--color-primary-soft);
   --feedback-glow-danger-end: #{rgba($danger, theme-value($dark, 0.22, 0.18))};
