@@ -2,54 +2,12 @@
   <SheetShell
     :visible="visible"
     title="加入计划"
-    :subtitle="needAddToPrivate ? '加入计划会同步保存到私房菜；先选择或创建一个个人分类。' : '选择日期和餐次，这道私房菜会固定到计划中，之后可以按计划准备食材和做饭。'"
+    subtitle="选择日期和餐次，把选中的菜加入计划。"
     @close="emit('close')"
   >
     <view v-if="loading" class="panel-note">加载中...</view>
     <view v-else-if="errorText" class="panel-note" @click="reload">{{ errorText }}</view>
     <template v-else>
-      <view v-if="needAddToPrivate" class="sheet-section sheet-section--category">
-        <view class="sheet-section__head">
-          <view class="sheet-section__meta">
-            <text class="sheet-section__title">私房菜分类</text>
-            <text class="sheet-section__tag">必选</text>
-          </view>
-          <view class="sheet-section__action" @click="toggleCategoryCreator">
-            {{ showCategoryCreator ? "取消" : "创建" }}
-          </view>
-        </view>
-
-        <view v-if="showCategoryCreator" class="sheet-creator">
-          <input
-            v-model="categoryDraftName"
-            class="sheet-creator__input"
-            maxlength="8"
-            placeholder="输入分类名称"
-            :disabled="categorySubmitting"
-          />
-          <button
-            class="sheet-creator__button"
-            :class="{ 'sheet-creator__button--disabled': categorySubmitting || !categoryDraftName.trim() }"
-            @click="createCategory"
-          >
-            {{ categorySubmitting ? "创建中" : "确定" }}
-          </button>
-        </view>
-
-        <view v-if="categories.length" class="chip-row">
-          <view
-            v-for="item in categories"
-            :key="item.id"
-            class="chip"
-            :class="{ 'chip--active': selectedCategoryId === item.id }"
-            @click="selectedCategoryId = item.id"
-          >
-            {{ item.name }}
-          </view>
-        </view>
-        <text v-if="!categories.length" class="sheet-section__hint">还没有个人分类，请先创建一个。</text>
-      </view>
-
       <view class="sheet-section">
         <MealMonthCalendar
           :selected-date="selectedDate"
@@ -106,8 +64,8 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref, watch } from "vue";
 import { UnauthorizedError, type UUID } from "@/apis/http";
-import { mealApi } from "@/apis/meal";
-import { recipeApi, type RecipeCategorySummary } from "@/apis/recipe";
+import { mealApi, type CreateMealPlanRequest } from "@/apis/meal";
+import { recipeApi } from "@/apis/recipe";
 import MealMonthCalendar from "@/components/MealMonthCalendar.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
 import { uniPlatform } from "@/platform/uni";
@@ -124,19 +82,25 @@ import {
 } from "@/utils/meal-slot";
 import { formatDateOnly, parseDateOnly, todayText } from "@/utils/date";
 
+interface AddToPlanRecipeItem {
+  recipeId: UUID;
+  recipeVersionId?: UUID;
+  slotType?: "MEAT" | "VEGETABLE" | "SOUP" | "STAPLE" | "BREAKFAST_STAPLE" | "BREAKFAST_PROTEIN" | "BREAKFAST_SIDE" | null;
+  sortOrder?: number;
+  purchaseState?: "READY" | "PENDING";
+}
+
 const props = defineProps<{
   visible: boolean;
-  recipeId?: UUID | null;
-  sourceRecipeId?: UUID | null;
-  sourceVersionId?: UUID | null;
-  needAddToPrivate: boolean;
+  items: AddToPlanRecipeItem[];
+  initialMealSlot?: MealSlot;
 }>();
 
 const loginModalStore = useLoginModalStore();
 
 const emit = defineEmits<{
   close: [];
-  success: [payload: { recipeId: UUID; addedToPrivate: boolean; planItemId: UUID; planDate: string; mealSlot: MealSlot }];
+  success: [payload: { planItemId: UUID; planDate: string; mealSlot: MealSlot }];
 }>();
 
 const today = todayText();
@@ -144,11 +108,6 @@ const mealSlots = MEAL_SLOT_OPTIONS;
 const loading = ref(false);
 const submitting = ref(false);
 const errorText = ref("");
-const categories = ref<RecipeCategorySummary[]>([]);
-const selectedCategoryId = ref<UUID | "">("");
-const categoryDraftName = ref("");
-const showCategoryCreator = ref(false);
-const categorySubmitting = ref(false);
 const selectedDate = ref(today);
 const monthDate = ref(buildMonthAnchor(today));
 const mealSlot = ref<MealSlot>("DINNER");
@@ -165,8 +124,7 @@ const mealSlotItems = computed(() => {
   }));
 });
 const canSubmit = computed(() => {
-  if (props.needAddToPrivate && !selectedCategoryId.value) return false;
-  return !mealSlotItems.value.find(item => item.value === mealSlot.value)?.expired;
+  return props.items.length > 0 && !mealSlotItems.value.find(item => item.value === mealSlot.value)?.expired;
 });
 const planDateText = computed(() => {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(selectedDate.value);
@@ -187,15 +145,6 @@ watch(
 );
 
 watch(
-  () => props.needAddToPrivate,
-  needAddToPrivate => {
-    if (props.visible && needAddToPrivate) {
-      void loadOptions();
-    }
-  }
-);
-
-watch(
   () => [selectedDate.value, nowMs.value] as const,
   () => {
     ensureMealSlotAvailable();
@@ -204,14 +153,10 @@ watch(
 );
 
 function resetSelection() {
-  selectedCategoryId.value = "";
-  categoryDraftName.value = "";
-  showCategoryCreator.value = false;
-  categorySubmitting.value = false;
   nowMs.value = Date.now();
   selectedDate.value = today;
   monthDate.value = buildMonthAnchor(today);
-  mealSlot.value = resolveNextMealSlot(today);
+  mealSlot.value = props.initialMealSlot ?? resolveNextMealSlot(today);
   errorText.value = "";
 }
 
@@ -219,11 +164,6 @@ async function loadOptions() {
   loading.value = true;
   errorText.value = "";
   try {
-    if (props.needAddToPrivate) {
-      await loadCategories();
-    } else {
-      categories.value = [];
-    }
     await loadPlanMarks(monthDate.value);
   } catch (error) {
     if (error instanceof UnauthorizedError) {
@@ -235,10 +175,6 @@ async function loadOptions() {
   } finally {
     loading.value = false;
   }
-}
-
-async function loadCategories() {
-  categories.value = await recipeApi.listCategories();
 }
 
 async function loadPlanMarks(nextMonth = monthDate.value) {
@@ -297,36 +233,6 @@ function selectMealSlot(value: MealSlot) {
   mealSlot.value = value;
 }
 
-function toggleCategoryCreator() {
-  showCategoryCreator.value = !showCategoryCreator.value;
-  if (!showCategoryCreator.value) categoryDraftName.value = "";
-}
-
-async function createCategory() {
-  const name = categoryDraftName.value.trim();
-  if (!name || categorySubmitting.value) return;
-  if (name.length > 8) {
-    await uniPlatform.feedback.toast({ title: "分类最多8个字", icon: "none" });
-    return;
-  }
-  categorySubmitting.value = true;
-  try {
-    const created = await recipeApi.createCategory({ operationId: createOperationId(), name });
-    categories.value = [...categories.value, created];
-    selectedCategoryId.value = created.id;
-    categoryDraftName.value = "";
-    showCategoryCreator.value = false;
-  } catch (error) {
-    if (error instanceof UnauthorizedError) {
-      loginModalStore.open();
-    } else {
-      await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "创建分类失败", icon: "none" });
-    }
-  } finally {
-    categorySubmitting.value = false;
-  }
-}
-
 function handleClose() {
   if (submitting.value) return;
   emit("close");
@@ -350,59 +256,54 @@ function handleMonthChange(nextMonth: string) {
 async function submit() {
   if (!canSubmit.value || submitting.value) return;
   submitting.value = true;
-  let addedToPrivate = false;
   try {
     if (isMealSlotExpired(selectedDate.value, mealSlot.value, new Date(nowMs.value))) {
       throw new Error("当前时间已经不能安排这餐了");
     }
-    let recipeId = props.recipeId ?? null;
-    let recipeVersionId: UUID | null = null;
-    if (props.needAddToPrivate) {
-      if (!selectedCategoryId.value) {
-        throw new Error("请选择私房菜分类");
-      }
-      if (!props.sourceRecipeId || !props.sourceVersionId) {
-        throw new Error("当前灵感菜谱信息不完整");
-      }
-      const result = await recipeApi.createMyRecipeFromInspiration({
-        operationId: createOperationId(),
-        sourceRecipeId: props.sourceRecipeId,
-        sourceVersionId: props.sourceVersionId,
-        categoryId: selectedCategoryId.value
+    const plans = await mealApi.listPlans({ from: selectedDate.value, to: selectedDate.value, page: 1, pageSize: 10 });
+    const currentPlan = plans.items.find(item => item.mealSlot === mealSlot.value) ?? null;
+    const menuByVersion = new Map<UUID, CreateMealPlanRequest["menuItems"][number]>();
+    for (const [index, item] of (currentPlan?.menuItems ?? []).entries()) {
+      menuByVersion.set(item.recipeVersionId, {
+        recipeId: item.recipeId,
+        recipeVersionId: item.recipeVersionId,
+        slotType: item.slotType,
+        sortOrder: index,
+        purchaseState: item.purchaseState
       });
-      recipeId = result.recipe.id;
-      recipeVersionId = result.recipe.contentVersionId;
-      addedToPrivate = true;
-    } else if (recipeId) {
-      const recipe = await recipeApi.getMyRecipe(recipeId);
-      recipeVersionId = recipe.contentVersionId;
     }
-    if (!recipeId || !recipeVersionId) throw new Error("当前菜谱暂不可加入计划");
-
-    const plan = await mealApi.addPlanItem({
+    for (const [index, item] of props.items.entries()) {
+      const recipeVersionId = item.recipeVersionId ?? (await recipeApi.getMyRecipe(item.recipeId)).contentVersionId;
+      if (menuByVersion.has(recipeVersionId)) continue;
+      menuByVersion.set(recipeVersionId, {
+        recipeId: item.recipeId,
+        recipeVersionId,
+        slotType: item.slotType ?? null,
+        sortOrder: item.sortOrder ?? index,
+        purchaseState: item.purchaseState ?? "READY"
+      });
+    }
+    const body: CreateMealPlanRequest = {
       operationId: createOperationId(),
       planDate: selectedDate.value,
       mealSlot: mealSlot.value,
-      recipeId,
-      recipeVersionId,
-      slotType: null,
-      purchaseState: "READY"
-    });
+      expectedVersion: currentPlan?.version ?? null,
+      menuItems: Array.from(menuByVersion.values()).map((item, sortOrder) => ({ ...item, sortOrder }))
+    };
+    const plan = await mealApi.createPlan(body);
     emit("success", {
-      recipeId,
-      addedToPrivate,
       planItemId: plan.id,
       planDate: plan.planDate,
       mealSlot: plan.mealSlot
     });
     emit("close");
-    await uniPlatform.feedback.toast({ title: addedToPrivate ? "已保存到私房菜并加入计划" : "已加入计划", icon: "success" });
+    await uniPlatform.feedback.toast({ title: "已加入计划", icon: "success" });
   } catch (error) {
     if (error instanceof UnauthorizedError) {
       loginModalStore.open();
     } else {
       await uniPlatform.feedback.toast({
-        title: addedToPrivate ? "私房菜已保存，请重试加入计划" : error instanceof Error ? error.message : "加入计划失败",
+        title: error instanceof Error ? error.message : "加入计划失败",
         icon: "none"
       });
     }
@@ -435,21 +336,11 @@ onUnmounted(() => {
   margin-top: 28rpx;
 }
 
-.sheet-section--category {
-  margin-top: 24rpx;
-}
-
 .sheet-section__head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 20rpx;
-}
-
-.sheet-section__meta {
-  display: flex;
-  align-items: center;
-  gap: 12rpx;
 }
 
 .sheet-section__title {
@@ -458,52 +349,17 @@ onUnmounted(() => {
   font-weight: var(--font-weight-semibold);
 }
 
-.sheet-section__tag {
-  display: inline-flex;
-  align-items: center;
-  min-height: 32rpx;
-  padding: 4rpx 10rpx;
-  border: 1rpx solid var(--color-state-warning-border);
-  border-radius: var(--radius-pill);
-  background: var(--color-state-warning-soft);
-  color: var(--color-state-warning-text);
-  font-size: 22rpx;
-  font-weight: var(--font-weight-semibold);
-  line-height: 1.2;
-}
-
-.sheet-section__hint {
-  color: var(--color-text-tertiary);
-  font-size: 22rpx;
-}
-
-.sheet-section__action {
-  color: var(--color-support-action);
-  font-size: 24rpx;
-  font-weight: var(--font-weight-semibold);
-}
-
-.sheet-section__hint {
-  line-height: 1.6;
-}
-
 .plan-section__date {
   color: var(--color-text-secondary);
   font-size: 26rpx;
   font-weight: var(--font-weight-semibold);
 }
 
-.chip-row,
 .meal-slot-row {
   display: flex;
   gap: 16rpx;
 }
 
-.chip-row {
-  flex-wrap: wrap;
-}
-
-.chip,
 .meal-slot {
   display: flex;
   align-items: center;
@@ -517,13 +373,6 @@ onUnmounted(() => {
   backdrop-filter: var(--material-card-filter);
   color: var(--color-text-secondary);
   font-size: 24rpx;
-}
-
-.chip--active {
-  background: var(--color-tag-primary-bg);
-  box-shadow: inset 0 0 0 1rpx var(--color-border-active);
-  color: var(--color-tag-primary-text);
-  font-weight: var(--font-weight-semibold);
 }
 
 .meal-slot {
@@ -563,46 +412,6 @@ onUnmounted(() => {
   color: var(--meal-slot-late-night);
 }
 
-.sheet-creator {
-  display: flex;
-  align-items: center;
-  gap: 16rpx;
-}
-
-.sheet-creator__input {
-  flex: 1;
-  min-width: 0;
-  height: 80rpx;
-  line-height: 1;
-  padding: 0 24rpx;
-  border: 1rpx solid var(--material-input-border);
-  border-radius: var(--radius-xs);
-  background: var(--material-input-bg);
-  box-shadow: var(--material-input-shadow);
-  color: var(--color-text);
-  font-size: 26rpx;
-  -webkit-backdrop-filter: var(--material-input-filter);
-  backdrop-filter: var(--material-input-filter);
-}
-
-.sheet-creator__button {
-  flex: 0 0 auto;
-  height: 80rpx;
-  padding: 0 28rpx;
-  border: 0;
-  border-radius: var(--radius-xs);
-  background: var(--color-tag-primary-bg);
-  color: var(--color-tag-primary-text);
-  font-size: 24rpx;
-  font-weight: var(--font-weight-semibold);
-  line-height: 80rpx;
-}
-
-.sheet-creator__button::after {
-  border: 0;
-}
-
-.sheet-creator__button--disabled,
 .sheet-actions__button--disabled {
   opacity: 0.46;
 }

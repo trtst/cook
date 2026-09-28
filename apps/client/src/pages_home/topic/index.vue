@@ -137,12 +137,8 @@
     <AddToPlanSheet
       v-if="currentPlanItem"
       :visible="planSheetVisible"
-      :recipe-id="currentPlanItem.ownedRecipeId"
-      :source-recipe-id="currentPlanItem.id"
-      :source-version-id="currentPlanItem.sourceVersionId"
-      :need-add-to-private="!Boolean(currentPlanItem.ownedRecipeId)"
+      :items="planSheetItems"
       @close="closePlanSheet"
-      @success="handlePlanSuccess"
     />
   </Layout>
 </template>
@@ -161,7 +157,6 @@ import { useTheme } from "@/composables/useTheme";
 import { useSystemInfo } from "@/composables/useSystemInfo";
 import { useLoginModalStore } from "@/stores/login-modal";
 import { useSessionStore } from "@/stores/session";
-import { markRecipeHomeDirty, markRecipeManageDirty } from "@/pages/recipe/utils/recipe-view-sync";
 import { uniPlatform } from "@/platform/uni";
 import emptyStateArt from "@/assets/empty.png";
 import { formatMonthDay, formatSort } from "../utils/date";
@@ -206,6 +201,15 @@ const navTitle = computed(() => topic.value?.title || "本周灵感");
 const navProgress = computed(() => Math.min(1, Math.max(0, scrollTop.value / NAV_FADE_DISTANCE)));
 const visibleHistory = computed(() => topic.value?.history.slice(0, 5) ?? []);
 const currentPlanItem = computed(() => (topic.value?.items ?? []).find(item => item.id === currentPlanItemId.value) ?? null);
+const planSheetItems = computed(() => {
+  const item = currentPlanItem.value;
+  if (!item) return [];
+  const recipeId = item.ownedRecipeId ?? item.id;
+  return [{
+    recipeId,
+    ...(!item.ownedRecipeId && item.sourceVersionId ? { recipeVersionId: item.sourceVersionId } : {})
+  }];
+});
 const navBackdropStyle = computed(() => ({
   height: `${navBarTotalHeight.value}px`,
   opacity: `${navProgress.value}`
@@ -305,22 +309,6 @@ function closePlanSheet() {
   currentPlanItemId.value = null;
 }
 
-function syncOwnedRecipe(itemId: number, ownedRecipeId: number) {
-  if (!topic.value) return;
-  topic.value = {
-    ...topic.value,
-    items: topic.value.items.map(item => (item.id === itemId ? { ...item, ownedRecipeId } : item))
-  };
-}
-
-function handlePlanSuccess(payload: { recipeId: number; addedToPrivate: boolean }) {
-  const item = currentPlanItem.value;
-  if (item && payload.addedToPrivate) {
-    syncOwnedRecipe(item.id, payload.recipeId);
-    markRecipeHomeDirty(["my"]);
-    markRecipeManageDirty(["recipes"]);
-  }
-}
 </script>
 
 <style scoped lang="scss">

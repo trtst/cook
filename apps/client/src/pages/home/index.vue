@@ -162,45 +162,47 @@
               </view>
               <text class="section-heading__action" @click="refreshFridgeRecipeRecommendations">换一换</text>
             </view>
-            <scroll-view v-if="visibleFridgeRecipes.length" scroll-x class="recipe-scroll" show-scrollbar="false">
-              <view
-                v-for="item in visibleFridgeRecipes"
-                :key="`${item.kind}-${item.recipeId}`"
-                class="family-recipe"
-                hover-class="family-recipe--hover"
-                hover-stay-time="100"
-                @click="openFridgeRecipe(item)"
-              >
-                <view class="family-recipe__visual">
-                  <image v-if="item.coverImageUrl" class="family-recipe__image" :src="item.coverImageUrl" mode="aspectFill" />
-                  <ImageEmpty v-else class="family-recipe__image-empty" ratio="fill" />
-                </view>
-                <text class="family-recipe__name">{{ item.title }}</text>
-                <text class="family-recipe__meta">{{ fridgeRecipeMeta(item) }}</text>
-              </view>
-            </scroll-view>
-            <view v-else-if="showFridgeRecipesSkeleton" class="recipe-scroll">
-              <view v-for="index in 3" :key="index" class="family-recipe family-recipe--skeleton">
-                <Skeleton width="204rpx" height="220rpx" radius="var(--radius-card)" />
-                <view class="family-recipe__skeleton-copy">
-                  <Skeleton width="160rpx" height="24rpx" />
-                  <Skeleton width="120rpx" height="20rpx" />
+            <view class="fridge-recipes-content">
+              <view v-if="showFridgeRecipesSkeleton" class="recipe-scroll">
+                <view v-for="index in homeFridgeRecipeDisplayCount" :key="index" class="family-recipe family-recipe--skeleton">
+                  <Skeleton width="204rpx" height="220rpx" radius="var(--radius-card)" />
+                  <view class="family-recipe__skeleton-copy">
+                    <Skeleton width="160rpx" height="24rpx" />
+                    <Skeleton width="120rpx" height="20rpx" />
+                  </view>
                 </view>
               </view>
-            </view>
-            <view v-else class="fridge-empty">
-              <Empty
-                :title="fridgeRecipesEmptyTitle"
-                :description="fridgeRecipesEmptyDescription"
-                :clickable="!sessionStore.isLoggedIn"
-                @click="openLogin()"
-              />
-              <view v-if="sessionStore.isLoggedIn" class="fridge-empty__actions">
-                <view class="fridge-empty__button fridge-empty__button--primary" @click="openFridgeEmptyPrimaryAction">
-                  <text>{{ fridgeRecipesEmptyPrimaryActionText }}</text>
+              <scroll-view v-else-if="fridgeRecipes.length" scroll-x class="recipe-scroll" show-scrollbar="false">
+                <view
+                  v-for="item in fridgeRecipes"
+                  :key="`${item.kind}-${item.recipeId}`"
+                  class="family-recipe"
+                  hover-class="family-recipe--hover"
+                  hover-stay-time="100"
+                  @click="openFridgeRecipe(item)"
+                >
+                  <view class="family-recipe__visual">
+                    <image v-if="item.coverImageUrl" class="family-recipe__image" :src="item.coverImageUrl" mode="aspectFill" />
+                    <ImageEmpty v-else class="family-recipe__image-empty" ratio="fill" />
+                  </view>
+                  <text class="family-recipe__name">{{ item.title }}</text>
+                  <text class="family-recipe__meta">{{ fridgeRecipeMeta(item) }}</text>
                 </view>
-                <view class="fridge-empty__button fridge-empty__button--secondary" @click="openRandomEntry">
-                  <text>随机一桌</text>
+              </scroll-view>
+              <view v-else class="fridge-empty">
+                <Empty
+                  :title="fridgeRecipesEmptyTitle"
+                  :description="fridgeRecipesEmptyDescription"
+                  :clickable="!sessionStore.isLoggedIn"
+                  @click="openLogin()"
+                />
+                <view v-if="sessionStore.isLoggedIn" class="fridge-empty__actions">
+                  <view class="fridge-empty__button fridge-empty__button--primary" @click="openFridgeEmptyPrimaryAction">
+                    <text>{{ fridgeRecipesEmptyPrimaryActionText }}</text>
+                  </view>
+                  <view class="fridge-empty__button fridge-empty__button--secondary" @click="openRandomEntry">
+                    <text>随机一桌</text>
+                  </view>
                 </view>
               </view>
             </view>
@@ -209,10 +211,10 @@
           <view class="pantry-panel">
             <view class="pantry-panel__header">
               <view>
-                <text class="pantry-panel__label">采购和库存都在这里</text>
-                <text class="pantry-panel__title">清单和冰箱</text>
+                <text class="pantry-panel__label">家里食材与采购</text>
+                <text class="pantry-panel__title">库存和清单</text>
               </view>
-              <text class="pantry-panel__action" @click="navigateTo('/pages_pantry/list/index')">去补清单</text>
+              <text class="pantry-panel__action" @click="navigateTo('/pages_pantry/list/index')">查看清单</text>
             </view>
 
             <view class="pantry-list">
@@ -227,14 +229,20 @@
               </view>
               <view v-else-if="hasPantrySummaryData" class="pantry-summary">
                 <view class="pantry-summary__stats">
-                  <view v-for="item in pantrySummaryItems" :key="item.label" class="pantry-summary__stat">
+                  <view
+                    v-for="item in pantrySummaryItems"
+                    :key="item.label"
+                    class="pantry-summary__stat"
+                    :class="{ 'pantry-summary__stat--clickable': item.label === '家里库存' }"
+                    @click="openPantrySummaryItem(item.label)"
+                  >
                     <text class="pantry-summary__value">{{ item.value }}</text>
                     <text class="pantry-summary__label">{{ item.label }}</text>
                   </view>
                 </view>
                 <text class="pantry-summary__hint">{{ pantrySummaryHintText }}</text>
               </view>
-              <Empty v-else title="还没有记录购物和食材" description="先记食材，或者先建一张清单。" />
+              <Empty v-else title="还没有食材或清单记录" description="记下家里现有的食材，也可以先列一张待买清单。" />
             </view>
           </view>
         </view>
@@ -333,7 +341,8 @@ const weekOverview = ref<HomeWeekOverview | null>(null);
 const fridgeRecipesLoading = ref(false);
 const fridgeRecipesLoaded = ref(false);
 const fridgeRecipes = ref<HomeFridgeRecipeItem[]>([]);
-const fridgeRecipePageIndex = ref(0);
+const fridgeRecipePage = ref(1);
+const fridgeRecipesHasNext = ref(false);
 const pantrySummaryLoading = ref(false);
 const pantrySummaryLoaded = ref(false);
 const pantryIngredientCount = ref(0);
@@ -405,7 +414,6 @@ const showWeekOverviewSkeleton = computed(() => sessionStore.isLoggedIn && weekO
 const showFridgeRecipesSkeleton = computed(
   () =>
     sessionStore.isLoggedIn &&
-    !fridgeRecipes.value.length &&
     (fridgeRecipesLoading.value || !fridgeRecipesLoaded.value || (pantrySummaryLoading.value && !pantrySummaryLoaded.value))
 );
 const showPantrySummarySkeleton = computed(
@@ -421,7 +429,7 @@ const hasPantrySummaryData = computed(
     })
 );
 const pantrySummaryItems = computed(() => [
-  { label: "冰箱食材", value: String(pantryIngredientCount.value) },
+  { label: "家里库存", value: String(pantryIngredientCount.value) },
   { label: "近期食材", value: String(pantryTraceCount.value) },
   { label: "待采购", value: String(pantryPendingShoppingCount.value) }
 ]);
@@ -433,22 +441,15 @@ const pantrySummaryHintText = computed(() => {
     activeListCount: pantryActiveListCount.value
   });
 });
-const visibleFridgeRecipes = computed(() => {
-  const items = fridgeRecipes.value;
-  if (items.length <= homeFridgeRecipeDisplayCount) return items;
-
-  const startIndex = (fridgeRecipePageIndex.value * homeFridgeRecipeDisplayCount) % items.length;
-  return Array.from({ length: homeFridgeRecipeDisplayCount }, (_, index) => items[(startIndex + index) % items.length]);
-});
 const hasFridgeIngredients = computed(() => pantryIngredientCount.value > 0);
 const fridgeRecipesEmptyTitle = computed(() => {
   if (!sessionStore.isLoggedIn) return "登录后看看能做什么";
-  return hasFridgeIngredients.value ? "还没匹配到合适的菜" : "先记几样冰箱食材";
+  return hasFridgeIngredients.value ? "这次还没找到合适的菜" : "冰箱里还没记下食材";
 });
 const fridgeRecipesEmptyDescription = computed(() => {
   if (!sessionStore.isLoggedIn) return "记下冰箱里的食材后，这里会按已有食材匹配菜谱。";
-  if (hasFridgeIngredients.value) return "可以去菜谱里找找想吃的，或先随机一桌换个思路。";
-  return "有了食材记录，首页就能帮你挑更顺手的菜。";
+  if (hasFridgeIngredients.value) return "没关系，可以逛逛菜谱，或者换个思路再随机一桌。";
+  return "先记下几样家里现有的食材，我来帮你看看能做什么。";
 });
 const fridgeRecipesEmptyPrimaryActionText = computed(() => (hasFridgeIngredients.value ? "去看食谱" : "去记食材"));
 const homeNextStatus = computed<HomeNextMealStatus>(() => nextMealState.value?.status ?? "NO_ARRANGEMENT");
@@ -623,10 +624,11 @@ async function loadWeekOverview(force = false) {
   await weekOverviewLoadPromise;
 }
 
-async function loadFridgeRecipes(force = false) {
+async function loadFridgeRecipes(force = false, page = fridgeRecipePage.value) {
   if (!sessionStore.isLoggedIn) {
     fridgeRecipes.value = [];
-    fridgeRecipePageIndex.value = 0;
+    fridgeRecipePage.value = 1;
+    fridgeRecipesHasNext.value = false;
     fridgeRecipesLoading.value = false;
     fridgeRecipesLoaded.value = false;
     return;
@@ -641,15 +643,16 @@ async function loadFridgeRecipes(force = false) {
 
   fridgeRecipesLoading.value = true;
   fridgeRecipesLoadPromise = homeApi
-    .getFridgeRecipes()
+    .getFridgeRecipes(page)
     .then(result => {
       fridgeRecipes.value = result.items;
-      fridgeRecipePageIndex.value = 0;
+      fridgeRecipePage.value = page;
+      fridgeRecipesHasNext.value = result.hasNext;
       fridgeRecipesLoaded.value = true;
     })
     .catch(() => {
       fridgeRecipes.value = [];
-      fridgeRecipePageIndex.value = 0;
+      fridgeRecipesHasNext.value = false;
       fridgeRecipesLoaded.value = true;
     })
     .finally(() => {
@@ -860,19 +863,22 @@ async function refreshFridgeRecipeRecommendations() {
     return;
   }
 
-  if (fridgeRecipes.value.length > homeFridgeRecipeDisplayCount) {
-    fridgeRecipePageIndex.value += 1;
-    return;
-  }
+  if (fridgeRecipesLoadPromise) await fridgeRecipesLoadPromise;
 
-  await loadFridgeRecipes(true);
+  const nextPage = fridgeRecipesHasNext.value ? fridgeRecipePage.value + 1 : 1;
+  await loadFridgeRecipes(true, nextPage);
 }
 
 function openFridgeEmptyPrimaryAction() {
   if (hasFridgeIngredients.value) {
-    navigateTo("/pages/recipe/index");
+    void uniPlatform.navigation.switchTab("/pages/recipe/index");
     return;
   }
+  navigateTo("/pages_pantry/index/index");
+}
+
+function openPantrySummaryItem(label: string) {
+  if (label !== "家里库存") return;
   navigateTo("/pages_pantry/index/index");
 }
 
@@ -2247,6 +2253,10 @@ defineExpose({
   background: var(--color-surface-raised);
 }
 
+.pantry-summary__stat--clickable {
+  cursor: pointer;
+}
+
 .pantry-summary__value,
 .pantry-summary__label,
 .pantry-summary__hint {
@@ -2316,6 +2326,10 @@ defineExpose({
 .recipe-scroll {
   width: 100%;
   white-space: nowrap;
+}
+
+.fridge-recipes-content {
+  min-height: 286rpx;
 }
 
 .fridge-empty__actions {

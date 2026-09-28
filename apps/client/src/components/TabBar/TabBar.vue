@@ -132,7 +132,7 @@ async function syncBadgeSnapshot() {
   position: absolute;
   inset: 0;
   z-index: 0;
-  background: transparent;
+  background: #fefefe;
   -webkit-mask-image: var(--frosted-mask-image);
   mask-image: var(--frosted-mask-image);
   -webkit-backdrop-filter: var(--material-mask-filter);

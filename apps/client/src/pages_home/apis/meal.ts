@@ -45,7 +45,7 @@ export interface CreateMealPlanRequest {
   menuItems: Array<{
     slotType: "MEAT" | "VEGETABLE" | "SOUP" | "STAPLE" | "BREAKFAST_STAPLE" | "BREAKFAST_PROTEIN" | "BREAKFAST_SIDE" | null;
     sortOrder: number;
-    recipeId: UUID;
+    recipeId: UUID | null;
     recipeVersionId: UUID;
     purchaseState: "READY" | "PENDING";
   }>;

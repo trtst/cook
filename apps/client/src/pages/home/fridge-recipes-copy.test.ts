@@ -25,8 +25,10 @@ assert.ok(
   source.includes('<view v-if="sessionStore.isLoggedIn" class="fridge-empty__actions">'),
   "Expected fridge recipe empty actions to render only for logged-in users."
 );
-assert.ok(source.includes("先记几样冰箱食材"), "Expected empty state for logged-in users without fridge ingredients.");
-assert.ok(source.includes("还没匹配到合适的菜"), "Expected empty state for logged-in users with unmatched ingredients.");
+assert.ok(source.includes("冰箱里还没记下食材"), "Expected a warm empty state for logged-in users without fridge ingredients.");
+assert.ok(source.includes("这次还没找到合适的菜"), "Expected a warm empty state for logged-in users with unmatched ingredients.");
+assert.ok(source.includes(".fridge-recipes-content {\n  min-height: 286rpx;"), "Expected loading and empty content to keep the same height.");
+assert.ok(source.includes('uniPlatform.navigation.switchTab("/pages/recipe/index")'), "Expected recipe tab actions to use tab navigation.");
 assert.ok(source.includes(".section-heading__eyebrow"), "Expected fridge recipe section eyebrow to have local styling.");
 assert.ok(source.includes(".fridge-empty__actions"), "Expected fridge recipe empty actions to have local styling.");
 assert.ok(source.includes(".fridge-empty__button--primary"), "Expected fridge recipe empty primary action to have local styling.");

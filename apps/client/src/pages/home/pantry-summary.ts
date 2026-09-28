@@ -24,7 +24,7 @@ export function buildPantrySummaryState(
   const next = createEmptyPantrySummary();
   if (fridgeSummary) {
     next.ingredientCount = fridgeSummary.totalCount;
-    next.traceCount = fridgeSummary.totalCount;
+    next.traceCount = fridgeSummary.recentCount;
   }
   if (shoppingSummary) {
     next.pendingShoppingCount = Math.max(shoppingSummary.pendingItemCount, 0);

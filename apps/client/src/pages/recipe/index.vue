@@ -537,12 +537,12 @@ const showRecipeEmpty = computed(
 );
 const emptyStateClickable = computed(() => activeTab.value !== "inspiration");
 const emptyStateTitle = computed(() => {
-	if (activeTab.value === "my") return "添加你的第一道私房菜";
+	if (activeTab.value === "my") return "先记下第一道拿手菜";
 	return "暂时没找到合适的菜谱";
 });
 const emptyStateDescription = computed(() =>
 	activeTab.value === "my"
-		? "记录家常拿手菜、灵感改编和做法草稿，点一下就开始添加。"
+		? "把常做的家常菜和灵感改编记下来，慢慢建起自己的菜谱集。"
 			: "换个分类、关键词或筛选条件试试。"
 );
 const emptyStateArt = computed(() => emptyStateIllustration);

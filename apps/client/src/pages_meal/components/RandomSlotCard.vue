@@ -1,54 +1,74 @@
 <template>
   <view :class="['slot-card', `slot-card--${item.status.toLowerCase()}`]">
-    <view class="slot-card__head">
-      <view class="slot-card__head-main">
-        <text class="slot-card__slot">{{ slotTypeLabel }}</text>
-        <text class="slot-card__title">{{ item.title }}</text>
-        <text class="slot-card__reason">{{ item.recommendationReason }}</text>
+    <template v-if="item.status === 'REPLACING'">
+      <view class="slot-card__head">
+        <view class="slot-card__head-main">
+          <Skeleton width="90rpx" height="22rpx" />
+          <Skeleton class="slot-card__skeleton-title" width="250rpx" height="34rpx" />
+          <Skeleton class="slot-card__skeleton-reason" width="310rpx" height="22rpx" />
+        </view>
+        <Skeleton width="122rpx" height="42rpx" radius="var(--radius-pill)" />
       </view>
-      <text class="slot-card__badge">{{ fridgeFitLabel }}</text>
-    </view>
+      <view class="slot-card__meta">
+        <Skeleton v-for="index in 3" :key="index" width="130rpx" height="38rpx" radius="var(--radius-pill)" />
+      </view>
+      <Skeleton class="slot-card__skeleton-note" width="220rpx" height="22rpx" />
+      <view class="action-row">
+        <Skeleton v-for="index in 3" :key="index" width="168rpx" height="64rpx" radius="var(--radius-pill)" />
+      </view>
+    </template>
+    <template v-else>
+      <view class="slot-card__head">
+        <view class="slot-card__head-main">
+          <text class="slot-card__slot">{{ slotTypeLabel }}</text>
+          <text class="slot-card__title">{{ item.title }}</text>
+          <text class="slot-card__reason">{{ item.recommendationReason }}</text>
+        </view>
+        <text class="slot-card__badge">{{ fridgeFitLabel }}</text>
+      </view>
 
-    <view class="slot-card__meta">
-      <text v-for="tag in metaTags" :key="tag" class="slot-card__meta-item">{{ tag }}</text>
-    </view>
+      <view class="slot-card__meta">
+        <text v-for="tag in metaTags" :key="tag" class="slot-card__meta-item">{{ tag }}</text>
+      </view>
 
-    <text v-if="fridgeNote" class="slot-card__fridge-note">{{ fridgeNote }}</text>
+      <text v-if="fridgeNote" class="slot-card__fridge-note">{{ fridgeNote }}</text>
 
-    <view class="action-row">
-      <view
-        class="action-pill action-pill--muted"
-        :class="{ 'action-pill--disabled': interactionDisabled }"
-        :hover-class="interactionDisabled ? '' : 'action-pill--hover'"
-        hover-stay-time="100"
-        @click="toggleLock()"
-      >
-        {{ item.status === "LOCKED" ? "已锁定" : "锁定" }}
+      <view class="action-row">
+        <view
+          class="action-pill action-pill--muted"
+          :class="{ 'action-pill--disabled': lockDisabled }"
+          :hover-class="lockDisabled ? '' : 'action-pill--hover'"
+          hover-stay-time="100"
+          @click="toggleLock()"
+        >
+          {{ item.status === "LOCKED" ? "已锁定" : "锁定" }}
+        </view>
+        <view
+          class="action-pill action-pill--muted action-pill--subtle"
+          :class="{ 'action-pill--disabled': removeDisabled }"
+          :hover-class="removeDisabled ? '' : 'action-pill--hover'"
+          hover-stay-time="100"
+          @click="removeSlot()"
+        >
+          {{ item.status === "REMOVED" ? "已划掉" : "划掉" }}
+        </view>
+        <view
+          class="action-pill action-pill--primary"
+          :class="{ 'action-pill--disabled': changeDisabled }"
+          :hover-class="changeDisabled ? '' : 'action-pill--hover'"
+          hover-stay-time="100"
+          @click="replaceSlot()"
+        >
+          换一道
+        </view>
       </view>
-      <view
-        class="action-pill action-pill--muted action-pill--subtle"
-        :class="{ 'action-pill--disabled': changeDisabled }"
-        :hover-class="changeDisabled ? '' : 'action-pill--hover'"
-        hover-stay-time="100"
-        @click="removeSlot()"
-      >
-        划掉
-      </view>
-      <view
-        class="action-pill action-pill--primary"
-        :class="{ 'action-pill--disabled': changeDisabled }"
-        :hover-class="changeDisabled ? '' : 'action-pill--hover'"
-        hover-stay-time="100"
-        @click="replaceSlot()"
-      >
-        {{ item.status === "REPLACING" ? "替换中..." : "换一道" }}
-      </view>
-    </view>
+    </template>
   </view>
 </template>
 
 <script setup lang="ts">
 import { computed } from "vue";
+import Skeleton from "@/components/Skeleton/Skeleton.vue";
 import type { RandomSlotViewModel } from "../types/random";
 
 const props = defineProps<{
@@ -161,7 +181,9 @@ const fridgeNote = computed(() => {
   }
 });
 
-const interactionDisabled = computed(() => props.disabled || props.item.status === "REPLACING");
+const interactionDisabled = computed(() => props.disabled || props.item.status === "REPLACING" || props.item.status === "REMOVED");
+const lockDisabled = computed(() => interactionDisabled.value);
+const removeDisabled = computed(() => props.disabled || props.item.status === "REPLACING" || props.item.status === "LOCKED");
 const changeDisabled = computed(() => interactionDisabled.value || props.item.status === "LOCKED");
 
 function formatFlavorTag(tag: string) {
@@ -179,7 +201,7 @@ function toggleLock() {
 }
 
 function removeSlot() {
-  if (changeDisabled.value) return;
+  if (removeDisabled.value) return;
   emit("remove", props.item.slotId);
 }
 
@@ -242,6 +264,14 @@ function replaceSlot() {
   font-size: var(--font-size-xs);
 }
 
+.slot-card__skeleton-title {
+  margin-top: 8rpx;
+}
+
+.slot-card__skeleton-reason {
+  margin-top: 8rpx;
+}
+
 .slot-card__badge {
   flex: 0 0 auto;
   padding: 8rpx 16rpx;
@@ -280,6 +310,10 @@ function replaceSlot() {
   color: var(--color-state-success-text);
   font-size: var(--font-size-xs);
   line-height: var(--line-height-normal);
+}
+
+.slot-card__skeleton-note {
+  margin-top: 16rpx;
 }
 
 .action-row {

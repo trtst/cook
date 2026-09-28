@@ -105,6 +105,7 @@ export interface HomeFridgeRecipeItem {
 
 export interface HomeFridgeRecipesResponse {
   items: HomeFridgeRecipeItem[];
+  hasNext: boolean;
 }
 
 export type HomeTopicType =
@@ -187,8 +188,8 @@ export const homeApi = {
   getWeekOverview() {
     return get<HomeWeekOverview>(`${cfg.domain}/api/home/week-overview`);
   },
-  getFridgeRecipes() {
-    return get<HomeFridgeRecipesResponse>(`${cfg.domain}/api/home/fridge-recipes`);
+  getFridgeRecipes(page = 1) {
+    return get<HomeFridgeRecipesResponse>(`${cfg.domain}/api/home/fridge-recipes`, { page });
   },
   getCurrentTopic() {
     return get<HomeTopicCurrentResponse>(`${cfg.domain}/api/home-topics/current`);

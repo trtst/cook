@@ -69,9 +69,13 @@ const emit = defineEmits<{
 .bottom-bar__button {
   flex: 1;
   margin: 0;
+  height: 64rpx;
+  min-height: 64rpx;
+  padding: 0;
   border-radius: var(--radius-pill);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-heavy);
+  line-height: 64rpx;
 }
 
 .primary {

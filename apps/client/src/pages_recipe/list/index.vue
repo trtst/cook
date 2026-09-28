@@ -15,7 +15,7 @@
       <view class="search-row">
         <RecipeSearchBar
           v-model="keyword"
-          placeholder="搜索菜谱、食材"
+          placeholder="搜搜菜名、食材或菜品特点，找道想做的菜"
           @confirm="loadList"
           @clear="clearKeyword"
         />

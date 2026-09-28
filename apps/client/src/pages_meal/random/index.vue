@@ -1,6 +1,9 @@
 <template>
   <page-meta :page-style="themePageStyle" />
   <Layout :class="themeClasses" title="随机一下" full-screen :navbar-placeholder="false" navbar-transparent>
+    <template #global-loading>
+      <CookAssistantThinkingLoading :visible="generateLoading" />
+    </template>
     <view class="random-nav-backdrop" :style="navBackdropStyle" />
     <scroll-view class="random-scroll" scroll-y :show-scrollbar="false" @scroll="handleRandomScroll">
       <view class="random-page">
@@ -83,72 +86,13 @@
       </view>
     </view>
 
-    <SheetShell
-      v-if="planSheetMounted"
+    <AddToPlanSheet
       :visible="planSheetVisible"
-      title="加入计划"
-      subtitle="先确认要安排到哪一天，这次只影响当前这顿。"
-      @close="handlePlanSheetClose"
-      @after-close="handlePlanSheetAfterClose"
-    >
-      <view class="plan-sheet">
-        <view class="plan-sheet__summary">
-          <text class="plan-sheet__label">当前餐次</text>
-          <text class="plan-sheet__value">{{ mealSlotLabel(state.conditions.mealSlot) }}</text>
-        </view>
-        <view class="plan-sheet__summary">
-          <text class="plan-sheet__label">安排日期</text>
-          <picker mode="date" :disabled="planSubmitting" :value="planDate" @change="handlePlanDateChange">
-            <view class="plan-sheet__picker">{{ planDate }}</view>
-          </picker>
-        </view>
-        <view class="plan-sheet__tips">
-          <text class="plan-sheet__tips-text">选中的菜会一起写入计划；食材需求可在计划详情查看，是否采购由你决定。</text>
-        </view>
-        <view v-if="inspirationSlots.length" class="plan-sheet__inspiration">
-          <view class="plan-sheet__section-head">
-            <view>
-              <text class="plan-sheet__section-title">灵感菜谱归入私房菜</text>
-              <text class="plan-sheet__section-note">每道菜都需要选择分类，没有分类时请先创建。</text>
-            </view>
-            <view class="plan-sheet__category-action" @click="toggleCategoryCreator">
-              {{ showCategoryCreator ? "取消" : "创建分类" }}
-            </view>
-          </view>
-          <view v-if="showCategoryCreator" class="plan-sheet__creator">
-            <input v-model="categoryDraftName" class="plan-sheet__creator-input" maxlength="8" placeholder="输入分类名称" :disabled="categorySubmitting" />
-            <button class="plan-sheet__creator-button" @click="createCategory">
-              {{ categorySubmitting ? "创建中" : "确定" }}
-            </button>
-          </view>
-          <text v-if="categoryLoading" class="plan-sheet__section-note">正在加载你的分类...</text>
-          <text v-else-if="!categories.length" class="plan-sheet__section-note">还没有个人分类，请先创建一个。</text>
-          <view v-for="item in inspirationSlots" :key="item.recipeVersionId" class="plan-sheet__category-row">
-            <text class="plan-sheet__category-title">{{ item.title }}</text>
-            <view class="plan-sheet__category-chips">
-              <view
-                v-for="category in categories"
-                :key="category.id"
-                class="plan-sheet__category-chip"
-                :class="{ 'plan-sheet__category-chip--active': selectedCategoryIds[item.recipeVersionId] === category.id }"
-                @click="selectCategory(item.recipeVersionId, category.id)"
-              >
-                {{ category.name }}
-              </view>
-            </view>
-          </view>
-        </view>
-      </view>
-
-      <template #footer>
-        <view class="plan-sheet__footer">
-          <button class="secondary plan-sheet__button" @click="closePlanSheet">取消</button>
-          <button class="primary plan-sheet__button" @click="createPlan">
-            {{ planSubmitting ? "保存中..." : "确认加入计划" }}
-          </button>
-        </view>
-      </template>
-    </SheetShell>
+      :items="planSheetItems"
+      :initial-meal-slot="state.conditions.mealSlot || undefined"
+      @close="planSheetVisible = false"
+      @success="handlePlanSuccess"
+    />
   </Layout>
 </template>
 
@@ -156,9 +100,9 @@
 import { onLoad, onShow } from "@dcloudio/uni-app";
 import { computed, ref, watch } from "vue";
 import type { UUID } from "@/apis/http";
-import { recipeApi, type RecipeCategorySummary } from "@/apis/recipe";
 import Layout from "@/components/Layout/Layout.vue";
-import SheetShell from "@/components/Sheet/SheetShell.vue";
+import AddToPlanSheet from "@/components/Recipe/AddToPlanSheet.vue";
+import CookAssistantThinkingLoading from "@/components/CookAssistantThinkingLoading.vue";
 import { buildThemePageStyle } from "@/composables/theme-page-style";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { useSystemInfo } from "@/composables/useSystemInfo";
@@ -171,7 +115,7 @@ import { restoreAppSession } from "@/utils/session";
 import { formatMealSlot, resolveMealSlotByTime } from "@/utils/meal-slot";
 import { formatThemeText } from "@/themes";
 import { createOperationId } from "@/utils/operation-id";
-import { mealApi, type CreateMealPlanRequest } from "../apis/meal";
+import { getCookAssistantLoadingDuration, waitForCookAssistantLoading } from "../utils/cook-assistant-loading";
 import {
   randomMealApi,
   type MealSlot,
@@ -184,12 +128,10 @@ import RandomBottomBar from "../components/RandomBottomBar.vue";
 import RandomConditionBar from "../components/RandomConditionBar.vue";
 import RandomEmptySlotCard from "../components/RandomEmptySlotCard.vue";
 import RandomSlotCard from "../components/RandomSlotCard.vue";
-import { todayText } from "../utils/date";
 import {
   buildRandomBoardSlots,
   createRandomSlotViewModel,
   type RandomPageState,
-  type RandomPlanMenuItemInput,
   type RandomSlotViewModel
 } from "../types/random";
 
@@ -228,16 +170,8 @@ const state = ref<RandomPageState>({
 const errorText = ref("");
 const randomScrollTop = ref(0);
 const pageMutating = ref(false);
-const planSheetMounted = ref(false);
 const planSheetVisible = ref(false);
-const planDate = ref(todayText());
-const planSubmitting = ref(false);
-const categoryLoading = ref(false);
-const categorySubmitting = ref(false);
-const categories = ref<RecipeCategorySummary[]>([]);
-const selectedCategoryIds = ref<Record<string, UUID | null>>({});
-const categoryDraftName = ref("");
-const showCategoryCreator = ref(false);
+const generateLoading = ref(false);
 const quota = ref<RandomMenuQuotaResponse | null>(null);
 const quotaLoading = ref(false);
 const rejectedRecipeVersionIds = ref<UUID[]>([]);
@@ -249,15 +183,19 @@ const activeSlots = computed(() => state.value.slots.filter(item => item.status 
 const removedCount = computed(() => state.value.slots.filter(item => item.status === "REMOVED").length);
 const quotaDepleted = computed(() => Boolean(quota.value && quota.value.remainingCount <= 0));
 const generateDisabled = computed(() => !state.value.conditions.mealSlot || !state.value.conditions.peopleCount || quotaDepleted.value);
-const submitLoading = computed(() => planSubmitting.value);
-const conditionLoading = computed(() => pageMutating.value || submitLoading.value);
-const slotActionLocked = computed(() => pageMutating.value || submitLoading.value);
+const conditionLoading = computed(() => pageMutating.value);
+const slotActionLocked = computed(() => pageMutating.value);
 const canCreatePlan = computed(() => activeSlots.value.length > 0);
-const inspirationSlots = computed(() => activeSlots.value.filter(item => item.sourceType === "INSPIRATION"));
-const planReady = computed(() => {
-  if (!canCreatePlan.value) return false;
-  return inspirationSlots.value.every(item => selectedCategoryIds.value[item.recipeVersionId]);
-});
+const planSheetItems = computed(() => activeSlots.value
+  .slice()
+  .sort((left, right) => left.slotIndex - right.slotIndex)
+  .map(item => ({
+    recipeId: item.recipeId,
+    recipeVersionId: item.recipeVersionId,
+    slotType: item.slotType,
+    sortOrder: item.slotIndex,
+    purchaseState: "READY" as const
+  })));
 const boardSlots = computed(() => {
   const mealSlot = state.value.conditions.mealSlot;
   const slotPlan = state.value.slotPlan;
@@ -476,8 +414,11 @@ async function generateMenu() {
       ])
     : [];
   pageMutating.value = true;
+  generateLoading.value = true;
   state.value.pageStatus = "MENU_MUTATING";
   errorText.value = "";
+  const loadingStartedAt = Date.now();
+  const loadingDuration = getCookAssistantLoadingDuration();
   try {
     const result = await randomMealApi.generateMenu({
       mealSlot: state.value.conditions.mealSlot,
@@ -487,6 +428,7 @@ async function generateMenu() {
       currentItems: lockedSlots.map(toCurrentRandomItem),
       rejectedRecipeVersionIds: requestRejectedVersionIds
     }, createOperationId());
+    await waitForCookAssistantLoading(loadingStartedAt, loadingDuration);
     quota.value = result.quota;
     if (isReroll) {
       rejectedRecipeVersionIds.value = requestRejectedVersionIds;
@@ -507,6 +449,7 @@ async function generateMenu() {
     state.value.pageStatus = hasMenu.value ? "MENU_READY" : "CONFIG_READY";
   } finally {
     pageMutating.value = false;
+    generateLoading.value = false;
   }
 }
 
@@ -514,7 +457,15 @@ function removeSlot(slotId: string) {
   if (slotActionLocked.value) return;
   if (isSlotReplacing(slotId)) return;
   const slot = state.value.slots.find(item => item.slotId === slotId);
-  if (slot) markRejectedRecipeVersion(slot.recipeVersionId);
+  if (!slot) return;
+  if (slot.status === "REMOVED") {
+    rejectedRecipeVersionIds.value = rejectedRecipeVersionIds.value.filter(id => id !== slot.recipeVersionId);
+    updateSlot(slotId, current => {
+      current.status = "RECOMMENDED";
+    });
+    return;
+  }
+  markRejectedRecipeVersion(slot.recipeVersionId);
   updateSlot(slotId, slot => {
     slot.status = "REMOVED";
   });
@@ -530,7 +481,7 @@ function toggleSlotLock(slotId: string) {
 }
 
 async function replaceSlot(slotId: string) {
-  if (submitLoading.value) return;
+  if (pageMutating.value) return;
   const slot = state.value.slots.find(item => item.slotId === slotId);
   if (!slot || slot.status === "REPLACING" || !state.value.conditions.mealSlot || !state.value.conditions.peopleCount || !state.value.slotPlan) return;
 
@@ -540,7 +491,6 @@ async function replaceSlot(slotId: string) {
     current.requestSeq = requestSeq;
     current.status = "REPLACING";
   });
-  state.value.pageStatus = "MENU_MUTATING";
   errorText.value = "";
 
   try {
@@ -592,8 +542,6 @@ async function replaceSlot(slotId: string) {
       current.status = previousStatus === "REMOVED" ? "REMOVED" : "RECOMMENDED";
     });
     errorText.value = error instanceof Error ? error.message : "替换失败";
-  } finally {
-    state.value.pageStatus = "MENU_READY";
   }
 }
 
@@ -601,160 +549,15 @@ async function openPlanSheet() {
   if (!ensureLoggedIn(() => {
     void openPlanSheet();
   })) return;
-  if (!canCreatePlan.value || planSubmitting.value) return;
-  planDate.value = todayText();
-  selectedCategoryIds.value = {};
-  categoryDraftName.value = "";
-  showCategoryCreator.value = false;
-  planSheetMounted.value = true;
+  if (!canCreatePlan.value || pageMutating.value) return;
   await uniPlatform.feedback.hideKeyboard();
   planSheetVisible.value = true;
-  void loadPlanCategories();
 }
 
-function closePlanSheet() {
-  if (planSubmitting.value) return;
+function handlePlanSuccess() {
+  state.value.pageStatus = "COMPLETED";
   planSheetVisible.value = false;
-}
-
-function handlePlanSheetClose() {
-  if (planSubmitting.value) return;
-  closePlanSheet();
-}
-
-function forceClosePlanSheet() {
-  planSheetVisible.value = false;
-}
-
-function handlePlanSheetAfterClose() {
-  planSheetMounted.value = false;
-}
-
-function handlePlanDateChange(event: { detail?: { value?: string } }) {
-  if (planSubmitting.value) return;
-  const nextValue = event.detail?.value?.trim();
-  if (!nextValue) return;
-  planDate.value = nextValue;
-}
-
-async function loadPlanCategories() {
-  if (!inspirationSlots.value.length) return;
-  categoryLoading.value = true;
-  try {
-    categories.value = await recipeApi.listCategories();
-    selectedCategoryIds.value = inspirationSlots.value.reduce<Record<string, UUID | null>>((result, item) => {
-      result[item.recipeVersionId] = null;
-      return result;
-    }, {});
-  } catch (error) {
-    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "分类加载失败", icon: "none" });
-  } finally {
-    categoryLoading.value = false;
-  }
-}
-
-function selectCategory(recipeVersionId: UUID, categoryId: UUID | null) {
-  selectedCategoryIds.value = { ...selectedCategoryIds.value, [recipeVersionId]: categoryId };
-}
-
-function toggleCategoryCreator() {
-  showCategoryCreator.value = !showCategoryCreator.value;
-  if (!showCategoryCreator.value) categoryDraftName.value = "";
-}
-
-async function createCategory() {
-  const name = categoryDraftName.value.trim();
-  if (!name || categorySubmitting.value) return;
-  categorySubmitting.value = true;
-  try {
-    const created = await recipeApi.createCategory({ operationId: createOperationId(), name });
-    categories.value = [...categories.value, created];
-    for (const item of inspirationSlots.value) selectCategory(item.recipeVersionId, created.id);
-    categoryDraftName.value = "";
-    showCategoryCreator.value = false;
-  } catch (error) {
-    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "创建分类失败", icon: "none" });
-  } finally {
-    categorySubmitting.value = false;
-  }
-}
-
-async function createPlan() {
-  if (!ensureLoggedIn(() => {
-    void createPlan();
-  })) return;
-  if (!state.value.conditions.mealSlot || !planReady.value || planSubmitting.value) return;
-  planSubmitting.value = true;
-  try {
-    const plans = await mealApi.listPlans({ from: planDate.value, to: planDate.value, page: 1, pageSize: 10 });
-    const currentPlan = plans.items.find(item => item.mealSlot === state.value.conditions.mealSlot) ?? null;
-    const existingItems = currentPlan?.menuItems ?? [];
-    const randomItems = await buildPlanMenuItems();
-    const existingMenuItems = existingItems
-      .flatMap((item, index) => {
-        if (!item.recipeId) return [];
-        return [{
-          slotType: item.slotType,
-          sortOrder: index,
-          recipeId: item.recipeId,
-          recipeVersionId: item.recipeVersionId,
-          purchaseState: item.purchaseState
-        }];
-      });
-    const menuItemMap = new Map(existingMenuItems.map(item => [item.recipeVersionId, item]));
-    for (const item of randomItems) {
-      menuItemMap.set(item.recipeVersionId, item);
-    }
-    const menuItems = Array.from(menuItemMap.values()).map((item, index) => ({
-      ...item,
-      sortOrder: index
-    }));
-    const body: CreateMealPlanRequest = {
-      operationId: createOperationId(),
-      planDate: planDate.value,
-      mealSlot: state.value.conditions.mealSlot,
-      expectedVersion: currentPlan?.version ?? null,
-      menuItems
-    };
-    await mealApi.createPlan(body);
-    state.value.pageStatus = "COMPLETED";
-    forceClosePlanSheet();
-    await uniPlatform.feedback.toast({ title: "已加入计划", icon: "success" });
-    void uniPlatform.navigation.navigateTo("/pages_meal/plan/index");
-  } catch (error) {
-    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "加入计划失败", icon: "none" });
-  } finally {
-    planSubmitting.value = false;
-  }
-}
-
-async function buildPlanMenuItems(): Promise<RandomPlanMenuItemInput[]> {
-  const imported = new Map<UUID, { recipeId: UUID; recipeVersionId: UUID }>();
-  for (const item of inspirationSlots.value) {
-    const categoryId = selectedCategoryIds.value[item.recipeVersionId];
-    if (!categoryId) throw new Error("请选择私房菜分类");
-    const result = await recipeApi.createMyRecipeFromInspiration({
-      operationId: createOperationId(),
-      sourceRecipeId: item.recipeId,
-      sourceVersionId: item.recipeVersionId,
-      categoryId
-    });
-    imported.set(item.recipeVersionId, {
-      recipeId: result.recipe.id,
-      recipeVersionId: result.recipe.contentVersionId
-    });
-    if (categoryId) await uniPlatform.storage.set(APP_STORAGE_KEYS.randomMenuCategory, categoryId);
-  }
-  return activeSlots.value
-    .slice()
-    .sort((left, right) => left.slotIndex - right.slotIndex)
-    .map(item => ({
-      slotType: item.slotType,
-      sortOrder: item.slotIndex,
-      recipeId: imported.get(item.recipeVersionId)?.recipeId ?? item.recipeId,
-      recipeVersionId: imported.get(item.recipeVersionId)?.recipeVersionId ?? item.recipeVersionId,
-      purchaseState: "READY"
-    }));
+  void uniPlatform.navigation.navigateTo("/pages_meal/plan/index");
 }
 
 function buildCurrentItems(targetSlotId: string) {
@@ -1244,167 +1047,4 @@ defineExpose({
   margin-top: 22rpx;
 }
 
-.plan-sheet {
-  display: flex;
-  flex-direction: column;
-  gap: 18rpx;
-}
-
-.plan-sheet__summary,
-.plan-sheet__footer {
-  display: flex;
-}
-
-.plan-sheet__summary {
-  align-items: center;
-  justify-content: space-between;
-  gap: 20rpx;
-  padding: 18rpx 20rpx;
-  border-radius: var(--radius-md);
-  background: var(--color-surface-muted);
-}
-
-.plan-sheet__label {
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-sm);
-}
-
-.plan-sheet__value,
-.plan-sheet__picker {
-  color: var(--color-text);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-heavy);
-}
-
-.plan-sheet__tips {
-  padding: 18rpx 20rpx;
-  border-radius: var(--radius-md);
-  background: var(--color-state-warning-soft);
-}
-
-.plan-sheet__tips-text {
-  display: block;
-  color: var(--color-state-warning-text);
-  font-size: var(--font-size-xs);
-  line-height: var(--line-height-normal);
-}
-
-.plan-sheet__inspiration {
-  display: flex;
-  flex-direction: column;
-  gap: 16rpx;
-  padding: 20rpx;
-  border-radius: var(--radius-md);
-  background: var(--material-card-accent-bg);
-}
-
-.plan-sheet__section-head,
-.plan-sheet__category-row {
-  display: flex;
-  justify-content: space-between;
-  gap: 16rpx;
-}
-
-.plan-sheet__section-head {
-  align-items: flex-start;
-}
-
-.plan-sheet__section-title,
-.plan-sheet__category-title {
-  display: block;
-  color: var(--color-text);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-heavy);
-}
-
-.plan-sheet__section-note {
-  display: block;
-  margin-top: 6rpx;
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-xs);
-  line-height: var(--line-height-normal);
-}
-
-.plan-sheet__category-action {
-  flex: 0 0 auto;
-  color: var(--color-support-action);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-heavy);
-}
-
-.plan-sheet__creator {
-  display: flex;
-  gap: 12rpx;
-}
-
-.plan-sheet__creator-input {
-  flex: 1;
-  min-width: 0;
-  height: 68rpx;
-  padding: 0 18rpx;
-  border: 1rpx solid var(--material-input-border);
-  border-radius: var(--radius-md);
-  background: var(--material-input-bg);
-  color: var(--color-text);
-  font-size: var(--font-size-sm);
-}
-
-.plan-sheet__creator-button {
-  flex: 0 0 104rpx;
-  height: 68rpx;
-  margin: 0;
-  border-radius: var(--radius-md);
-  background: var(--button-primary-bg);
-  color: var(--button-primary-text);
-  font-size: var(--font-size-xs);
-}
-
-.plan-sheet__category-row {
-  flex-direction: column;
-  padding-top: 14rpx;
-  border-top: 1rpx solid var(--material-card-border);
-}
-
-.plan-sheet__category-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10rpx;
-}
-
-.plan-sheet__category-chip {
-  min-height: 50rpx;
-  padding: 0 20rpx;
-  border-radius: var(--radius-pill);
-  background: var(--material-input-bg);
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-xs);
-  line-height: 50rpx;
-}
-
-.plan-sheet__category-chip--active {
-  background: var(--button-primary-bg);
-  color: var(--button-primary-text);
-}
-
-.plan-sheet__footer {
-  gap: 16rpx;
-}
-
-.plan-sheet__button {
-  flex: 1;
-  margin: 0;
-  border-radius: var(--radius-pill);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-heavy);
-}
-
-.primary {
-  background: var(--button-primary-bg);
-  color: var(--button-primary-text);
-}
-
-.secondary {
-  background: var(--color-surface-muted);
-  color: var(--color-text);
-}
 </style>

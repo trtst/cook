@@ -39,7 +39,8 @@ nodeTest("清单标题仅允许清单创建者在进行中状态修改", () => {
 });
 
 nodeTest("清单作废仍从导航栏设置打开", () => {
-  nodeAssert.match(pageSource, /#navbar-right/);
+  nodeAssert.match(pageSource, /#navbar-center[\s\S]*?detail-nav-settings/);
+  nodeAssert.match(pageSource, /:navbar-capsule-guard="true"/);
   nodeAssert.match(pageSource, /openSettingsSheet/);
   nodeAssert.match(pageSource, /title="清单设置"/);
   nodeAssert.match(pageSource, /作废清单/);

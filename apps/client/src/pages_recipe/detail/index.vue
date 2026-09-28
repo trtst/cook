@@ -449,10 +449,7 @@
 
       <AddToPlanSheet
         :visible="planSheetVisible"
-        :recipe-id="planRecipeId || null"
-        :source-recipe-id="kind === 'inspiration' ? externalRecipeRef?.sourceRecipeId : null"
-        :source-version-id="kind === 'inspiration' ? externalRecipeRef?.sourceVersionId : null"
-        :need-add-to-private="kind === 'inspiration' && !Boolean(linkedOwnedRecipeId)"
+        :items="planSheetItems"
         @close="closePlanSheet"
         @success="handlePlanSuccess"
       />
@@ -796,6 +793,14 @@ const canRecommendRecipe = computed(() => Boolean(myPersonal.value?.canRecommend
 const planRecipeId = computed<UUID | "">(() => {
   if (kind.value === "my" && myDetail.value) return recipeId.value;
   return linkedOwnedRecipeId.value || "";
+});
+const planSheetItems = computed(() => {
+  const recipeId = planRecipeId.value || (kind.value === "inspiration" ? externalRecipeRef.value?.sourceRecipeId : "") || "";
+  if (!recipeId) return [];
+  const recipeVersionId = !planRecipeId.value && kind.value === "inspiration"
+    ? externalRecipeRef.value?.sourceVersionId
+    : undefined;
+  return [{ recipeId, ...(recipeVersionId ? { recipeVersionId } : {}) }];
 });
 const canAddToPrivate = computed(() => isExternalDetail.value && !linkedOwnedRecipeId.value);
 const showReportEntry = computed(() => isExternalDetail.value && sessionStore.isLoggedIn);
@@ -1279,8 +1284,6 @@ function openPlanSheet() {
 }
 
 function handlePlanSuccess(payload: {
-  recipeId: UUID;
-  addedToPrivate: boolean;
   planItemId: UUID;
   planDate: string;
   mealSlot: "BREAKFAST" | "LUNCH" | "AFTERNOON_TEA" | "DINNER" | "LATE_NIGHT";
@@ -1294,14 +1297,6 @@ function handlePlanSuccess(payload: {
     hasDiningEvent: false
   };
   syncDetailPlanLinks(nextLink);
-  if (kind.value !== "inspiration" || !payload.addedToPrivate || !inspirationDetail.value) return;
-  detail.value = {
-    ...inspirationDetail.value,
-    ownedRecipeId: payload.recipeId,
-    planLinks: mergeRecipePlanLinks(inspirationDetail.value.planLinks, nextLink)
-  };
-  markRecipeHomeDirty(["my"]);
-  markRecipeManageDirty(["recipes"]);
 }
 
 function openPlanLink(link: RecipePlanLinkSummary | null | undefined) {

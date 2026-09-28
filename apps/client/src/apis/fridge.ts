@@ -26,12 +26,13 @@ export interface CreateFridgeTraceRequest {
 
 export interface FridgeTraceSummaryResponse {
   totalCount: number;
+  recentCount: number;
   latestTime: string | null;
 }
 
 export const fridgeApi = {
-  list(page = 1, pageSize = 50) {
-    return get<PageResult<FridgeTraceSummary>>(`${cfg.domain}/api/fridge-traces`, { page, pageSize });
+  list(page = 1, pageSize = 20, categoryId?: UUID) {
+    return get<PageResult<FridgeTraceSummary>>(`${cfg.domain}/api/fridge-traces`, { page, pageSize, categoryId });
   },
   getSummary() {
     return get<FridgeTraceSummaryResponse>(`${cfg.domain}/api/fridge-traces/summary`);

@@ -44,6 +44,20 @@ export interface AddMealPlanItemRequest {
   purchaseState?: "READY" | "PENDING";
 }
 
+export interface CreateMealPlanRequest {
+  operationId: OperationId;
+  planDate: string;
+  mealSlot: MealSlot;
+  expectedVersion?: number | null;
+  menuItems: Array<{
+    slotType: NonNullable<AddMealPlanItemRequest["slotType"]> | null;
+    sortOrder: number;
+    recipeId: UUID | null;
+    recipeVersionId: UUID;
+    purchaseState: "READY" | "PENDING";
+  }>;
+}
+
 export const mealApi = {
   listPlans(query: MealPlanQuery) {
     return get<PageResult<MealPlanSummary>>(`${cfg.domain}/api/meal-plans`, { ...query });
@@ -57,6 +71,10 @@ export const mealApi = {
       if (!result.hasNext) return items;
       page += 1;
     } while (true);
+  },
+  createPlan(body: CreateMealPlanRequest) {
+    const { operationId, ...payload } = body;
+    return post<MealPlanSummary>(`${cfg.domain}/api/meal-plans`, payload, { idempotencyKey: operationId });
   },
   addPlanItem(body: AddMealPlanItemRequest) {
     const { operationId, ...payload } = body;

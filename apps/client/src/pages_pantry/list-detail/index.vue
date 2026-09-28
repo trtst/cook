@@ -10,11 +10,9 @@
     <template #navbar-center>
       <view class="detail-nav">
         <text class="detail-nav__title" :style="navTitleStyle">{{ detail?.name || "采购清单" }}</text>
-      </view>
-    </template>
-    <template #navbar-right>
-      <view v-if="canVoid" class="detail-nav-settings" hover-class="detail-nav-settings--hover" @click="openSettingsSheet">
-        <text class="cookfont icon-manage detail-nav-settings__icon" />
+        <view v-if="canVoid" class="detail-nav-settings" hover-class="detail-nav-settings--hover" @click="openSettingsSheet">
+          <text class="cookfont icon-manage detail-nav-settings__icon" />
+        </view>
       </view>
     </template>
 
@@ -164,14 +162,21 @@
                       >
                         <view class="item-origin-list">
                           <view
-                            v-for="source in orderedGroupSources(group)"
-                            :key="sourceEntryKey(source)"
+                            v-for="sourceGroup in groupedGroupSources(group)"
+                            :key="sourceGroup.key"
                             class="item-origin"
-                            :class="{ 'item-origin--link': canOpenSource(source) }"
-                            @click.stop="openSource(source)"
                           >
-                            <text class="item-origin__tag">{{ sourceTypeLabel(source.sourceType) }}</text>
-                            <text class="item-origin__text">{{ sourceEntryText(source) }}</text>
+                            <text class="item-origin__tag">{{ sourceGroup.label }}</text>
+                            <view class="item-origin__entries">
+                              <template v-for="(source, index) in sourceGroup.sources" :key="sourceEntryKey(source)">
+                                <text
+                                  class="item-origin__text"
+                                  :class="{ 'item-origin__text--link': canOpenSource(source) }"
+                                  @click.stop="openSource(source)"
+                                >{{ sourceEntryText(source) }}</text>
+                                <text v-if="index < sourceGroup.sources.length - 1" class="item-origin__separator">、</text>
+                              </template>
+                            </view>
                           </view>
                         </view>
                       </view>
@@ -192,11 +197,12 @@
         <view v-if="canAddItem" class="detail-footer">
           <MealFooterActions
             :quick-action="{ label: '添加食材', iconClass: 'icon-add' }"
-            :primary-action="canComplete ? { label: '完成采购' } : null"
+            :primary-action="canComplete ? { label: '结束本次采购' } : null"
             single-button
             :submitting="submitting"
+            :primary-visual-disabled="submitting && !checkPendingGroupId"
             :quick-blocked="submitting"
-            :primary-native-disabled="submitting"
+            :primary-native-disabled="submitting && !checkPendingGroupId"
             @quick="openAddSheet"
             @primary="completeList"
           />
@@ -1037,6 +1043,21 @@ function orderedGroupSources(group: GroupView) {
   });
 }
 
+function groupedGroupSources(group: GroupView) {
+  const buckets = new Map<string, ShoppingItemSourceSummary[]>();
+  for (const source of orderedGroupSources(group)) {
+    const key = source.sourceType;
+    const current = buckets.get(key) ?? [];
+    current.push(source);
+    buckets.set(key, current);
+  }
+  return [...buckets.entries()].map(([key, sources]) => ({
+    key,
+    label: sourceTypeLabel(sources[0].sourceType),
+    sources
+  }));
+}
+
 function sourceEntryKey(source: ShoppingItemSourceSummary) {
   return [
     source.sourceType,
@@ -1526,7 +1547,7 @@ async function voidList() {
 async function completeList() {
   if (!detail.value || !canComplete.value || submitting.value) return;
   const confirmed = await uniPlatform.feedback.confirm({
-    title: "完成采购",
+    title: "结束本次采购",
     content: "结束后，已勾选的食材会加入食材库；未勾选的食材仍保持未买。"
   });
   if (!confirmed) return;
@@ -1536,7 +1557,7 @@ async function completeList() {
       operationId: createOperationId(),
       version: detail.value.version
     });
-    await uniPlatform.feedback.toast({ title: "采购已完成", icon: "success" });
+    await uniPlatform.feedback.toast({ title: "本次采购已结束", icon: "success" });
   } catch (error) {
     await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "操作失败", icon: "none" });
   } finally {
@@ -1706,10 +1727,14 @@ defineExpose({
 }
 
 .detail-nav {
+  position: relative;
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 18rpx;
   width: 100%;
+  padding-right: 80rpx;
+  box-sizing: border-box;
 }
 
 .detail-nav-backdrop {
@@ -1745,6 +1770,9 @@ defineExpose({
 }
 
 .detail-nav-settings {
+  position: absolute;
+  top: 50%;
+  right: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1752,6 +1780,7 @@ defineExpose({
   height: 64rpx;
   border-radius: 50%;
   color: var(--color-icon-active);
+  transform: translateY(-50%);
 }
 
 .detail-nav-settings--hover {
@@ -2251,7 +2280,8 @@ defineExpose({
   justify-content: center;
   gap: 12rpx;
   border-radius: inherit;
-  background: var(--color-surface-overlay-soft);
+  background: color-mix(in srgb, var(--color-surface-overlay-soft) 30%, transparent);
+  backdrop-filter: blur(12rpx);
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
 }
@@ -2468,7 +2498,7 @@ defineExpose({
   font-size: 26rpx;
   line-height: 1;
   transform: rotate(-180deg);
-  color: var(--color-text-tertiary);
+  color: var(--color-text-quaternary);
   transition: transform 220ms ease;
 }
 
@@ -2503,8 +2533,8 @@ defineExpose({
 }
 
 .item-origin {
-  display: inline-flex;
-  align-items: center;
+  display: flex;
+  align-items: flex-start;
   justify-content: flex-start;
   gap: 12rpx;
   width: 100%;
@@ -2514,13 +2544,17 @@ defineExpose({
   border-top: 1rpx solid var(--color-divider);
 }
 
-.item-origin--link {
-  cursor: pointer;
+.item-origin__entries {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  min-width: 0;
 }
 
 .item-origin__tag {
   flex: 0 0 auto;
   padding: 6rpx 16rpx;
+  line-height: 1;
   border-radius: var(--radius-pill);
   background: var(--color-tag-primary-bg);
   color: var(--color-tag-primary-text);
@@ -2530,7 +2564,15 @@ defineExpose({
 .item-origin__text {
   flex: 0 1 auto;
   min-width: 0;
-  text-align: right;
+  text-align: left;
+}
+
+.item-origin__text--link {
+  cursor: pointer;
+}
+
+.item-origin__separator {
+  color: var(--color-text-tertiary);
 }
 
 .detail-footer {

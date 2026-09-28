@@ -11,48 +11,71 @@
     />
 
     <view v-else class="trace-page">
-      <scroll-view class="trace-scroll" scroll-y :show-scrollbar="false">
-        <view class="trace-content">
-          <text class="trace-intro">家里的食材随时会变，来看看、整理一下，下一顿就更好安排。</text>
+      <view class="trace-scroll-wrap">
+        <RecipeSearchLoading
+          :pull-distance="pullDistance"
+          :refreshing="refreshing"
+          :show-success="showSuccess"
+          :refresher-text="refresherText"
+          :threshold="refresherThreshold"
+        />
+        <scroll-view
+          class="trace-scroll"
+          scroll-y
+          :scroll-top="traceScrollTop"
+          refresher-enabled
+          refresher-default-style="none"
+          :show-scrollbar="false"
+          :refresher-threshold="refresherThreshold"
+          :refresher-triggered="refresherTriggered"
+          @scrolltolower="handleScrollToLower"
+          @scroll="handleTraceScroll"
+          @refresherpulling="onRefresherPulling"
+          @refresherrefresh="handleRefresherRefresh"
+          @refresherrestore="onRefresherRestore"
+          @refresherabort="onRefresherRestore"
+        >
+          <view class="trace-content">
+            <text class="trace-intro">最近买过、用过的食材会记在这里，家里有变化时也可以随手更新。</text>
 
-          <view v-if="hasTraceItems" class="trace-manage">
-            <view class="trace-category-fixed">
-              <view
-                class="trace-category-chip"
-                :class="{ 'trace-category-chip--active': categoryFilter === '__ALL__' }"
-                @click="changeCategory('__ALL__')"
-              >全部</view>
-            </view>
-            <scroll-view scroll-x class="trace-category-scroll" :show-scrollbar="false">
-              <view class="trace-category-row">
+            <view v-if="ingredientCategories.length" class="trace-manage">
+              <view class="trace-category-fixed">
                 <view
-                  v-for="category in traceCategories"
-                  :key="category"
                   class="trace-category-chip"
-                  :class="{ 'trace-category-chip--active': categoryFilter === category }"
-                  @click="changeCategory(category)"
-                >{{ category }}</view>
+                  :class="{ 'trace-category-chip--active': categoryFilter === null }"
+                  @click="changeCategory(null)"
+                >全部</view>
+              </view>
+              <scroll-view scroll-x class="trace-category-scroll" :show-scrollbar="false">
+                <view class="trace-category-row">
+                  <view
+                    v-for="category in ingredientCategories"
+                    :key="category.id"
+                    class="trace-category-chip"
+                    :class="{ 'trace-category-chip--active': categoryFilter === category.id }"
+                    @click="changeCategory(category.id)"
+                  >{{ category.name }}</view>
               </view>
             </scroll-view>
-            <view class="trace-manage__actions">
+            <view v-if="hasTraceItems" class="trace-manage__actions">
               <text v-if="!manageMode" class="trace-manage__action" @click="enterManageMode">管理</text>
               <template v-else>
-                <text class="trace-manage__action" @click="toggleSelectAll">{{ allVisibleSelected ? "取消全选" : "全选" }}</text>
+                <text class="trace-manage__action" @click="toggleSelectAll">{{ selectingAll ? "加载中..." : allVisibleSelected ? "取消全选" : "全选" }}</text>
                 <text class="trace-manage__action" @click="exitManageMode">取消</text>
               </template>
             </view>
           </view>
 
-          <view v-if="loading" class="trace-state">加载中...</view>
-          <view v-else-if="errorText" class="trace-state trace-state--error" @click="loadPage">{{ errorText }}，点此重试</view>
+          <view v-if="loading && !traces.length" class="trace-state">加载中...</view>
+            <view v-else-if="errorText" class="trace-state trace-state--error" @click="loadPage()">{{ errorText }}，点此重试</view>
           <Empty
-            v-else-if="!filteredCurrentTraces.length && !filteredArchivedTraces.length"
+            v-else-if="!filteredCurrentTraces.length && !filteredArchivedTraces.length && !hasNext"
             class="trace-empty"
             :art="emptyStateArt"
-            :title="categoryFilter === '__ALL__' ? '还没有记录的食材' : `${categoryFilter}里还没有食材`"
-            :description="categoryFilter === '__ALL__' ? '可以手动添加，或在购物清单里勾选已买后自动记录。' : '换个分类看看，或添加食材。'"
+            :title="activeCategoryName ? `${activeCategoryName}里还没有食材` : '还没有记录的食材'"
+            :description="activeCategoryName ? '换个分类看看，或添加食材。' : '可以手动添加，或在购物清单里勾选已买后自动记录。'"
           />
-          <view v-else>
+          <template v-else>
             <view v-if="filteredCurrentTraces.length" class="trace-list">
               <view
                 v-for="trace in filteredCurrentTraces"
@@ -84,7 +107,7 @@
 
             <view v-if="filteredArchivedTraces.length" class="archive-section">
               <button class="archive-toggle" @click="archiveExpanded = !archiveExpanded">
-                <text>很久没记录（{{ filteredArchivedTraces.length }} 项）</text>
+                <text>很久没记录</text>
                 <text>{{ archiveExpanded ? "收起" : "展开" }}</text>
               </button>
               <view v-if="archiveExpanded" class="trace-list">
@@ -116,9 +139,25 @@
                 </view>
               </view>
             </view>
+              <Empty
+                v-if="!filteredCurrentTraces.length && !filteredArchivedTraces.length && hasNext"
+                class="trace-empty"
+                :art="emptyStateArt"
+                :title="activeCategoryName ? `${activeCategoryName}里还没有食材` : '还没有记录的食材'"
+                :description="activeCategoryName ? '换个分类看看，或添加食材。' : '可以手动添加，或在购物清单里勾选已买后自动记录。'"
+              />
+              <view v-if="moreErrorText" class="trace-state trace-state--error" @click="loadMoreTraces()">{{ moreErrorText }}，点此重试</view>
+            <LoadMore
+              :loading="loadingMore || selectingAll"
+              :has-next="hasNext"
+              :show-done="loadedMoreOnce && !hasNext"
+              next-text="继续上滑，查看更多食材"
+              done-text="已经翻到底啦"
+            />
+          </template>
           </view>
-        </view>
-      </scroll-view>
+        </scroll-view>
+      </view>
 
       <view class="trace-actions">
         <template v-if="!manageMode">
@@ -200,15 +239,24 @@ import MealFooterActions from "@/components/Meal/MealFooterActions.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
 import { recipeApi, type IngredientCategorySummary, type IngredientSummary } from "@/apis/recipe";
 import type { UUID } from "@/apis/http";
+import LoadMore from "@/components/LoadMore.vue";
 import { useLoginEmptyState } from "../composables/useLoginEmptyState";
 import { buildThemePageStyle } from "@/composables/theme-page-style";
+import RecipeSearchLoading from "@/components/Recipe/RecipeSearchLoading.vue";
+import { useCustomRefresher } from "@/composables/useCustomRefresher";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { useTheme } from "@/composables/useTheme";
 import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
 import { createOperationId } from "@/utils/operation-id";
 import { fridgeApi, type FridgeTraceSummary } from "../apis/fridge";
-import { loadAllFridgeTraces } from "../utils/fridge-traces";
+
+type TracePageCache = {
+  items: FridgeTraceSummary[];
+  page: number;
+  hasNext: boolean;
+  loadedMoreOnce: boolean;
+};
 
 const { themeVars, themeClasses } = useTheme();
 const pageStyle = usePageScrollStyle();
@@ -216,17 +264,25 @@ const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageS
 const sessionStore = useSessionStore();
 const { openLogin } = useLoginEmptyState(handleLoginSuccess);
 const traces = ref<FridgeTraceSummary[]>([]);
+const traceCache = new Map<string, TracePageCache>();
+let traceCacheUserId: number | null = null;
 const currentTraces = computed(() => traces.value.filter(trace => !trace.archived && trace.presence !== "EMPTY"));
 const archivedTraces = computed(() => traces.value.filter(trace => trace.archived));
-const categoryFilter = ref("__ALL__");
+const categoryFilter = ref<UUID | null>(null);
 const hasTraceItems = computed(() => currentTraces.value.length > 0 || archivedTraces.value.length > 0);
-const traceCategories = computed(() => [...new Set(
-  [...currentTraces.value, ...archivedTraces.value].map(trace => trace.categoryName?.trim() || "未分类")
-)]);
-const filteredCurrentTraces = computed(() => filterByCategory(currentTraces.value));
-const filteredArchivedTraces = computed(() => filterByCategory(archivedTraces.value));
+const filteredCurrentTraces = computed(() => currentTraces.value);
+const filteredArchivedTraces = computed(() => archivedTraces.value);
+const activeCategoryName = computed(() => ingredientCategories.value.find(item => item.id === categoryFilter.value)?.name || "");
 const loading = ref(false);
+const traceScrollTop = ref(0);
+const loadingMore = ref(false);
+const loadedMoreOnce = ref(false);
+const hasNext = ref(false);
+const tracePage = ref(1);
 const errorText = ref("");
+const moreErrorText = ref("");
+const traceRequestSeed = ref(0);
+const selectingAll = ref(false);
 const archiveExpanded = ref(false);
 const manageMode = ref(false);
 const selectedTraceIds = ref(new Set<FridgeTraceSummary["id"]>());
@@ -235,6 +291,7 @@ const selectableTraces = computed(() => archiveExpanded.value
   ? [...filteredCurrentTraces.value, ...filteredArchivedTraces.value]
   : filteredCurrentTraces.value);
 const allVisibleSelected = computed(() => selectableTraces.value.length > 0
+  && !hasNext.value
   && selectableTraces.value.every(trace => selectedTraceIds.value.has(trace.id)));
 const addSheetVisible = ref(false);
 const ingredientKeyword = ref("");
@@ -253,6 +310,24 @@ const ingredientSearchPending = ref(false);
 let ingredientSearchTimer: ReturnType<typeof setTimeout> | null = null;
 const selectedIngredients = ref<IngredientSummary[]>([]);
 const submitting = ref(false);
+const {
+  threshold: refresherThreshold,
+  pullDistance,
+  refreshing,
+  showSuccess,
+  refresherText,
+  refresherTriggered,
+  onRefresherPulling,
+  onRefresherRefresh,
+  onRefreshComplete,
+  onRefresherRestore
+} = useCustomRefresher({
+  text: {
+    pulling: "下拉刷新食材",
+    canRelease: ["松手刷新食材", "更新食材状态"],
+    success: "食材已刷新"
+  }
+});
 const ingredientSearchMode = computed(() => Boolean(ingredientKeyword.value.trim()));
 const ingredientSearchLoading = computed(() => ingredientSearchMode.value && (ingredientSearchPending.value || ingredientLoading.value));
 const ingredientSearchItems = computed(() => ingredientLoadedKeyword.value === ingredientKeyword.value.trim() ? ingredientOptions.value : []);
@@ -275,23 +350,159 @@ watch(ingredientKeyword, () => {
 });
 
 onShow(() => {
-  if (sessionStore.isLoggedIn) void loadPage();
+  if (!sessionStore.isLoggedIn) {
+    clearTraceCache();
+    traceCacheUserId = null;
+    return;
+  }
+  prepareTraceCacheForUser();
+  const cached = traceCache.get(traceCacheKey());
+  if (cached) applyTraceCache(cached);
+  else void loadPage();
 });
 
 async function handleLoginSuccess() {
-  await loadPage();
+  prepareTraceCacheForUser();
+  await loadPage({ reset: true });
 }
 
-async function loadPage() {
-  if (!sessionStore.isLoggedIn || loading.value) return;
+function traceCacheKey(categoryId = categoryFilter.value) {
+  return `${sessionStore.uid}:${categoryId === null ? "all" : categoryId}`;
+}
+
+function applyTraceCache(cache: TracePageCache) {
+  traces.value = cache.items;
+  tracePage.value = cache.page;
+  hasNext.value = cache.hasNext;
+  loadedMoreOnce.value = cache.loadedMoreOnce;
+  moreErrorText.value = "";
+}
+
+function clearTraceCache() {
+  traceCache.clear();
+  traceRequestSeed.value += 1;
+  traces.value = [];
+  tracePage.value = 1;
+  hasNext.value = false;
+  loadedMoreOnce.value = false;
+  selectedTraceIds.value = new Set();
+  loading.value = false;
+  loadingMore.value = false;
+}
+
+function prepareTraceCacheForUser() {
+  if (traceCacheUserId === sessionStore.uid) return;
+  clearTraceCache();
+  selectedTraceIds.value = new Set();
+  traceCacheUserId = sessionStore.uid;
+}
+
+let categoryPromise: Promise<void> | null = null;
+
+async function ensureTraceCategories(force = false) {
+  if (ingredientCategories.value.length && !force) return;
+  if (categoryPromise) {
+    await categoryPromise;
+    return;
+  }
+  categoryPromise = recipeApi.listIngredientCategories()
+    .then(result => {
+      ingredientCategories.value = result;
+    })
+    .finally(() => {
+      categoryPromise = null;
+    });
+  await categoryPromise;
+}
+
+async function loadPage(options: { reset?: boolean; refreshCategories?: boolean } = {}) {
+  if (!sessionStore.isLoggedIn || (loading.value && !options.reset)) return;
+  const key = traceCacheKey();
+  const cached = traceCache.get(key);
+  if (cached && !options.reset) {
+    applyTraceCache(cached);
+    return;
+  }
+  const requestId = ++traceRequestSeed.value;
   loading.value = true;
-  errorText.value = "";
+  loadingMore.value = false;
+  moreErrorText.value = "";
+  if (!cached) errorText.value = "";
   try {
-    traces.value = await loadAllFridgeTraces((page, pageSize) => fridgeApi.list(page, pageSize));
+    await ensureTraceCategories(options.refreshCategories);
+    const result = await fridgeApi.list(1, 20, categoryFilter.value ?? undefined);
+    if (requestId !== traceRequestSeed.value || key !== traceCacheKey()) return;
+    const nextCache = {
+      items: result.items,
+      page: result.page,
+      hasNext: result.hasNext,
+      loadedMoreOnce: false
+    };
+    traceCache.set(key, nextCache);
+    applyTraceCache(nextCache);
+    errorText.value = "";
   } catch (error) {
-    errorText.value = error instanceof Error ? error.message : "食材参考加载失败";
+    if (requestId === traceRequestSeed.value && key === traceCacheKey()) {
+      const message = error instanceof Error ? error.message : "食材参考加载失败";
+      if (cached) {
+        applyTraceCache(cached);
+        await uniPlatform.feedback.toast({ title: message, icon: "none" });
+      } else {
+        errorText.value = message;
+      }
+    }
   } finally {
-    loading.value = false;
+    if (requestId === traceRequestSeed.value) loading.value = false;
+  }
+}
+
+async function loadMoreTraces() {
+  if (loading.value || loadingMore.value || !hasNext.value) return false;
+  const requestId = traceRequestSeed.value;
+  const key = traceCacheKey();
+  const nextPage = tracePage.value + 1;
+  loadingMore.value = true;
+  moreErrorText.value = "";
+  try {
+    const result = await fridgeApi.list(nextPage, 20, categoryFilter.value ?? undefined);
+    if (requestId !== traceRequestSeed.value || key !== traceCacheKey()) return false;
+    const nextCache: TracePageCache = {
+      items: [...traces.value, ...result.items],
+      page: result.page,
+      hasNext: result.hasNext,
+      loadedMoreOnce: true
+    };
+    traceCache.set(key, nextCache);
+    applyTraceCache(nextCache);
+    return true;
+  } catch (error) {
+    if (requestId === traceRequestSeed.value && key === traceCacheKey()) {
+      moreErrorText.value = error instanceof Error ? error.message : "食材加载失败";
+    }
+    return false;
+  } finally {
+    if (requestId === traceRequestSeed.value) loadingMore.value = false;
+  }
+}
+
+function handleScrollToLower() {
+  void loadMoreTraces();
+}
+
+function handleTraceScroll(event: { detail?: { scrollTop?: number } }) {
+  traceScrollTop.value = event.detail?.scrollTop ?? 0;
+}
+
+async function handleRefresherRefresh() {
+  if (!onRefresherRefresh()) {
+    onRefresherRestore();
+    return;
+  }
+  try {
+    await loadPage({ reset: true, refreshCategories: true });
+    await onRefreshComplete();
+  } finally {
+    onRefresherRestore();
   }
 }
 
@@ -301,13 +512,27 @@ function formatRecordedAt(value: string) {
   return `${date.getMonth() + 1}月${date.getDate()}日记录`;
 }
 
-function filterByCategory(items: FridgeTraceSummary[]) {
-  if (categoryFilter.value === "__ALL__") return items;
-  return items.filter(trace => (trace.categoryName?.trim() || "未分类") === categoryFilter.value);
-}
-
-function changeCategory(category: string) {
-  categoryFilter.value = category;
+function changeCategory(categoryId: UUID | null) {
+  if (categoryFilter.value === categoryId) return;
+  categoryFilter.value = categoryId;
+  traceScrollTop.value = 0;
+  selectedTraceIds.value = new Set();
+  archiveExpanded.value = false;
+  errorText.value = "";
+  moreErrorText.value = "";
+  traceRequestSeed.value += 1;
+  loading.value = false;
+  loadingMore.value = false;
+  const cached = traceCache.get(traceCacheKey());
+  if (cached) applyTraceCache(cached);
+  else {
+    traces.value = [];
+    tracePage.value = 1;
+    hasNext.value = false;
+    loadedMoreOnce.value = false;
+    selectingAll.value = false;
+    void loadPage({ reset: true });
+  }
 }
 
 function openAddSheet() {
@@ -447,7 +672,8 @@ async function addSelectedIngredients() {
   try {
     await fridgeApi.markPresentBatch(selected.map(ingredient => ({ ingredientId: ingredient.id, name: ingredient.name })), createOperationId());
     closeAddSheet();
-    await loadPage();
+    clearTraceCache();
+    await loadPage({ reset: true });
   } catch (error) {
     ingredientErrorText.value = error instanceof Error ? error.message : "添加失败";
   } finally {
@@ -469,7 +695,19 @@ function exitManageMode() {
   selectedTraceIds.value = new Set();
 }
 
-function toggleSelectAll() {
+async function toggleSelectAll() {
+  if (selectingAll.value || loading.value || loadingMore.value) return;
+  if (!allVisibleSelected.value && hasNext.value) {
+    selectingAll.value = true;
+    try {
+      while (hasNext.value) {
+        const loaded = await loadMoreTraces();
+        if (!loaded) return;
+      }
+    } finally {
+      selectingAll.value = false;
+    }
+  }
   const next = new Set(selectedTraceIds.value);
   for (const trace of selectableTraces.value) {
     if (allVisibleSelected.value) next.delete(trace.id);
@@ -503,7 +741,8 @@ async function confirmMarkSelectedEmpty() {
       categoryName: trace.categoryName
     })), createOperationId());
     exitManageMode();
-    await loadPage();
+    clearTraceCache();
+    await loadPage({ reset: true });
     await uniPlatform.feedback.toast({
       title: errorText.value ? "已更新食材，列表刷新失败" : "已更新食材状态",
       icon: errorText.value ? "none" : "success"
@@ -521,6 +760,13 @@ async function confirmMarkSelectedEmpty() {
   display: flex;
   flex-direction: column;
   height: 100%;
+  min-height: 0;
+}
+
+.trace-scroll-wrap {
+  position: relative;
+  display: flex;
+  flex: 1;
   min-height: 0;
 }
 

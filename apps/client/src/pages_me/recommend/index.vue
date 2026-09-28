@@ -33,7 +33,7 @@
             <view v-else-if="errorText && !messageItems.length" class="notice notice--error" @click="loadPage()">
               {{ errorText }}
             </view>
-            <Empty v-else-if="!messageItems.length" :art="emptyStateArt" title="暂无通知" description="重要消息，将在这里呈现。" />
+            <Empty v-else-if="!messageItems.length" :art="emptyStateArt" title="暂无通知" description="有新的重要消息时，会在这里等你。" />
             <view v-else class="message-list">
               <view
                 v-for="item in displayItems"

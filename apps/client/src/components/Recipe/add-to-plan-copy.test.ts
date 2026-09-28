@@ -20,11 +20,12 @@ const randomPageSource = readFile("../../pages_meal/random/index.vue");
 
 expectExcludes(homeTopicPageSource, 'class="recipe-note"');
 expectExcludes(homeTopicPageSource, "确认加入计划时，会同时保存到私房菜。");
-expectExcludes(addToPlanSheetSource, "稍后分类");
-expectExcludes(addToPlanSheetSource, "分类可现在选择，也可以之后再整理。");
-expectIncludes(addToPlanSheetSource, "props.needAddToPrivate && !selectedCategoryId.value");
-expectExcludes(randomPageSource, "稍后分类");
-expectExcludes(randomPageSource, "也可以稍后再分");
-expectIncludes(randomPageSource, "inspirationSlots.value.every(item => selectedCategoryIds.value[item.recipeVersionId])");
+expectExcludes(addToPlanSheetSource, "私房菜分类");
+expectExcludes(addToPlanSheetSource, "needAddToPrivate");
+expectIncludes(addToPlanSheetSource, "mealApi.createPlan(body)");
+expectExcludes(addToPlanSheetSource, "if (!item.recipeId) continue;");
+expectIncludes(addToPlanSheetSource, "if (menuByVersion.has(recipeVersionId)) continue;");
+expectIncludes(randomPageSource, "<AddToPlanSheet");
+expectExcludes(randomPageSource, "createMyRecipeFromInspiration");
 
 console.log("add to plan copy tests passed");
