@@ -667,6 +667,15 @@ export class UpdateHomeEntryImageDto extends OperationDto {
   expectedVersion!: number;
 }
 
+export class HomeFridgeRecipesQueryDto {
+  @ApiPropertyOptional({ default: 1 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page = 1;
+}
+
 export class SetHomeEntryStatusDto extends OperationDto {
   @ApiProperty({ enum: ["LISTED", "UNLISTED"] })
   @IsIn(["LISTED", "UNLISTED"])
@@ -944,6 +953,30 @@ export class PageQueryDto {
   @IsString()
   @MaxLength(120)
   keyword?: string;
+}
+
+export class FridgeTracePageQueryDto {
+  @ApiPropertyOptional({ default: 1 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page = 1;
+
+  @ApiPropertyOptional({ default: 20, maximum: 100 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  pageSize = 20;
+
+  @ApiPropertyOptional({ example: resourceIdExample, description: "按食材分类筛选" })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  categoryId?: number;
 }
 
 export class FridgeSummaryQueryDto {
@@ -1936,11 +1969,12 @@ export class CreateMealPlanMenuItemDto {
   @Min(0)
   sortOrder!: number;
 
-  @ApiProperty({ minimum: 1 })
+  @ApiProperty({ minimum: 1, nullable: true })
+  @ValidateIf((_object, value) => value !== null)
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  recipeId!: number;
+  recipeId!: number | null;
 
   @ApiProperty({ minimum: 1 })
   @Type(() => Number)

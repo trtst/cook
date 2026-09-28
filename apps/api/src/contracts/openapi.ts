@@ -242,6 +242,7 @@ export class HomeFridgeRecipeItemModel {
 
 export class HomeFridgeRecipesResponseModel {
   @ApiProperty({ type: [HomeFridgeRecipeItemModel] }) items!: HomeFridgeRecipeItemModel[];
+  @ApiProperty({ type: Boolean }) hasNext!: boolean;
 }
 
 export class AdminHomeEntryItemModel extends HomeEntryItemModel {
@@ -2105,6 +2106,11 @@ export class MealPlanModel {
   @ApiProperty(dateTime) createdAt!: string;
 }
 
+export class MealReminderModel {
+  @ApiProperty({ type: String, enum: ["NOT_SCHEDULED", "SCHEDULED", "SENT", "FAILED"] }) status!: string;
+  @ApiProperty({ ...dateTime, nullable: true }) scheduledAt!: string | null;
+}
+
 export class DiningEventStageCountsModel {
   @ApiProperty({ type: Number, minimum: 0 }) todoCount!: number;
   @ApiProperty({ type: Number, minimum: 0 }) activeCount!: number;
@@ -2349,6 +2355,11 @@ export class DiningEventModel {
   @ApiProperty(dateTime) createdAt!: string;
 }
 
+export class CancelDiningEventModel {
+  @ApiProperty(uuid) id!: string;
+  @ApiProperty({ type: String, enum: ["CANCELLED"] }) status!: string;
+}
+
 export class DiningEventShareLinkModel {
   @ApiProperty({ type: String }) shareTokenPath!: string;
   @ApiProperty({ ...dateTime, nullable: true }) expiresAt!: string | null;
@@ -2525,6 +2536,7 @@ export class FridgeTraceModel {
 
 export class FridgeTraceSummaryResponseModel {
   @ApiProperty({ type: Number }) totalCount!: number;
+  @ApiProperty({ type: Number }) recentCount!: number;
   @ApiProperty({ ...nullableString, example: null }) latestTime!: string | null;
 }
 

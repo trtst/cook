@@ -220,11 +220,11 @@ export class PantryService {
     @Inject(MedalService) private readonly medalService: MedalService
   ) {}
 
-  async listFridgeTraces(userId: UUID, page: number, pageSize: number): Promise<PageResult<FridgeTraceIngredientSummary>> {
+  async listFridgeTraces(userId: UUID, page: number, pageSize: number, categoryId?: UUID): Promise<PageResult<FridgeTraceIngredientSummary>> {
     const normalizedPage = toPositiveInt(page, 1);
     const normalizedPageSize = Math.min(toPositiveInt(pageSize, 20), 100);
     const skip = (normalizedPage - 1) * normalizedPageSize;
-    const summaries = this.fridgeTraceSummariesSql(userId);
+    const summaries = this.fridgeTraceSummariesSql(userId, categoryId);
     const rows = await this.prisma.$queryRaw<Array<{
       id: number | null;
       ingredientId: number | null;
@@ -271,14 +271,23 @@ export class PantryService {
   }
 
   async getFridgeTraceSummary(userId: UUID): Promise<FridgeTraceSummaryResponse> {
-    const rows = await this.prisma.$queryRaw<Array<{ totalCount: number; latestTime: Date | null }>>(Prisma.sql`
+    const rows = await this.prisma.$queryRaw<Array<{ totalCount: number; recentCount: number; latestTime: Date | null }>>(Prisma.sql`
       WITH summaries AS (${this.fridgeTraceSummariesSql(userId)})
-      SELECT COUNT(*)::INTEGER AS "totalCount", MAX("recordedAt") AS "latestTime" FROM summaries
+      SELECT
+        COUNT(*)::INTEGER AS "totalCount",
+        COUNT(*) FILTER (WHERE presence <> 'UNCONFIRMED')::INTEGER AS "recentCount",
+        MAX("recordedAt") AS "latestTime"
+      FROM summaries
     `);
-    return { totalCount: Number(rows[0]?.totalCount ?? 0), latestTime: rows[0]?.latestTime?.toISOString() ?? null };
+    return {
+      totalCount: Number(rows[0]?.totalCount ?? 0),
+      recentCount: Number(rows[0]?.recentCount ?? 0),
+      latestTime: rows[0]?.latestTime?.toISOString() ?? null
+    };
   }
 
-  private fridgeTraceSummariesSql(userId: UUID) {
+  private fridgeTraceSummariesSql(userId: UUID, categoryId?: UUID) {
+    const categoryFilter = categoryId ? Prisma.sql`AND ingredient.category_id = ${categoryId}` : Prisma.empty;
     return Prisma.sql`
       WITH source AS (
         SELECT trace.id, trace.ingredient_id AS "ingredientId", trace.name,
@@ -292,10 +301,9 @@ export class PantryService {
         FROM fridge_traces trace
         LEFT JOIN ingredients ingredient ON ingredient.id = trace.ingredient_id
         LEFT JOIN ingredient_categories category ON category.id = ingredient.category_id
-        WHERE trace.user_id = ${userId}
+        WHERE trace.user_id = ${userId} ${categoryFilter}
       ), latest_state AS (
         SELECT DISTINCT ON ("identityKey") * FROM source
-        WHERE kind <> 'USED'
         ORDER BY "identityKey", "recordedAt" DESC, id DESC
       ), latest_purchase AS (
         SELECT DISTINCT ON ("identityKey") "identityKey", "recordedAt"
@@ -312,6 +320,7 @@ export class PantryService {
               OR state."categoryCode" IN ('PRODUCE', 'VEGETABLES', 'FRUIT', 'FRESH_MEAT', 'FRESH_FISH', 'TOFU', 'FRESH_MILK')
               THEN INTERVAL '7 days' ELSE INTERVAL '15 days' END)
             THEN 'UNCONFIRMED'
+            WHEN state.kind = 'USED' THEN 'UNCONFIRMED'
             WHEN state.kind = 'MANUAL_EMPTY' THEN 'EMPTY' ELSE 'PRESENT' END AS presence,
           CURRENT_TIMESTAMP - state."recordedAt" >= INTERVAL '30 days' AS archived,
           COALESCE(CURRENT_TIMESTAMP - purchase."recordedAt" < INTERVAL '3 days', FALSE) AS "recentlyPurchased"
@@ -320,7 +329,8 @@ export class PantryService {
       )
       SELECT calculated.id, calculated."ingredientId", calculated.name, calculated."categoryName",
         calculated.kind,
-        CASE WHEN calculated.presence = 'UNCONFIRMED' THEN '没有近期记录'
+        CASE WHEN calculated.kind = 'USED' THEN '用过，余量未知'
+          WHEN calculated.presence = 'UNCONFIRMED' THEN '没有近期记录'
           WHEN calculated.presence = 'EMPTY' THEN '已标记没有'
           WHEN calculated."recentlyPurchased" THEN '最近买过' ELSE '可能还有' END AS label,
         calculated."recordedAt", calculated."windowDays", calculated.presence,

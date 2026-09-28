@@ -388,6 +388,7 @@ export interface HomeFridgeRecipeItem {
 
 export interface HomeFridgeRecipesResponse {
   items: HomeFridgeRecipeItem[];
+  hasNext: boolean;
 }
 
 export interface AdminHomeEntryItem extends HomeEntryItem {
@@ -2547,7 +2548,7 @@ export interface AdminDeletePendingItemResult {
 export interface CreateMealPlanMenuItemRequest {
   slotType: RecipeSlotType | null;
   sortOrder: number;
-  recipeId: UUID;
+  recipeId: UUID | null;
   recipeVersionId: UUID;
   purchaseState: MealPlanDishPurchaseState;
 }
@@ -2712,6 +2713,11 @@ export interface MealPlanSummary {
   shoppingListName: string | null;
   shoppingListStatus: "ACTIVE" | "COMPLETED" | "VOIDED" | null;
   createdAt: IsoDateTime;
+}
+
+export interface MealReminderSummary {
+  status: "NOT_SCHEDULED" | "SCHEDULED" | "SENT" | "FAILED";
+  scheduledAt: IsoDateTime | null;
 }
 
 export interface AddMealPlanItemRequest {
@@ -2916,6 +2922,11 @@ export interface DiningEventSummary {
   createdAt: IsoDateTime;
 }
 
+export interface CancelDiningEventResponse {
+  id: UUID;
+  status: "CANCELLED";
+}
+
 export interface DiningEventShareLinkResponse {
   shareTokenPath: string;
   expiresAt: IsoDateTime | null;
@@ -3115,6 +3126,7 @@ export interface FridgeTraceIngredientSummary extends FridgeTraceSummary {
 
 export interface FridgeTraceSummaryResponse {
   totalCount: number;
+  recentCount: number;
   latestTime: IsoDateTime | null;
 }
 

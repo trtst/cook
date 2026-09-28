@@ -26,7 +26,7 @@ test("痕迹文案不承诺精确库存", () => {
   assert.equal(fridgeTraceLabel("USED"), "用过，余量未知");
 });
 
-test("最新购买或手动确认决定有无，用过痕迹不覆盖食材状态", () => {
+test("最新用过痕迹将食材状态降为未确认", () => {
   const state = fridgePresenceState([
     { kind: "MANUAL_EMPTY", createdAt: new Date("2026-09-15T00:00:00.000Z"), categoryName: "蔬菜", categoryCode: null },
     { kind: "USED", createdAt: new Date("2026-09-23T00:00:00.000Z"), categoryName: "蔬菜", categoryCode: null },
@@ -34,12 +34,21 @@ test("最新购买或手动确认决定有无，用过痕迹不覆盖食材状�
   ], now);
 
   assert.deepEqual(state, {
-    status: "PRESENT",
-    updatedAt: "2026-09-22T00:00:00.000Z",
+    status: "UNCONFIRMED",
+    updatedAt: "2026-09-23T00:00:00.000Z",
     windowDays: 7,
     archived: false,
     recentlyPurchased: true
   });
+});
+
+test("同一时间的食材痕迹按 id 倒序确定最新状态", () => {
+  const ids = fridgePresentIngredientIds([
+    { id: 1, ingredientId: 1004, kind: "MANUAL_PRESENT", createdAt: new Date("2026-09-23T00:00:00.000Z"), categoryName: "蔬菜", categoryCode: null },
+    { id: 2, ingredientId: 1004, kind: "MANUAL_EMPTY", createdAt: new Date("2026-09-23T00:00:00.000Z"), categoryName: "蔬菜", categoryCode: null }
+  ], now);
+
+  assert.deepEqual([...ids], []);
 });
 
 test("有无确认超过七或十五天降为未确认，超过三十天移入折叠区", () => {

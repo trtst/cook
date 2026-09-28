@@ -1,10 +1,11 @@
-import { Controller, Get, Inject, NotFoundException, Param, Req, Res, UseGuards } from "@nestjs/common";
+import { Controller, Get, Inject, NotFoundException, Param, Query, Req, Res, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiExcludeController, ApiTags } from "@nestjs/swagger";
 import type { HomeFeatureBoardPlacement } from "@prisma/client";
 import type { Writable } from "node:stream";
 import { ok } from "../../common/api-response";
 import type { RequestWithUser } from "../../common/auth-context";
 import { UserAuthGuard } from "../../common/user-auth.guard";
+import { HomeFridgeRecipesQueryDto } from "../../contracts/dtos";
 import {
   ApiOkModel,
   ApiOkNullableModel,
@@ -76,8 +77,8 @@ export class HomeController {
   @UseGuards(UserAuthGuard)
   @ApiBearerAuth("UserBearerAuth")
   @ApiOkModel(HomeFridgeRecipesResponseModel, "读取首页冰箱匹配推荐")
-  getFridgeRecipes(@Req() request: RequestWithUser) {
-    return this.homeService.getFridgeRecipes(request.user.userId).then(result => ok(result));
+  getFridgeRecipes(@Req() request: RequestWithUser, @Query() query: HomeFridgeRecipesQueryDto) {
+    return this.homeService.getFridgeRecipes(request.user.userId, query.page).then(result => ok(result));
   }
 }
 

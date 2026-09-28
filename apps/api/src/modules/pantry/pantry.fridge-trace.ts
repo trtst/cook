@@ -3,6 +3,7 @@ export type FridgeTraceKind = "PURCHASED" | "USED" | "MANUAL_PRESENT" | "MANUAL_
 export type FridgePresenceStatus = "PRESENT" | "EMPTY" | "UNCONFIRMED";
 
 export interface FridgePresenceRecord {
+  id?: number;
   kind: FridgeTraceKind;
   createdAt: Date;
   categoryName: string | null;
@@ -57,9 +58,12 @@ export function fridgePresenceState(
   records: FridgePresenceRecord[],
   now = new Date()
 ): FridgePresenceState | null {
-  const stateRecords = records
-    .filter(record => record.kind !== "USED")
-    .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime());
+  const stateRecords = [...records].sort((left, right) => {
+    const timeDiff = right.createdAt.getTime() - left.createdAt.getTime();
+    if (timeDiff !== 0) return timeDiff;
+    if (left.id === undefined || right.id === undefined) return 0;
+    return right.id - left.id;
+  });
   const latest = stateRecords[0];
   if (!latest) return null;
 
@@ -69,7 +73,7 @@ export function fridgePresenceState(
   const purchaseAgeMs = latestPurchase ? now.getTime() - latestPurchase.createdAt.getTime() : Infinity;
   const confirmed = ageMs < windowDays * 24 * 60 * 60 * 1000;
   return {
-    status: !confirmed ? "UNCONFIRMED" : latest.kind === "MANUAL_EMPTY" ? "EMPTY" : "PRESENT",
+    status: !confirmed || latest.kind === "USED" ? "UNCONFIRMED" : latest.kind === "MANUAL_EMPTY" ? "EMPTY" : "PRESENT",
     updatedAt: latest.createdAt.toISOString(),
     windowDays,
     archived: ageMs >= 30 * 24 * 60 * 60 * 1000,

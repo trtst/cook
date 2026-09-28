@@ -14,9 +14,9 @@ import {
   CreateShoppingListDto,
   CreateShoppingListItemDto,
   DeleteShoppingListDto,
+  FridgeTracePageQueryDto,
   LeaveShoppingListDto,
   OperationDto,
-  PageQueryDto,
   RenameShoppingListDto,
   RemoveShoppingListItemDto,
   RemoveShoppingListMemberDto,
@@ -55,8 +55,8 @@ export class PantryController {
 
   @Get("fridge-traces")
   @ApiOkPage(FridgeTraceIngredientModel, "读取当前用户食材有无状态")
-  listFridgeTraces(@Req() request: RequestWithUser, @Query() query: PageQueryDto) {
-    return this.pantryService.listFridgeTraces(request.user.userId, query.page, query.pageSize).then(result => ok(result));
+  listFridgeTraces(@Req() request: RequestWithUser, @Query() query: FridgeTracePageQueryDto) {
+    return this.pantryService.listFridgeTraces(request.user.userId, query.page, query.pageSize, query.categoryId).then(result => ok(result));
   }
 
   @Get("fridge-traces/summary")
