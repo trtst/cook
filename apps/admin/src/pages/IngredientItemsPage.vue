@@ -23,8 +23,9 @@ type IngredientImageFilter = "ALL" | "MISSING";
 type IngredientProteinType = NonNullable<AdminIngredientSummary["proteinType"]>;
 
 const cropFrameSize = 240;
-const minIngredientImageSize = 60;
-const maxIngredientImageSize = 100;
+// 食材图片统一保留 300～500 像素，超出上限再缩至 500×500。
+const minIngredientImageSize = 300;
+const maxIngredientImageSize = 500;
 const maxIngredientSourceSize = 2 * 1024 * 1024;
 const maxIngredientSourceEdge = 375 * 3;
 const maxBatchIngredientSourceSize = 4 * 1024 * 1024;
@@ -762,7 +763,7 @@ async function handleBatchImageFiles(event: Event) {
         const width = image.naturalWidth || image.width;
         const height = image.naturalHeight || image.height;
         if (width !== height) throw new Error("图片必须是 1:1 正方形");
-        if (width < minIngredientImageSize || height < minIngredientImageSize) throw new Error("图片尺寸不能小于 60×60 像素");
+        if (width < minIngredientImageSize || height < minIngredientImageSize) throw new Error("图片尺寸不能小于 300×300 像素");
         if (width > maxBatchIngredientSourceEdge || height > maxBatchIngredientSourceEdge) throw new Error("原图边长不能超过 3750 像素");
         const outputSize = Math.min(width, maxIngredientImageSize);
         const processedFile = await processImageFile({
@@ -901,7 +902,7 @@ async function handleImageFileChange(event: Event) {
     }
     if (sourceWidth < minIngredientImageSize || sourceHeight < minIngredientImageSize) {
       URL.revokeObjectURL(sourceUrl);
-      ElMessage.error("食材图片尺寸不能小于 60×60 像素");
+      ElMessage.error("食材图片尺寸不能小于 300×300 像素");
       return;
     }
     if (sourceWidth > maxIngredientSourceEdge || sourceHeight > maxIngredientSourceEdge) {
@@ -1298,7 +1299,7 @@ watch(
               <el-button type="primary" :icon="Upload" :loading="imageSaving" @click="editingIngredient && chooseImageFile(editingIngredient)">
                 上传 / 替换图片
               </el-button>
-              <div class="edit-image-panel__hint">原图不超过 2 MB、边长不超过 1125 像素；只支持 1:1 正方形，至少 60×60，超过 100×100 会等比例缩小并保存为 JPG。</div>
+              <div class="edit-image-panel__hint">原图不超过 2 MB、边长不超过 1125 像素；只支持 1:1 正方形，至少 300×300，超过 500×500 会缩小至 500×500，保存为 JPG。</div>
             </div>
           </div>
         </el-form-item>
@@ -1388,7 +1389,7 @@ watch(
       @closed="resetBatchImageDialog"
     >
       <div class="table-hint batch-image-summary">
-        单张原图最大 4 MB、最长边 3750 像素；必须为 1:1 且至少 60×60，超过 100×100 会缩小至 100×100，保存为 JPG（质量 1）。
+        单张原图最大 4 MB、最长边 3750 像素；必须为 1:1 且至少 300×300，超过 500×500 会缩小至 500×500，保存为 JPG（质量 1）。
       </div>
       <div class="table-hint batch-image-summary">
         {{ batchImageBusy ? `处理中 ${batchImageFinishedCount}/${batchImageResults.length}` : `处理完成：成功 ${batchImageSuccessCount} 张，失败 ${batchImageFailedCount} 张` }}
@@ -1417,7 +1418,7 @@ watch(
 
     <el-dialog v-model="cropDialogVisible" title="裁切系统食材图片" width="520px" @closed="resetCropState">
       <div class="crop-dialog">
-      <div class="crop-dialog__intro">原图不超过 2 MB、边长不超过 1125 像素；食材图片必须为 1:1 且至少 60×60，大于 100×100 会缩小并保存为 JPG。</div>
+      <div class="crop-dialog__intro">原图不超过 2 MB、边长不超过 1125 像素；食材图片必须为 1:1 且至少 300×300，大于 500×500 会缩小至 500×500 并保存为 JPG。</div>
         <div class="crop-stage" @pointermove="handleCropDrag" @pointerup="endCropDrag" @pointerleave="endCropDrag">
           <img
             v-if="cropState.sourceUrl"
@@ -1611,8 +1612,8 @@ watch(
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 120px;
-  height: 120px;
+  width: 300px;
+  height: 300px;
   border-radius: 16px;
   background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
   overflow: hidden;
@@ -1620,8 +1621,8 @@ watch(
 }
 
 .ingredient-card__image {
-  width: 120px;
-  height: 120px;
+  width: 300px;
+  height: 300px;
   object-fit: cover;
 }
 

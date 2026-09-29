@@ -2,7 +2,7 @@
 
 > **For agentic workers:** Use this plan inline in the current authorized workspace. Do not delegate file ownership. Steps use checkbox syntax for tracking.
 
-**Goal:** Convert system ingredient photos according to confirmed 1:1 size rules, store JPEG quality 0.8 objects, and persist the OSS URL that returns a 60×60 derivative.
+**Goal:** Convert system ingredient photos according to confirmed 1:1 size rules, store JPEG objects, and persist the OSS URL that returns a 300×300 derivative.
 
 **Architecture:** A reusable Admin Canvas encoder receives an already selected source rectangle and an explicit output size/quality. The ingredient page validates the strict square/minimum/maximum policy and passes its selected crop to the encoder. The API validates the final JPEG dimensions, stores `{ingredientId}.jpg`, persists `imageUrl`, and returns that persisted field to ingredient consumers; legacy derived URLs are not used.
 
@@ -13,10 +13,10 @@
 ## Global Constraints
 
 - Ingredient images must be strictly 1:1.
-- Reject an image if either original dimension is below 60 pixels.
-- Keep dimensions from 60×60 through 100×100; downscale larger square images to 100×100.
-- Encode the stored object as JPEG with quality `0.8`.
-- Persist an OSS URL whose image processing parameter returns a 60×60 result.
+- Reject an image if either original dimension is below 300 pixels.
+- Keep dimensions from 300×300 through 500×500; downscale larger square images to 500×500.
+- Encode single-upload objects as JPEG with quality `0.8`; batch-upload objects use quality `1`.
+- Persist an OSS URL whose image processing parameter returns a 300×300 result.
 - Do not backfill or fall back to URLs derived from `imageUpdatedAt`.
 - Do not implement filtering, export, or batch file selection in this stage.
 - Do not add or run tests in this stage; run scoped type, Prisma, build, and diff checks only.
@@ -46,7 +46,7 @@
 
 - [x] Add a nullable Prisma `imageUrl` column without copying old `imageUpdatedAt` values.
 - [x] Update single-image upload storage naming/MIME validation to final `{ingredientId}.jpg` JPEG output.
-- [x] Append OSS resize parameters `image/resize,m_fixed,w_60,h_60` to the generated public URL and persist that exact URL. Without `ASSET_PUBLIC_BASE_URL`, persist a stable API-relative path rather than the request Host.
+- [x] Append OSS resize parameters `image/resize,m_fixed,w_300,h_300` to the generated public URL and persist that exact URL. Without `ASSET_PUBLIC_BASE_URL`, persist a stable API-relative path rather than the request Host.
 - [x] Update ingredient list, pantry responses, recipe ingredient references, and public-image gating to read the stored field; a null URL means no registered image.
 - [x] Update clear-image to set `imageUrl` to null and preserve the existing version/idempotency/audit/rollback behavior.
 - [x] Update API contract and API index image semantics, including old records remaining null.
@@ -65,7 +65,7 @@
 - Ingredient policy validates natural image dimensions before conversion; selected crop output must be square.
 
 - [x] Implement image decode, source rectangle drawing, configured Canvas dimensions, JPEG `toBlob` encoding, and `File` output.
-- [x] In the existing crop flow reject non-square source images, reject either dimension below 60, keep 60–100 pixel square sources unchanged, and choose 100×100 for larger sources.
+- [x] In the existing crop flow reject non-square source images, reject either dimension below 300, keep 300–500 pixel square sources unchanged, and choose 500×500 for larger sources.
 - [x] Export the selected square crop as the configured JPEG with quality `0.8`; set the uploaded filename to `{ingredientId}.jpg`.
 - [x] Keep the current single-image crop interaction and pass the final JPEG into the existing upload API.
 - [x] Replace the documented 50×50 PNG rule with the confirmed ingredient image policy.
