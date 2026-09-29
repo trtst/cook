@@ -761,6 +761,7 @@ async function confirmMarkSelectedEmpty() {
   flex-direction: column;
   height: 100%;
   min-height: 0;
+  overflow: hidden;
 }
 
 .trace-scroll-wrap {
@@ -768,11 +769,12 @@ async function confirmMarkSelectedEmpty() {
   display: flex;
   flex: 1;
   min-height: 0;
+  overflow: hidden;
 }
 
 .trace-scroll {
   flex: 1;
-  height: 1px;
+  height: 100%;
   min-height: 0;
 }
 
@@ -1057,7 +1059,7 @@ async function confirmMarkSelectedEmpty() {
 
 .trace-actions__mark-empty {
   background: var(--color-primary);
-  color: var(--color-on-primary);
+  color: var(--button-primary-text);
 }
 
 .trace-actions__mark-empty--disabled {

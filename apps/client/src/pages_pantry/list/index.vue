@@ -1206,7 +1206,6 @@ defineExpose({
 
 .create-fab__icon {
   color: var(--button-primary-text);
-  font-size: 28rpx;
 }
 
 .sheet-actions {

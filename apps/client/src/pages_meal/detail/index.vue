@@ -586,7 +586,10 @@
                 :style="detailDockActionStyle(index)"
                 @click="handleDetailDockAction(action.key)"
               >
-                <text class="cookfont detail-manage-dock__action-icon" :class="action.iconClass" />
+                <text
+                  class="cookfont detail-manage-dock__action-icon"
+                  :class="[action.iconClass, { 'detail-manage-dock__action-icon--danger': action.key === 'cancel-detail' }]"
+                />
                 <text class="detail-manage-dock__action-label">{{ action.label }}</text>
               </button>
             </view>
@@ -639,7 +642,6 @@
           v-else
           meal
           :quick-action="reminderQuickAction"
-          :quick-status="reminderStatusText"
           :secondary-action="footerSecondaryAction"
           :primary-action="footerPrimaryAction"
           :primary-gap-text="footerPrimaryGapText"
@@ -1633,8 +1635,8 @@ const footerVisible = computed(() => {
   );
 });
 const reminderQuickAction = computed(() => ({
-  label: "微信提醒",
-  iconClass: "icon-notice",
+  label: reminderStatusText.value,
+  iconClass: "icon-wechat",
   disabled: reminderLoading.value || reminderSubmitting.value || Boolean(
     eventDetail.value
       ? eventClosed.value || eventDetail.value.status === "CANCELLED" || eventDetail.value.status === "COMPLETED"
@@ -1647,7 +1649,7 @@ const reminderStatusText = computed(() => {
   if (reminderState.value?.status === "SCHEDULED") return "已预约";
   if (reminderState.value?.status === "SENT") return "已发送";
   if (reminderState.value?.status === "FAILED") return "发送失败";
-  return "未预约";
+  return "预约提醒";
 });
 const detailDockActions = computed(() => {
   const actions: Array<{ key: DetailDockActionKey; label: string; iconClass?: string; disabled?: boolean }> = [];
@@ -1658,7 +1660,7 @@ const detailDockActions = computed(() => {
   return actions;
 });
 const detailDockVisible = computed(() => detailDockActions.value.length > 0);
-const detailDockPositionStyle = computed(() => ({ bottom: footerVisible.value ? "calc(280rpx + env(safe-area-inset-bottom))" : "calc(40rpx + env(safe-area-inset-bottom))" }));
+const detailDockPositionStyle = computed(() => ({ bottom: footerVisible.value ? "calc(140rpx + env(safe-area-inset-bottom))" : "calc(40rpx + env(safe-area-inset-bottom))" }));
 const showFooterStatus = computed(() => Boolean(eventDetail.value && footerStage.value !== "TIME_UP"));
 const footerStatusIcon = computed(() => {
   if (eventDetail.value?.scheduledAt && !eventClosed.value) return "icon-time";
@@ -5721,7 +5723,10 @@ function clearFocusedSection() {
 
 .detail-manage-dock__action-icon {
   color: var(--color-icon-active);
-  font-size: 34rpx;
+}
+
+.detail-manage-dock__action-icon--danger {
+  color: var(--color-state-danger-text);
 }
 
 .detail-manage-dock__action-label {
@@ -5750,7 +5755,6 @@ function clearFocusedSection() {
 
 .detail-manage-dock__icon {
   color: var(--button-primary-text);
-  font-size: 34rpx;
   transition: transform 240ms ease;
 }
 

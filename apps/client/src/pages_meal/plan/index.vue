@@ -1780,7 +1780,6 @@ defineExpose({
 
 .manage-dock__action-icon {
   color: var(--color-icon-active);
-  font-size: 34rpx;
 }
 
 .manage-dock__action-label {
@@ -1815,7 +1814,6 @@ defineExpose({
 
 .manage-dock__icon {
   color: var(--button-primary-text);
-  font-size: 34rpx;
   transition: transform 240ms ease;
 }
 

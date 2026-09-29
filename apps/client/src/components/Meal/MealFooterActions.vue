@@ -11,7 +11,6 @@
       >
         <text class="cookfont meal-footer__quick-icon" :class="quickAction.iconClass" />
         <text class="meal-footer__quick-label">{{ quickAction.label }}</text>
-        <text v-if="quickStatus" class="meal-footer__quick-status">{{ quickStatus }}</text>
       </button>
       <view
         v-else
@@ -21,7 +20,6 @@
       >
         <text class="cookfont meal-footer__quick-icon" :class="quickAction.iconClass" />
         <text class="meal-footer__quick-label">{{ quickAction.label }}</text>
-        <text v-if="quickStatus" class="meal-footer__quick-status">{{ quickStatus }}</text>
       </view>
     </template>
 
@@ -51,7 +49,6 @@
 <script setup lang="ts">
 defineProps<{
   quickAction?: { label: string; iconClass?: string; disabled?: boolean } | null;
-  quickStatus?: string;
   secondaryAction?: { label: string; disabled?: boolean } | null;
   primaryAction?: { label: string; disabled?: boolean } | null;
   meal?: boolean;
@@ -112,19 +109,12 @@ const emit = defineEmits<{
 
 .meal-footer__quick-icon {
   color: var(--color-text);
-  font-size: 30rpx;
 }
 
 .meal-footer__quick-label {
   color: var(--color-text-secondary);
   font-size: 22rpx;
   line-height: 1.4;
-}
-
-.meal-footer__quick-status {
-	color: var(--color-text-secondary);
-	font-size: 20rpx;
-	line-height: 1.2;
 }
 
 .meal-footer__buttons {

@@ -1108,7 +1108,6 @@ defineExpose({
 
 .event-fab__icon {
   color: var(--button-primary-text);
-  font-size: 30rpx;
 }
 
 .event-redirect {

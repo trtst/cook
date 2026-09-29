@@ -500,7 +500,7 @@ onLoad(query => {
 onShow(() => {
   openPendingLoginPrompt();
   void useAppConfigStore().refreshForHomeShow();
-  void Promise.all([loadHomeEntries(), loadNextMealState(true), loadWeekOverview(true), loadFridgeRecipes(true), loadPantrySummary(true)]);
+  void Promise.all([loadHomeEntries(), loadNextMealState(true), loadWeekOverview(true), loadFridgeRecipes(), loadPantrySummary(true)]);
 });
 
 function parseHomeLoginPrompt(value: unknown) {
