@@ -27,8 +27,11 @@ const minIngredientImageSize = 60;
 const maxIngredientImageSize = 100;
 const maxIngredientSourceSize = 2 * 1024 * 1024;
 const maxIngredientSourceEdge = 375 * 3;
+const maxBatchIngredientSourceSize = 4 * 1024 * 1024;
+const maxBatchIngredientSourceEdge = 375 * 10;
 const batchImageResultPageSize = 50;
 const imageQuality = 0.8;
+const batchImageQuality = 1;
 const router = useRouter();
 const unitTypeLabelMap: Record<AdminUnitSummary["type"], string> = {
   WEIGHT: "重量",
@@ -700,9 +703,9 @@ async function handleBatchImageFiles(event: Event) {
     if (!file.type.startsWith("image/")) {
       row.status = "FAILED";
       row.message = "文件不是图片";
-    } else if (file.size <= 0 || file.size > maxIngredientSourceSize) {
+    } else if (file.size <= 0 || file.size > maxBatchIngredientSourceSize) {
       row.status = "FAILED";
-      row.message = file.size <= 0 ? "图片文件为空" : "原图不能超过 2 MB";
+      row.message = file.size <= 0 ? "图片文件为空" : "原图不能超过 4 MB";
     } else if (row.ingredientId === null) {
       row.status = "FAILED";
       row.message = "文件名主体必须是食材数字 ID";
@@ -760,14 +763,14 @@ async function handleBatchImageFiles(event: Event) {
         const height = image.naturalHeight || image.height;
         if (width !== height) throw new Error("图片必须是 1:1 正方形");
         if (width < minIngredientImageSize || height < minIngredientImageSize) throw new Error("图片尺寸不能小于 60×60 像素");
-        if (width > maxIngredientSourceEdge || height > maxIngredientSourceEdge) throw new Error("原图边长不能超过 1125 像素");
+        if (width > maxBatchIngredientSourceEdge || height > maxBatchIngredientSourceEdge) throw new Error("原图边长不能超过 3750 像素");
         const outputSize = Math.min(width, maxIngredientImageSize);
         const processedFile = await processImageFile({
           source: image,
           sourceRect: { x: 0, y: 0, width, height },
           outputWidth: outputSize,
           outputHeight: outputSize,
-          quality: imageQuality,
+          quality: batchImageQuality,
           fileName: `${row.ingredientId}.jpg`
         });
         row.message = "上传图片…";
@@ -1384,6 +1387,9 @@ watch(
       :show-close="!batchImageBusy"
       @closed="resetBatchImageDialog"
     >
+      <div class="table-hint batch-image-summary">
+        单张原图最大 4 MB、最长边 3750 像素；必须为 1:1 且至少 60×60，超过 100×100 会缩小至 100×100，保存为 JPG（质量 1）。
+      </div>
       <div class="table-hint batch-image-summary">
         {{ batchImageBusy ? `处理中 ${batchImageFinishedCount}/${batchImageResults.length}` : `处理完成：成功 ${batchImageSuccessCount} 张，失败 ${batchImageFailedCount} 张` }}
       </div>
