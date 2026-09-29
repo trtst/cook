@@ -1283,6 +1283,7 @@ model Ingredient {
   status          IngredientStatus @default(ACTIVE)
   systemSortOrder Int?             @map("system_sort_order")
   displaySortOrder Int?            @map("display_sort_order")
+  imageUrl        String?          @map("image_url") @db.VarChar(2048)
   imageUpdatedAt  DateTime?        @map("image_updated_at") @db.Timestamptz(3)
   version         Int              @default(1)
   createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)

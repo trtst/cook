@@ -3871,10 +3871,10 @@ export class RecipeService {
   }
 
   private buildIngredientImageUrl(
-    request: { protocol?: string; get?: (name: string) => string | undefined },
-    ingredient: { ownerId: UUID | null; id: UUID; imageUpdatedAt?: Date | null }
+    _request: { protocol?: string; get?: (name: string) => string | undefined },
+    ingredient: { ownerId: UUID | null; imageUrl: string | null }
   ) {
     if (ingredient.ownerId) return null;
-    return this.ingredientImageService.buildImageUrl(request, ingredient.id, ingredient.imageUpdatedAt ?? null);
+    return this.ingredientImageService.buildImageUrl(ingredient.imageUrl, _request);
   }
 }

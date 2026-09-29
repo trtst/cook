@@ -906,7 +906,7 @@ export class AdminController {
     @Query() query: AdminIngredientQueryDto
   ) {
     return this.adminService
-      .listIngredients(request, query.page, query.pageSize, query.categoryId, query.keyword, query.status, query.factStatus, request.admin.adminId)
+      .listIngredients(request, query.page, query.pageSize, query.categoryId, query.keyword, query.status, query.factStatus, request.admin.adminId, query.imageStatus)
       .then(result => ok(result));
   }
 
@@ -1134,7 +1134,7 @@ export class AdminController {
   @Post("ingredients/:ingredientId/image")
   @UseGuards(AdminAuthGuard)
   @ApiBearerAuth("AdminBearerAuth")
-  @UseInterceptors(FileInterceptor("file", { limits: { fileSize: 5 * 1024 * 1024 } }))
+  @UseInterceptors(FileInterceptor("file", { limits: { fileSize: 2 * 1024 * 1024 } }))
   @ApiConsumes("multipart/form-data")
   @ApiIdempotencyKey()
   @ApiOkModel(AdminIngredientModel, "上传或替换系统食材图片")

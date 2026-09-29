@@ -7,11 +7,9 @@ const assetStorage = {
     `/static/${storageKey}${updatedAt ? `?v=${encodeURIComponent(updatedAt.toISOString())}` : ""}`
 };
 
-test("ingredient image public url includes the stored png extension", () => {
+test("ingredient image url returns the persisted value without deriving a legacy path", () => {
   const service = new IngredientImageService(assetStorage as never);
 
-  assert.equal(
-    service.buildImageUrl({}, 12, new Date("2026-09-06T12:00:00.000Z")),
-    "/static/uploads/ingredients/12.png?v=2026-09-06T12%3A00%3A00.000Z"
-  );
+  const imageUrl = "/uploads/ingredients/12.jpg?x-oss-process=image/resize,m_fixed,w_60,h_60";
+  assert.equal(service.buildImageUrl(imageUrl), imageUrl);
 });

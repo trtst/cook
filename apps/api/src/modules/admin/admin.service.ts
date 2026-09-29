@@ -358,7 +358,6 @@ type AdminIngredientRow = Prisma.IngredientGetPayload<{
 }> & {
   mergedTo?: { id: UUID; name: string } | null;
 };
-type AdminIngredientWithImageRow = AdminIngredientRow & { imageUpdatedAt: Date | null };
 type AdminPendingIngredientRow = Prisma.IngredientRecommendationGetPayload<{
   include: {
     ingredient: {
@@ -546,7 +545,7 @@ function toAdminIngredientSummary(ingredient: AdminIngredientRow): AdminIngredie
     isStaple: ingredient.isStaple,
     isSpicyIngredient: ingredient.isSpicyIngredient,
     aliases: ingredient.aliases,
-    imageUrl: null,
+    imageUrl: ingredient.imageUrl,
     updatedAt: toIsoDate(ingredient.updatedAt)
   };
 }
@@ -2056,7 +2055,8 @@ export class AdminService {
     keyword: string | undefined,
     status: string | undefined,
     factStatus: string | undefined,
-    adminId: UUID
+    adminId: UUID,
+    imageStatus?: string
   ): Promise<PageResult<AdminIngredientSummary>> {
     await this.requireSuperAdmin(adminId);
     const normalizedPage = toPositiveInt(page, 1);
@@ -2065,6 +2065,7 @@ export class AdminService {
     const normalizedKeyword = keyword?.trim();
     const normalizedStatus = status === "PENDING" || status === "DISABLED" || status === "MERGED" || status === "ALL" ? status : "ACTIVE";
     const normalizedFactStatus = factStatus === "MISSING" ? "MISSING" : "ALL";
+    const normalizedImageStatus = imageStatus === "MISSING" ? "MISSING" : "ALL";
     const where: Prisma.IngredientWhereInput = {
       ownerId: null,
       status:
@@ -2074,7 +2075,8 @@ export class AdminService {
             }
           : normalizedStatus,
       ...(categoryId ? { categoryId } : {}),
-      ...(normalizedKeyword ? buildIngredientSearchWhere(normalizedKeyword) : {})
+      ...(normalizedKeyword ? buildIngredientSearchWhere(normalizedKeyword) : {}),
+      ...(normalizedImageStatus === "MISSING" ? { imageUrl: null } : {})
     };
     const orderBy = categoryId
       ? ([{ systemSortOrder: "asc" }, { createdAt: "asc" }] satisfies Prisma.IngredientOrderByWithRelationInput[])
@@ -2094,7 +2096,7 @@ export class AdminService {
       return {
         items: items.map(item => ({
           ...toAdminIngredientSummary(item),
-          imageUrl: this.ingredientImageService.buildImageUrl(request, item.id, (item as AdminIngredientWithImageRow).imageUpdatedAt)
+          imageUrl: this.ingredientImageService.buildImageUrl(item.imageUrl, request)
         })),
         page: normalizedPage,
         pageSize: normalizedPageSize,
@@ -2119,7 +2121,7 @@ export class AdminService {
     return {
       items: items.map(item => ({
         ...toAdminIngredientSummary(item),
-        imageUrl: this.ingredientImageService.buildImageUrl(request, item.id, (item as AdminIngredientWithImageRow).imageUpdatedAt)
+        imageUrl: this.ingredientImageService.buildImageUrl(item.imageUrl, request)
       })),
       page: normalizedPage,
       pageSize: normalizedPageSize,
@@ -2385,11 +2387,7 @@ export class AdminService {
         });
         const result = {
           ...toAdminIngredientSummary(updated),
-          imageUrl: this.ingredientImageService.buildImageUrl(
-            request,
-            updated.id,
-            (updated as AdminIngredientWithImageRow).imageUpdatedAt
-          )
+          imageUrl: this.ingredientImageService.buildImageUrl(updated.imageUrl, request)
         };
         await tx.auditEvent.create({
           data: {
@@ -2480,11 +2478,7 @@ export class AdminService {
 
         const result = {
           ...toAdminIngredientSummary(updated as AdminIngredientRow),
-          imageUrl: this.ingredientImageService.buildImageUrl(
-            request,
-            updated.id,
-            (updated as AdminIngredientWithImageRow).imageUpdatedAt
-          )
+          imageUrl: this.ingredientImageService.buildImageUrl(updated.imageUrl, request)
         };
         await tx.auditEvent.create({
           data: {
@@ -2774,12 +2768,15 @@ export class AdminService {
         backupImagePath = await this.ingredientImageService.replaceStagedImage(ingredientId, stagedImagePath);
         replaced = true;
 
+        const imageUpdatedAt = new Date();
+        const imageUrl = this.ingredientImageService.buildStoredImageUrl(request, ingredientId, imageUpdatedAt);
         const updated = await tx.ingredient.update({
           where: { id: ingredientId },
           data: {
-            imageUpdatedAt: new Date(),
+            imageUrl,
+            imageUpdatedAt,
             version: { increment: 1 }
-          } as Prisma.IngredientUpdateInput,
+          },
           include: {
             category: true,
             defaultUnit: true
@@ -2787,11 +2784,7 @@ export class AdminService {
         });
         const result = {
           ...toAdminIngredientSummary(updated as AdminIngredientRow),
-          imageUrl: this.ingredientImageService.buildImageUrl(
-            request,
-            updated.id,
-            (updated as AdminIngredientWithImageRow).imageUpdatedAt
-          )
+          imageUrl: this.ingredientImageService.buildImageUrl(updated.imageUrl, request)
         };
         await tx.auditEvent.create({
           data: {
@@ -2859,6 +2852,7 @@ export class AdminService {
         const updated = await tx.ingredient.update({
           where: { id: ingredientId },
           data: {
+            imageUrl: null,
             imageUpdatedAt: null,
             version: { increment: 1 }
           } as Prisma.IngredientUpdateInput,

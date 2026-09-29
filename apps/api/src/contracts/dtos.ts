@@ -2796,6 +2796,11 @@ export class AdminIngredientQueryDto extends PageQueryDto {
   @IsOptional()
   @IsIn(["ALL", "MISSING"])
   factStatus?: "ALL" | "MISSING";
+
+  @ApiPropertyOptional({ example: "MISSING", enum: ["ALL", "MISSING"] })
+  @IsOptional()
+  @IsIn(["ALL", "MISSING"])
+  imageStatus?: "ALL" | "MISSING";
 }
 
 export class AdminNutritionFoodQueryDto extends PageQueryDto {

@@ -337,7 +337,7 @@ Ingredient
   id, ownerId?, categoryId, defaultUnitId, name, searchKey, imageUpdatedAt?, createdAt, updatedAt
 ```
 
-`ownerId = null` 表示系统项，非空表示个人项。个人食材不保存图片字段；系统食材图片由后台后传治理，当前终存 `50x50 PNG` 小图，不进入个人食材创建契约。R1 不新增审核、合并目标、换算倍率或别名表。
+`ownerId = null` 表示系统项，非空表示个人项。个人食材不保存图片字段；系统食材图片由后台治理，采用严格 `1:1` 的 JPG；单张图片上传处理规则见 `docs/ingredient.md`，不进入个人食材创建契约。R1 不新增审核、合并目标、换算倍率或别名表。
 
 ### 内容版本快照
 

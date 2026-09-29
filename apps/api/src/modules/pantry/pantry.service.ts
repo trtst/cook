@@ -199,7 +199,7 @@ const shoppingDetailItemSelect = {
     select: {
       ownerId: true,
       id: true,
-      imageUpdatedAt: true,
+      imageUrl: true,
       category: {
         select: {
           name: true
@@ -3395,7 +3395,7 @@ export class PantryService {
       ingredientId: item.ingredientId,
       name: item.name,
       categoryName: item.ingredient?.category.name ?? null,
-      imageUrl: item.ingredient ? this.ingredientImageService.buildImageUrl({}, item.ingredient.id, item.ingredient.imageUpdatedAt) : null,
+      imageUrl: item.ingredient ? this.ingredientImageService.buildImageUrl(item.ingredient.imageUrl) : null,
       quantityText: item.quantityText,
       note: item.note,
       status: toListItemStatus(item.status),

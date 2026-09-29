@@ -43,7 +43,7 @@ export class PublicAssetsController {
 
   @Get("ingredients/:fileName")
   async getIngredientImage(@Param("fileName") fileName: string, @Res() response: ResponseLike) {
-    const match = /^(\d+)(?:\.png)?$/i.exec(fileName);
+    const match = /^(\d+)\.jpg$/i.exec(fileName);
     if (!match) {
       throw new NotFoundException("食材图片不存在");
     }
@@ -53,9 +53,7 @@ export class PublicAssetsController {
         id: ingredientId,
         ownerId: null,
         status: "ACTIVE",
-        imageUpdatedAt: {
-          not: null
-        }
+        imageUrl: { not: null }
       },
       select: { id: true }
     });
