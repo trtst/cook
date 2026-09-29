@@ -1576,8 +1576,9 @@ watch(
 }
 
 .ingredient-card-grid {
+  /* 图片展示固定为 150×150，卡片扩展到 180px 以容纳内边距和操作区。 */
   display: grid;
-  grid-template-columns: repeat(auto-fill, 148px);
+  grid-template-columns: repeat(auto-fill, 180px);
   gap: 16px;
 }
 
@@ -1586,8 +1587,8 @@ watch(
   flex-direction: column;
   align-items: center;
   gap: 12px;
-  width: 148px;
-  min-width: 148px;
+  width: 180px;
+  min-width: 180px;
   padding: 14px;
   border: 1px solid #e5e7eb;
   border-radius: 18px;
@@ -1612,8 +1613,8 @@ watch(
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 300px;
-  height: 300px;
+  width: 150px;
+  height: 150px;
   border-radius: 16px;
   background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
   overflow: hidden;
@@ -1621,8 +1622,8 @@ watch(
 }
 
 .ingredient-card__image {
-  width: 300px;
-  height: 300px;
+  width: 150px;
+  height: 150px;
   object-fit: cover;
 }
 
@@ -1664,7 +1665,7 @@ watch(
 .ingredient-card__body {
   display: grid;
   gap: 6px;
-  width: 120px;
+  width: 150px;
 }
 
 .ingredient-card__main {
@@ -1708,7 +1709,7 @@ watch(
   align-items: center;
   justify-content: flex-start;
   gap: 12px;
-  width: 120px;
+  width: 150px;
   padding-top: 4px;
 }
 

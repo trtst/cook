@@ -1,5 +1,7 @@
 # 项目变更记录
 
+| 2026-09-30 | 食材 CMS 卡片图片展示尺寸调整为 150×150；卡片和网格列宽同步增至 180px，卡片内名称与操作区域宽度同步为 150px，避免图片超出卡片内容区。 | `apps/admin/src/pages/IngredientItemsPage.vue`、`docs/plans/minor_change_log.md` | Admin type-check、Admin build 与 `git diff --check` 通过；真实后台浏览器视觉验收未做。 |
+
 | 2026-09-29 | 食材图片规格调整为至少 300×300、最高存储 500×500：上传前将超过 500×500 的正方形图片缩至 500×500，300～500 像素保持原尺寸；API 同步校验 300～500，OSS 图片 URL 缩放为 300×300，CMS 食材卡片按 300×300 展示。单张与批量上传统一遵循服务端尺寸契约；批量上传 4 MB / 3750 像素 / JPG 质量 1 保持不变。同步更新 API 契约、食材规则、接口索引及执行文档。 | `apps/admin/src/pages/IngredientItemsPage.vue`、`apps/api/src/modules/admin/ingredient-image.service.ts`、`apps/api/src/modules/admin/ingredient-image.service.test.ts`、`docs/api-contract.md`、`docs/api-index.md`、`docs/ingredient.md`、`docs/plans/ingredient-export-image-batch-execution.md`、`docs/superpowers/plans/2026-09-29-ingredient-image-processing.md`、`docs/superpowers/specs/2026-09-29-ingredient-export-image-batch-design.md`、`docs/plans/minor_change_log.md` | API type-check、食材图片服务测试（1 项）、Admin type-check、Admin build 与 `git diff --check` 通过；真实 OSS/CDN、后台浏览器与图片清晰度验收未做。 |
 
 | 2026-09-29 | 调整食材批量图片上传参数：原图上限改为 4 MB、最长边上限改为 3750 像素，Canvas JPG 质量设为 1；批量弹窗明确展示新限制。单张上传仍为 2 MB / 1125 像素 / 质量 0.8，食材图片 1:1 与输出尺寸规则不变。 | `apps/admin/src/pages/IngredientItemsPage.vue`、`docs/plans/ingredient-export-image-batch-execution.md`、`docs/superpowers/specs/2026-09-29-ingredient-export-image-batch-design.md`、`docs/plans/minor_change_log.md` | Admin type-check、Admin build 与 `git diff --check` 通过；未运行测试。 |
