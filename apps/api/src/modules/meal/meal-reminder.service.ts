@@ -180,7 +180,7 @@ export class MealReminderService {
   }
 
   private async lockReminderSend(tx: Prisma.TransactionClient) {
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${REMINDER_SEND_LOCK}, 0))`;
+    await tx.$queryRaw<string[]>`SELECT pg_advisory_xact_lock(hashtextextended(${REMINDER_SEND_LOCK}, 0))::text`;
   }
 
   private assertEnoughLeadTime(scheduledAt: Date) {
