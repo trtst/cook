@@ -14,14 +14,21 @@ import {
 import type { UUID } from "@/apis/http";
 import { useAdminHeaderRefresh } from "@/composables/useAdminHeader";
 import { createOperationId } from "@/utils/operation-id";
+import { processImageFile } from "@/utils/image-processing";
 
 type IngredientDialogMode = "create" | "edit";
 type IngredientStatusFilter = "PENDING" | "ACTIVE" | "DISABLED" | "MERGED" | "ALL";
 type IngredientFactFilter = "ALL" | "MISSING";
+type IngredientImageFilter = "ALL" | "MISSING";
 type IngredientProteinType = NonNullable<AdminIngredientSummary["proteinType"]>;
 
 const cropFrameSize = 240;
-const exportImageSize = 50;
+const minIngredientImageSize = 60;
+const maxIngredientImageSize = 100;
+const maxIngredientSourceSize = 2 * 1024 * 1024;
+const maxIngredientSourceEdge = 375 * 3;
+const batchImageResultPageSize = 50;
+const imageQuality = 0.8;
 const router = useRouter();
 const unitTypeLabelMap: Record<AdminUnitSummary["type"], string> = {
   WEIGHT: "重量",
@@ -55,15 +62,17 @@ const proteinTypeOptions: Array<{ label: string; value: IngredientProteinType | 
 
 const loading = ref(false);
 const saving = ref(false);
-const batchSaving = ref(false);
 const imageSaving = ref(false);
+const exporting = ref(false);
+const batchImageBusy = ref(false);
 const dialogVisible = ref(false);
-const batchDialogVisible = ref(false);
+const batchImageDialogVisible = ref(false);
 const cropDialogVisible = ref(false);
 const mergeDialogVisible = ref(false);
 const dialogMode = ref<IngredientDialogMode>("create");
 const editingIngredientId = ref<UUID | null>(null);
 const fileInput = ref<HTMLInputElement | null>(null);
+const batchImageInput = ref<HTMLInputElement | null>(null);
 const categories = ref<AdminIngredientCategorySummary[]>([]);
 const ingredients = ref<AdminIngredientSummary[]>([]);
 const units = ref<AdminUnitSummary[]>([]);
@@ -90,7 +99,8 @@ const query = reactive({
   keyword: "",
   categoryId: "" as UUID | "",
   status: "ACTIVE" as IngredientStatusFilter,
-  factStatus: "ALL" as IngredientFactFilter
+  factStatus: "ALL" as IngredientFactFilter,
+  imageStatus: "ALL" as IngredientImageFilter
 });
 
 const form = reactive({
@@ -103,10 +113,16 @@ const form = reactive({
   aliasesText: ""
 });
 
-const batchForm = reactive({
-  categoryId: "" as UUID | "",
-  text: ""
-});
+type BatchImageResult = {
+  key: string;
+  fileName: string;
+  ingredientId: UUID | null;
+  status: "WAITING" | "PROCESSING" | "SUCCESS" | "FAILED";
+  message: string;
+};
+
+const batchImageResults = ref<BatchImageResult[]>([]);
+const batchImageResultPage = ref(1);
 
 const cropTarget = reactive({
   ingredientId: "" as UUID | "",
@@ -146,19 +162,16 @@ const unitGroups = computed(() => {
   }));
 });
 
-const unitNameMap = computed(() => {
-  const map = new Map<string, AdminUnitSummary[]>();
-  for (const unit of units.value) {
-    const list = map.get(unit.name) || [];
-    list.push(unit);
-    map.set(unit.name, list);
-  }
-  return map;
-});
-
 const selectableCategories = computed(() => categories.value.filter(item => item.isSelectable));
 const allIngredientCount = computed(() => categories.value.reduce((sum, item) => sum + item.ingredientCount, 0));
 const isAllView = computed(() => !query.categoryId);
+const batchImageSuccessCount = computed(() => batchImageResults.value.filter(item => item.status === "SUCCESS").length);
+const batchImageFailedCount = computed(() => batchImageResults.value.filter(item => item.status === "FAILED").length);
+const batchImageFinishedCount = computed(() => batchImageSuccessCount.value + batchImageFailedCount.value);
+const visibleBatchImageResults = computed(() => {
+  const start = (batchImageResultPage.value - 1) * batchImageResultPageSize;
+  return batchImageResults.value.slice(start, start + batchImageResultPageSize);
+});
 useAdminHeaderRefresh(() => {
   void loadPage();
 });
@@ -186,6 +199,11 @@ const cropImageStyle = computed(() => ({
   height: `${cropState.sourceHeight * cropState.scale}px`,
   transform: `translate(${cropState.x}px, ${cropState.y}px)`
 }));
+const cropMaxScale = computed(() => {
+  if (!cropState.sourceWidth) return cropState.minScale;
+  const outputSize = Math.min(cropState.sourceWidth, maxIngredientImageSize);
+  return Math.max(cropState.minScale, (cropState.minScale * cropState.sourceWidth) / outputSize);
+});
 
 function resetForm() {
   form.name = "";
@@ -196,11 +214,6 @@ function resetForm() {
   form.isSpicyIngredient = false;
   form.aliasesText = "";
   editingIngredientId.value = null;
-}
-
-function resetBatchForm() {
-  batchForm.categoryId = selectableCategories.value.find(item => item.id === query.categoryId)?.id || selectableCategories.value[0]?.id || "";
-  batchForm.text = "";
 }
 
 function resetCropState() {
@@ -244,9 +257,6 @@ async function loadCategories() {
   if (!form.categoryId) {
     form.categoryId = selectableCategories.value.find(item => item.id === query.categoryId)?.id || selectableCategories.value[0]?.id || "";
   }
-  if (!batchForm.categoryId) {
-    batchForm.categoryId = selectableCategories.value.find(item => item.id === query.categoryId)?.id || selectableCategories.value[0]?.id || "";
-  }
 }
 
 async function loadUnits() {
@@ -266,7 +276,8 @@ async function loadIngredients() {
       categoryId: query.categoryId || undefined,
       keyword: query.keyword.trim() || undefined,
       status: query.status,
-      factStatus: query.factStatus
+      factStatus: query.factStatus,
+      imageStatus: query.imageStatus
     });
     if (requestId !== ingredientsRequest) return;
     ingredients.value = result.items;
@@ -307,6 +318,11 @@ async function changeStatus(status: IngredientStatusFilter) {
 }
 
 async function changeFactStatus() {
+  query.page = 1;
+  await loadIngredients();
+}
+
+async function changeImageStatus() {
   query.page = 1;
   await loadIngredients();
 }
@@ -477,13 +493,8 @@ function chooseNutritionFood(food: AdminNutritionFoodSummary) {
   nutritionDetail.value.mapping = { id: 0, status: "CONFIRMED", matchType: "MANUAL", confidence: 1, sourceVersion: food.sourceVersion, food };
 }
 
-function openBatchDialog() {
-  resetBatchForm();
-  batchDialogVisible.value = true;
-}
-
 function canSortIngredients() {
-  return query.status === "ACTIVE" && query.factStatus === "ALL" && !query.keyword.trim() && total.value <= query.pageSize;
+  return query.status === "ACTIVE" && query.factStatus === "ALL" && query.imageStatus === "ALL" && !query.keyword.trim() && total.value <= query.pageSize;
 }
 
 function inferIngredientTagGaps(row: AdminIngredientSummary) {
@@ -571,90 +582,213 @@ async function submitIngredient() {
   }
 }
 
-function parseBatchText() {
-  const categoryId = batchForm.categoryId;
-  if (!categoryId) {
-    ElMessage.error("请选择分类");
-    return null;
-  }
-  const lines = batchForm.text
-    .split(/\r?\n/)
-    .map((line, index) => ({ line: line.trim(), index: index + 1 }))
-    .filter(item => item.line);
-
-  if (!lines.length) {
-    ElMessage.error("请先输入批量食材");
-    return null;
-  }
-
-  const items: Array<{ name: string; defaultUnitId: UUID }> = [];
-  const seen = new Set<string>();
-  for (const { line, index } of lines) {
-    const parts = line.split(/[,\uFF0C\t]/).map(item => item.trim()).filter(Boolean);
-    const name = parts[0] || "";
-    const unitName = parts[1] || "";
-    if (!name || !unitName) {
-      ElMessage.error(`第 ${index} 行格式不正确，请使用“食材名,单位名”`);
-      return null;
-    }
-    if (seen.has(name)) {
-      ElMessage.error(`第 ${index} 行食材“${name}”重复`);
-      return null;
-    }
-    seen.add(name);
-    const matchedUnits = unitNameMap.value.get(unitName) || [];
-    if (matchedUnits.length !== 1) {
-      ElMessage.error(
-        matchedUnits.length === 0
-          ? `第 ${index} 行单位“${unitName}”不存在`
-          : `第 ${index} 行单位“${unitName}”不唯一，请改名后重试`
-      );
-      return null;
-    }
-    items.push({
-      name,
-      defaultUnitId: matchedUnits[0].id
+async function loadIngredientsByIds(ingredientIds: Set<UUID>) {
+  const items = new Map<UUID, AdminIngredientSummary>();
+  let page = 1;
+  let hasNext = true;
+  while (hasNext && items.size < ingredientIds.size) {
+    const result = await ingredientApi.listIngredients({
+      page,
+      pageSize: 100,
+      status: "ALL",
+      factStatus: "ALL",
+      imageStatus: "ALL"
     });
+    for (const item of result.items) {
+      if (ingredientIds.has(item.id)) items.set(item.id, item);
+    }
+    hasNext = result.hasNext;
+    page += 1;
   }
-
-  return {
-    categoryId,
-    items
-  };
+  return items;
 }
 
-async function submitBatchIngredients() {
-  const parsed = parseBatchText();
-  if (!parsed) return;
-  batchSaving.value = true;
-  let createdCount = 0;
+async function exportFilteredIngredients() {
+  if (exporting.value) return;
+  exporting.value = true;
   try {
-    for (const item of parsed.items) {
-      await ingredientApi.createIngredient({
-        operationId: createOperationId(),
-        name: item.name,
-        categoryId: parsed.categoryId,
-        defaultUnitId: item.defaultUnitId,
-        isStaple: false,
-        isSpicyIngredient: false,
-        aliases: []
+    const items: AdminIngredientSummary[] = [];
+    const filters = {
+      categoryId: query.categoryId || undefined,
+      keyword: query.keyword.trim() || undefined,
+      status: query.status,
+      factStatus: query.factStatus,
+      imageStatus: query.imageStatus
+    };
+    let page = 1;
+    let hasNext = true;
+    while (hasNext) {
+      const result = await ingredientApi.listIngredients({
+        page,
+        pageSize: 100,
+        ...filters
       });
-      createdCount += 1;
+      items.push(...result.items);
+      hasNext = result.hasNext;
+      page += 1;
     }
-    batchDialogVisible.value = false;
-    resetBatchForm();
-    await Promise.all([loadCategories(), loadIngredients()]);
-    ElMessage.success(`已导入 ${createdCount} 条系统食材`);
+    if (!items.length) {
+      ElMessage.info("当前筛选没有可导出的食材");
+      return;
+    }
+
+    const exportData = Object.fromEntries(items.map(item => [String(item.id), item.name]));
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json;charset=utf-8" });
+    const downloadUrl = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = downloadUrl;
+    link.download = `ingredients-${new Date().toISOString().replace(/[:.]/gu, "-")}.json`;
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 0);
+    ElMessage.success(`已导出 ${items.length} 条食材`);
   } catch (error) {
-    ElMessage.warning(
-      error instanceof Error
-        ? `已成功导入 ${createdCount} 条，剩余失败：${error.message}`
-        : `已成功导入 ${createdCount} 条，剩余失败`
-    );
-    await Promise.all([loadCategories(), loadIngredients()]);
+    ElMessage.error(error instanceof Error ? error.message : "导出食材失败");
   } finally {
-    batchSaving.value = false;
+    exporting.value = false;
   }
+}
+
+function chooseBatchImageFiles() {
+  if (batchImageBusy.value || imageSaving.value) return;
+  batchImageInput.value?.click();
+}
+
+function resetBatchImageDialog() {
+  if (!batchImageBusy.value) {
+    batchImageResults.value = [];
+    batchImageResultPage.value = 1;
+  }
+}
+
+function batchImageStatusText(status: BatchImageResult["status"]) {
+  if (status === "PROCESSING") return "上传中";
+  if (status === "SUCCESS") return "成功";
+  if (status === "FAILED") return "失败";
+  return "等待中";
+}
+
+async function handleBatchImageFiles(event: Event) {
+  const input = event.target as HTMLInputElement;
+  const files = Array.from(input.files || []);
+  input.value = "";
+  if (!files.length) return;
+
+  const rows = files.map((file, index): BatchImageResult => {
+    const nameWithoutExtension = file.name.replace(/\.[^.]+$/u, "");
+    const ingredientId = /^\d+$/u.test(nameWithoutExtension) ? Number(nameWithoutExtension) : null;
+    return {
+      key: `${index}-${file.name}`,
+      fileName: file.name,
+      ingredientId: Number.isSafeInteger(ingredientId) ? ingredientId : null,
+      status: "WAITING",
+      message: "等待处理"
+    };
+  });
+  batchImageResults.value = rows;
+  batchImageResultPage.value = 1;
+  batchImageDialogVisible.value = true;
+  batchImageBusy.value = true;
+
+  const idCounts = new Map<number, number>();
+  for (const row of rows) {
+    if (row.ingredientId !== null) idCounts.set(row.ingredientId, (idCounts.get(row.ingredientId) || 0) + 1);
+  }
+
+  for (let index = 0; index < rows.length; index += 1) {
+    const row = rows[index];
+    const file = files[index];
+    if (!file.type.startsWith("image/")) {
+      row.status = "FAILED";
+      row.message = "文件不是图片";
+    } else if (file.size <= 0 || file.size > maxIngredientSourceSize) {
+      row.status = "FAILED";
+      row.message = file.size <= 0 ? "图片文件为空" : "原图不能超过 2 MB";
+    } else if (row.ingredientId === null) {
+      row.status = "FAILED";
+      row.message = "文件名主体必须是食材数字 ID";
+    } else if ((idCounts.get(row.ingredientId) || 0) > 1) {
+      row.status = "FAILED";
+      row.message = "本批次存在重复食材 ID";
+    }
+  }
+
+  const validIngredientIds = new Set(
+    rows
+      .filter(row => row.status === "WAITING" && row.ingredientId !== null)
+      .map(row => row.ingredientId as UUID)
+  );
+  let ingredientsById = new Map<UUID, AdminIngredientSummary>();
+  if (validIngredientIds.size) {
+    try {
+      ingredientsById = await loadIngredientsByIds(validIngredientIds);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "读取食材列表失败";
+      for (const row of rows) {
+        if (row.status !== "FAILED") {
+          row.status = "FAILED";
+          row.message = message;
+        }
+      }
+    }
+  }
+
+  if (validIngredientIds.size && rows.some(row => row.status !== "FAILED")) {
+    for (let index = 0; index < rows.length; index += 1) {
+      const row = rows[index];
+      const file = files[index];
+      if (row.status === "FAILED") continue;
+      if (row.ingredientId === null) continue;
+      batchImageResultPage.value = Math.floor(index / batchImageResultPageSize) + 1;
+      const ingredient = ingredientsById.get(row.ingredientId);
+      if (!ingredient) {
+        row.status = "FAILED";
+        row.message = `未找到系统食材 ${row.ingredientId}`;
+        continue;
+      }
+      if (ingredient.status !== "ACTIVE" && ingredient.status !== "DISABLED") {
+        row.status = "FAILED";
+        row.message = `食材状态为${ingredient.status}，当前不能上传图片`;
+        continue;
+      }
+
+      row.status = "PROCESSING";
+      row.message = "读取图片并处理…";
+      const sourceUrl = URL.createObjectURL(file);
+      try {
+        const image = await loadImage(sourceUrl);
+        const width = image.naturalWidth || image.width;
+        const height = image.naturalHeight || image.height;
+        if (width !== height) throw new Error("图片必须是 1:1 正方形");
+        if (width < minIngredientImageSize || height < minIngredientImageSize) throw new Error("图片尺寸不能小于 60×60 像素");
+        if (width > maxIngredientSourceEdge || height > maxIngredientSourceEdge) throw new Error("原图边长不能超过 1125 像素");
+        const outputSize = Math.min(width, maxIngredientImageSize);
+        const processedFile = await processImageFile({
+          source: image,
+          sourceRect: { x: 0, y: 0, width, height },
+          outputWidth: outputSize,
+          outputHeight: outputSize,
+          quality: imageQuality,
+          fileName: `${row.ingredientId}.jpg`
+        });
+        row.message = "上传图片…";
+        await ingredientApi.uploadIngredientImage(row.ingredientId, processedFile, createOperationId(), ingredient.version);
+        row.status = "SUCCESS";
+        row.message = "图片已上传并回填 imageUrl";
+      } catch (error) {
+        row.status = "FAILED";
+        row.message = error instanceof Error ? error.message : "图片上传失败";
+      } finally {
+        URL.revokeObjectURL(sourceUrl);
+      }
+    }
+  }
+
+  batchImageBusy.value = false;
+  if (batchImageSuccessCount.value) await loadIngredients();
+  ElMessage({
+    type: batchImageFailedCount.value ? (batchImageSuccessCount.value ? "warning" : "error") : "success",
+    message: `批量图片处理完成：成功 ${batchImageSuccessCount.value} 张，失败 ${batchImageFailedCount.value} 张`
+  });
 }
 
 function reorderList<T>(items: T[], fromIndex: number, toIndex: number) {
@@ -686,9 +820,9 @@ async function applyIngredientOrder(nextList: AdminIngredientSummary[]) {
 }
 
 function handleIngredientDragStart(event: DragEvent, row: AdminIngredientSummary) {
-  if (query.status !== "ACTIVE" || query.keyword.trim()) {
+  if (query.status !== "ACTIVE" || query.keyword.trim() || query.factStatus !== "ALL" || query.imageStatus !== "ALL") {
     event.preventDefault();
-    ElMessage.error("筛选中不能拖拽排序，请先清空关键词");
+    ElMessage.error("筛选中不能拖拽排序，请先恢复全部状态并清空关键词");
     return;
   }
   if (total.value > query.pageSize) {
@@ -731,7 +865,7 @@ async function handleIngredientDrop(row: AdminIngredientSummary) {
 }
 
 function chooseImageFile(row: AdminIngredientSummary) {
-  if (imageSaving.value) return;
+  if (imageSaving.value || batchImageBusy.value) return;
   cropTarget.ingredientId = row.id;
   cropTarget.expectedVersion = row.version;
   cropTarget.ingredientName = row.name;
@@ -743,18 +877,39 @@ async function handleImageFileChange(event: Event) {
   const file = target.files?.[0];
   target.value = "";
   if (!file) return;
-  if (!file.type.startsWith("image/")) {
+  if (file.type && !file.type.startsWith("image/")) {
     ElMessage.error("请选择图片文件");
+    return;
+  }
+  if (file.size <= 0 || file.size > maxIngredientSourceSize) {
+    ElMessage.error(file.size <= 0 ? "图片文件为空" : "食材图片原图不能超过 2 MB");
     return;
   }
 
   const sourceUrl = URL.createObjectURL(file);
   try {
     const image = await loadImage(sourceUrl);
+    const sourceWidth = image.naturalWidth || image.width;
+    const sourceHeight = image.naturalHeight || image.height;
+    if (sourceWidth !== sourceHeight) {
+      URL.revokeObjectURL(sourceUrl);
+      ElMessage.error("食材图片必须是 1:1 正方形");
+      return;
+    }
+    if (sourceWidth < minIngredientImageSize || sourceHeight < minIngredientImageSize) {
+      URL.revokeObjectURL(sourceUrl);
+      ElMessage.error("食材图片尺寸不能小于 60×60 像素");
+      return;
+    }
+    if (sourceWidth > maxIngredientSourceEdge || sourceHeight > maxIngredientSourceEdge) {
+      URL.revokeObjectURL(sourceUrl);
+      ElMessage.error("食材图片原图边长不能超过 1125 像素");
+      return;
+    }
     resetCropState();
     cropState.sourceUrl = sourceUrl;
-    cropState.sourceWidth = image.naturalWidth || image.width;
-    cropState.sourceHeight = image.naturalHeight || image.height;
+    cropState.sourceWidth = sourceWidth;
+    cropState.sourceHeight = sourceHeight;
     centerCropImage(cropState.sourceWidth, cropState.sourceHeight);
     cropDialogVisible.value = true;
   } catch {
@@ -816,22 +971,21 @@ function updateCropScale(nextScale: number) {
 
 async function renderCropFile() {
   const image = await loadImage(cropState.sourceUrl);
-  const canvas = document.createElement("canvas");
-  canvas.width = exportImageSize;
-  canvas.height = exportImageSize;
-  const context = canvas.getContext("2d");
-  if (!context) throw new Error("裁图失败");
-
   const sourceX = Math.max(0, -cropState.x / cropState.scale);
   const sourceY = Math.max(0, -cropState.y / cropState.scale);
   const sourceSize = cropFrameSize / cropState.scale;
-
-  context.clearRect(0, 0, exportImageSize, exportImageSize);
-  context.drawImage(image, sourceX, sourceY, sourceSize, sourceSize, 0, 0, exportImageSize, exportImageSize);
-
-  const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, "image/png"));
-  if (!blob) throw new Error("裁图失败");
-  return new File([blob], `ingredient-${cropTarget.ingredientId}.png`, { type: "image/png" });
+  const outputSize = Math.min(cropState.sourceWidth, maxIngredientImageSize);
+  if (sourceSize + 0.5 < outputSize) {
+    throw new Error("裁剪后的图片尺寸不能小于原图输出尺寸");
+  }
+  return processImageFile({
+    source: image,
+    sourceRect: { x: sourceX, y: sourceY, width: sourceSize, height: sourceSize },
+    outputWidth: outputSize,
+    outputHeight: outputSize,
+    quality: imageQuality,
+    fileName: `ingredient-${cropTarget.ingredientId}.jpg`
+  });
 }
 
 async function submitIngredientImage() {
@@ -934,6 +1088,10 @@ watch(
         <el-option label="全部标签状态" value="ALL" />
         <el-option label="建议补录" value="MISSING" />
       </el-select>
+      <el-select v-model="query.imageStatus" class="toolbar-select" placeholder="图片地址" @change="changeImageStatus">
+        <el-option label="全部图片地址" value="ALL" />
+        <el-option label="没有图片地址" value="MISSING" />
+      </el-select>
       <el-input
         v-model="query.keyword"
         class="toolbar-search toolbar-search--wide"
@@ -949,7 +1107,8 @@ watch(
         "
       />
       <el-button type="primary" :icon="Plus" @click="openCreateIngredient">新增系统食材</el-button>
-      <el-button @click="openBatchDialog">批量导入</el-button>
+      <el-button :loading="exporting" :disabled="batchImageBusy" @click="exportFilteredIngredients">批量导出</el-button>
+      <el-button :disabled="batchImageBusy || imageSaving" @click="chooseBatchImageFiles">批量上传图片</el-button>
     </div>
 
     <div class="category-panel table-panel">
@@ -1064,7 +1223,7 @@ watch(
             {{ currentScopeName }}共 {{ total }} 条
             <template v-if="isUnclassifiedCategory(query.categoryId)">；待归类项可按状态处理；“待归类”点击“处理”进入审核工作台完成归类、通过、归并或拒绝。</template>
             <template v-if="query.factStatus === 'MISSING'">；当前只显示建议优先补录标签的系统食材</template>
-            <template v-else>；仅“启用中 + 无关键词 + 当前分类总数不超过单页上限”支持拖拽排序。</template>
+            <template v-else>；仅“启用中、无标签/图片地址筛选、无关键词且当前结果不超过单页上限”支持拖拽排序。</template>
           </div>
           <el-pagination
             v-model:current-page="query.page"
@@ -1136,12 +1295,12 @@ watch(
               <el-button type="primary" :icon="Upload" :loading="imageSaving" @click="editingIngredient && chooseImageFile(editingIngredient)">
                 上传 / 替换图片
               </el-button>
-              <div class="edit-image-panel__hint">上传前可裁成方图，服务端只接收最终 `50x50 PNG`。</div>
+              <div class="edit-image-panel__hint">原图不超过 2 MB、边长不超过 1125 像素；只支持 1:1 正方形，至少 60×60，超过 100×100 会等比例缩小并保存为 JPG。</div>
             </div>
           </div>
         </el-form-item>
         <el-form-item v-else label="食材图片">
-          <div class="table-hint">先创建系统食材，后续再上传 `50x50` 小图。</div>
+          <div class="table-hint">先创建系统食材，再上传 1:1 正方形图片。</div>
         </el-form-item>
         <el-divider v-if="dialogMode === 'edit'">营养关联与单位换算</el-divider>
         <template v-if="dialogMode === 'edit'">
@@ -1216,31 +1375,43 @@ watch(
       </template>
     </el-dialog>
 
-    <el-dialog v-model="batchDialogVisible" title="批量导入系统食材" width="560px" @closed="resetBatchForm">
-      <el-form label-position="top">
-        <el-form-item label="所属分类">
-          <el-select v-model="batchForm.categoryId" placeholder="请选择分类">
-            <el-option v-for="item in selectableCategories" :key="item.id" :label="item.name" :value="item.id" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="多行文本批量导入">
-          <el-input
-            v-model="batchForm.text"
-            type="textarea"
-            :rows="8"
-            placeholder="盐,克&#10;糖,克&#10;生抽,毫升&#10;蚝油,毫升"
-          />
-        </el-form-item>
-      </el-form>
+    <el-dialog
+      v-model="batchImageDialogVisible"
+      title="批量上传食材图片"
+      width="680px"
+      :close-on-click-modal="!batchImageBusy"
+      :close-on-press-escape="!batchImageBusy"
+      :show-close="!batchImageBusy"
+      @closed="resetBatchImageDialog"
+    >
+      <div class="table-hint batch-image-summary">
+        {{ batchImageBusy ? `处理中 ${batchImageFinishedCount}/${batchImageResults.length}` : `处理完成：成功 ${batchImageSuccessCount} 张，失败 ${batchImageFailedCount} 张` }}
+      </div>
+      <div class="batch-image-results">
+        <div v-for="item in visibleBatchImageResults" :key="item.key" class="batch-image-result">
+          <span class="batch-image-result__name">{{ item.fileName }}</span>
+          <span class="batch-image-result__status" :class="`batch-image-result__status--${item.status.toLowerCase()}`">
+            {{ batchImageStatusText(item.status) }}
+          </span>
+          <span class="batch-image-result__message">{{ item.message }}</span>
+        </div>
+      </div>
+      <el-pagination
+        v-if="batchImageResults.length > batchImageResultPageSize"
+        v-model:current-page="batchImageResultPage"
+        :page-size="batchImageResultPageSize"
+        :total="batchImageResults.length"
+        layout="prev, pager, next"
+        small
+      />
       <template #footer>
-        <el-button @click="batchDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="batchSaving" @click="submitBatchIngredients">确定导入</el-button>
+        <el-button :disabled="batchImageBusy" @click="batchImageDialogVisible = false">关闭</el-button>
       </template>
     </el-dialog>
 
     <el-dialog v-model="cropDialogVisible" title="裁切系统食材图片" width="520px" @closed="resetCropState">
       <div class="crop-dialog">
-        <div class="crop-dialog__intro">拖动图片调整位置，系统最终保存为 `50x50 PNG` 小图。</div>
+      <div class="crop-dialog__intro">原图不超过 2 MB、边长不超过 1125 像素；食材图片必须为 1:1 且至少 60×60，大于 100×100 会缩小并保存为 JPG。</div>
         <div class="crop-stage" @pointermove="handleCropDrag" @pointerup="endCropDrag" @pointerleave="endCropDrag">
           <img
             v-if="cropState.sourceUrl"
@@ -1258,7 +1429,7 @@ watch(
           <el-slider
             :model-value="cropState.scale"
             :min="cropState.minScale"
-            :max="Math.max(cropState.minScale, cropState.minScale * 4)"
+            :max="cropMaxScale"
             :step="0.01"
             @update:model-value="updateCropScale"
           />
@@ -1271,6 +1442,7 @@ watch(
     </el-dialog>
 
     <input ref="fileInput" class="visually-hidden" type="file" accept="image/*" @change="handleImageFileChange" />
+    <input ref="batchImageInput" class="visually-hidden" type="file" accept="image/*" multiple @change="handleBatchImageFiles" />
   </section>
 </template>
 
@@ -1649,6 +1821,39 @@ watch(
   grid-template-columns: 48px 1fr;
   align-items: center;
   gap: 16px;
+}
+
+.batch-image-summary {
+  margin-bottom: 12px;
+}
+
+.batch-image-results {
+  max-height: 420px;
+  overflow: auto;
+}
+
+.batch-image-result {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) 48px minmax(160px, 2fr);
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid #eef0f3;
+}
+
+.batch-image-result__name,
+.batch-image-result__message {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.batch-image-result__status--success {
+  color: #16834a;
+}
+
+.batch-image-result__status--failed {
+  color: #d14343;
 }
 
 .visually-hidden {

@@ -255,6 +255,7 @@ export interface AdminIngredientListQuery {
   keyword?: string;
   status?: "PENDING" | "ACTIVE" | "DISABLED" | "MERGED" | "ALL";
   factStatus?: "ALL" | "MISSING";
+  imageStatus?: "ALL" | "MISSING";
 }
 
 export interface AdminPendingIngredientListQuery {
@@ -565,7 +566,8 @@ export const ingredientApi = {
         categoryId: query?.categoryId,
         keyword: query?.keyword,
         status: query?.status,
-        factStatus: query?.factStatus
+        factStatus: query?.factStatus,
+        imageStatus: query?.imageStatus
       }
     });
   },
