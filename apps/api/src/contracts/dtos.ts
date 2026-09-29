@@ -1955,13 +1955,14 @@ export class ReportRecipeDto extends OperationDto {
 }
 
 export class CreateMealPlanMenuItemDto {
-  @ApiProperty({
+  @ApiPropertyOptional({
     enum: ["MEAT", "VEGETABLE", "SOUP", "STAPLE", "BREAKFAST_STAPLE", "BREAKFAST_PROTEIN", "BREAKFAST_SIDE"],
     nullable: true
   })
+  @IsOptional()
   @ValidateIf((_object, value) => value !== null)
   @IsIn(["MEAT", "VEGETABLE", "SOUP", "STAPLE", "BREAKFAST_STAPLE", "BREAKFAST_PROTEIN", "BREAKFAST_SIDE"])
-  slotType!: string | null;
+  slotType?: string | null;
 
   @ApiProperty({ minimum: 0 })
   @Type(() => Number)

@@ -1188,7 +1188,7 @@ export class MealService {
     planDate: string,
     mealSlot: string,
     menuItems: Array<{
-      slotType: string | null;
+      slotType?: string | null;
       sortOrder: number;
       recipeId: UUID | null;
       recipeVersionId: UUID;
@@ -4274,7 +4274,7 @@ export class MealService {
     tx: Prisma.TransactionClient,
     userId: UUID,
     menuItems: Array<{
-      slotType: string | null;
+      slotType?: string | null;
       sortOrder: number;
       recipeId: UUID | null;
       recipeVersionId: UUID;
@@ -4311,7 +4311,13 @@ export class MealService {
           ]
         },
         include: {
-          currentVersion: true
+          currentVersion: {
+            include: {
+              versionTags: {
+                where: { status: "CONFIRMED" }
+              }
+            }
+          }
         }
       });
       if (!recipe) {
@@ -4320,9 +4326,21 @@ export class MealService {
       if (recipe.currentVersionId !== item.recipeVersionId) {
         throw new ConflictException("菜谱版本已变化，请重新选择");
       }
+      const existingDish = existingPlan?.dishes.find(
+        dish => dish.recipeId === recipe.id && dish.recipeVersionId === recipe.currentVersionId
+      );
+      const isRetainedLegacySlot = Boolean(existingDish && item.slotType == null && existingDish.slotType === null);
+      const slotType = item.slotType != null
+        ? normalizeRecipeSlotType(item.slotType)
+        : existingDish
+          ? normalizeNullableRecipeSlotType(existingDish.slotType)
+          : this.resolveRandomTagSnapshot(recipe.currentVersion.versionTags)?.slotTypes[0] ?? null;
+      if (slotType === null && !isRetainedLegacySlot) {
+        throw new BadRequestException("菜谱缺少已确认的菜位标签，请先补充后再加入计划");
+      }
       resolved.push({
         dishId: null,
-        slotType: normalizeNullableRecipeSlotType(item.slotType),
+        slotType,
         sortOrder: item.sortOrder,
         purchaseState: normalizePurchaseState(item.purchaseState),
         menu: {

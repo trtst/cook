@@ -1404,7 +1404,7 @@ interface CreateMealPlanRequest {
   expectedVersion?: number | null;
   title?: string | null;
   menuItems: Array<{
-    slotType: "MEAT" | "VEGETABLE" | "SOUP" | "STAPLE" | "BREAKFAST_STAPLE" | "BREAKFAST_PROTEIN" | "BREAKFAST_SIDE";
+    slotType?: "MEAT" | "VEGETABLE" | "SOUP" | "STAPLE" | "BREAKFAST_STAPLE" | "BREAKFAST_PROTEIN" | "BREAKFAST_SIDE" | null;
     sortOrder: number;
     recipeId: UUID | null;
     recipeVersionId: UUID;
@@ -1414,7 +1414,7 @@ interface CreateMealPlanRequest {
 }
 ```
 
-同一用户同一 `planDate + mealSlot` 同时只允许一条非取消计划；取消记录保留菜单与状态，不占用该日期餐次，新计划会创建独立记录；公开 `menuItems[]` 写入表示“按本次整顿菜单覆盖当前餐次”。`recipeId = null` 仅可用于保留当前同一计划中已存在且 `recipeId` 为空的菜品，服务端按原菜品保留菜位与采购状态；不能用它新增或引用其他计划的菜谱版本。新建时若未显式传 `title`，服务端默认写成 `餐次 + 饮食计划`，例如 `早餐饮食计划`、`晚餐饮食计划`；后续整餐更新若不传 `title`，继续保留现有标题。计划页新增“添加计划”时，允许用空数组 `menuItems = []` 先创建一条当前日期 + 餐次的空白计划壳子，菜单快照默认写成 `餐次待补充`，后续再去详情页补菜；但这条放宽只适用于“当前餐次原本不存在计划”的新建场景。覆盖已有计划时必须提交当前 `expectedVersion`，版本不一致返回业务 `code=409`；已有计划不允许用空数组把菜单整体清空，已经完成的餐次也不允许再被覆盖。旧 `recipeIds[]` 不再接受。当前历史老计划项允许 `slotType = null`，新写入必须显式提交 `slotType / recipeVersionId / purchaseState`。`POST /meal-plans/{planItemId}/complete` 只允许计划拥有者调用，并把该餐次从 `PLANNED` 推进到 `COMPLETED`，语义为计划拥有者明确确认这顿饭已完成；若计划仍关联未完成饭局，则必须先由饭局发起人完成饭局，不能借计划接口代替饭局确认。取消计划不计入开饭打卡。`POST /meal-plans/{planItemId}/cancel` 只允许所有者在计划日期结束前、且未关联有效饭局时调用；计划状态改为 `CANCELLED`，菜单和历史保留，不进入完成后的食材更新流程。同日期同餐次可以另建计划，取消记录保留但不占用餐次。`POST /meal-plans/{planItemId}/dining-event` 继续从计划餐次创建饭局，但已完成餐次不得再发起新饭局；若当前计划已经固定菜单，新饭局直接以 `CONFIRMED` 状态创建。若该餐次已经挂有未结束饭局，后续继续改计划菜单时，服务端会同步刷新这场饭局的标题、菜单快照和菜单项，避免计划与饭局各自漂移成两份事实。
+同一用户同一 `planDate + mealSlot` 同时只允许一条非取消计划；取消记录保留菜单与状态，不占用该日期餐次，新计划会创建独立记录；公开 `menuItems[]` 写入表示“按本次整顿菜单覆盖当前餐次”。`recipeId = null` 仅可用于保留当前同一计划中已存在且 `recipeId` 为空的菜品，服务端按原菜品保留菜位与采购状态；不能用它新增或引用其他计划的菜谱版本。新建时若未显式传 `title`，服务端默认写成 `餐次 + 饮食计划`，例如 `早餐饮食计划`、`晚餐饮食计划`；后续整餐更新若不传 `title`，继续保留现有标题。计划页新增“添加计划”时，允许用空数组 `menuItems = []` 先创建一条当前日期 + 餐次的空白计划壳子，菜单快照默认写成 `餐次待补充`，后续再去详情页补菜；但这条放宽只适用于“当前餐次原本不存在计划”的新建场景。覆盖已有计划时必须提交当前 `expectedVersion`，版本不一致返回业务 `code=409`；已有计划不允许用空数组把菜单整体清空，已经完成的餐次也不允许再被覆盖。旧 `recipeIds[]` 不再接受。当前历史老计划项允许 `slotType = null`；新计划项若省略或传 `null`，服务端按固定菜谱版本的已确认餐次/菜位标签推导菜位类型，无法推导时返回业务错误，提示先补充标签。保留当前计划中已有的历史菜品时允许继续保留其 `slotType = null`。新写入仍须提供 `recipeVersionId / purchaseState`。`POST /meal-plans/{planItemId}/complete` 只允许计划拥有者调用，并把该餐次从 `PLANNED` 推进到 `COMPLETED`，语义为计划拥有者明确确认这顿饭已完成；若计划仍关联未完成饭局，则必须先由饭局发起人完成饭局，不能借计划接口代替饭局确认。取消计划不计入开饭打卡。`POST /meal-plans/{planItemId}/cancel` 只允许所有者在计划日期结束前、且未关联有效饭局时调用；计划状态改为 `CANCELLED`，菜单和历史保留，不进入完成后的食材更新流程。同日期同餐次可以另建计划，取消记录保留但不占用餐次。`POST /meal-plans/{planItemId}/dining-event` 继续从计划餐次创建饭局，但已完成餐次不得再发起新饭局；若当前计划已经固定菜单，新饭局直接以 `CONFIRMED` 状态创建。若该餐次已经挂有未结束饭局，后续继续改计划菜单时，服务端会同步刷新这场饭局的标题、菜单快照和菜单项，避免计划与饭局各自漂移成两份事实。
 
 详情页单独改标题不再复用整餐覆盖接口，而是走独立写口：
 
