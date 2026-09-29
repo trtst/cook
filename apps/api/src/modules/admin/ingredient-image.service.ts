@@ -8,8 +8,9 @@ type RequestLike = {
   get?: (name: string) => string | undefined;
 };
 
-const minImageSize = 60;
-const maxImageSize = 100;
+// 服务端与后台保持同一图片尺寸契约，访问地址固定返回 300×300。
+const minImageSize = 300;
+const maxImageSize = 500;
 const maxImageBytes = 2 * 1024 * 1024;
 const jpegStart = 0xd8;
 const jpegEnd = 0xd9;
@@ -62,7 +63,7 @@ export class IngredientImageService {
       ? generatedUrl
       : `${parsedUrl.pathname}${parsedUrl.search}`;
     const separator = stableUrl.includes("?") ? "&" : "?";
-    return `${stableUrl}${separator}x-oss-process=image/resize,m_fixed,w_60,h_60`;
+    return `${stableUrl}${separator}x-oss-process=image/resize,m_fixed,w_300,h_300`;
   }
 
   async stageImageUpload(ingredientId: UUID, file: { buffer?: Buffer; size?: number } | undefined) {
@@ -81,10 +82,10 @@ export class IngredientImageService {
       throw new BadRequestException("食材图片必须是 1:1 正方形");
     }
     if (size.width < minImageSize || size.height < minImageSize) {
-      throw new BadRequestException("食材图片尺寸不能小于 60×60 像素");
+      throw new BadRequestException("食材图片尺寸不能小于 300×300 像素");
     }
     if (size.width > maxImageSize || size.height > maxImageSize) {
-      throw new BadRequestException("食材图片最长边不能超过 100 像素");
+      throw new BadRequestException("食材图片最长边不能超过 500 像素");
     }
 
     const tempPath = this.getTempPath(ingredientId);

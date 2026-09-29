@@ -131,7 +131,7 @@
 | AdminIngredient | PUT | `/admin/ingredients/{ingredientId}` | 后台编辑系统食材 |
 | AdminIngredient | POST | `/admin/ingredients/{ingredientId}/status` | 后台下架或恢复系统食材 |
 | AdminIngredient | DELETE | `/admin/ingredients/{ingredientId}` | 后台删除未被引用的系统食材 |
-| AdminIngredient | POST | `/admin/ingredients/{ingredientId}/image` | 后台上传或替换系统食材 1:1 JPG 图片（60–100 像素，质量 80%） |
+| AdminIngredient | POST | `/admin/ingredients/{ingredientId}/image` | 后台上传或替换系统食材 1:1 JPG 图片（300–500 像素） |
 | AdminIngredient | DELETE | `/admin/ingredients/{ingredientId}/image` | 后台清空系统食材图片 |
 | AdminIngredient | POST | `/admin/ingredients/reorder` | 后台重排系统食材 |
 | AdminIngredient | GET | `/admin/pending-ingredients` | 后台待审核食材分页列表（用户提交与 JSON 导入） |

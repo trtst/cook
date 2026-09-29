@@ -10,6 +10,6 @@ const assetStorage = {
 test("ingredient image url returns the persisted value without deriving a legacy path", () => {
   const service = new IngredientImageService(assetStorage as never);
 
-  const imageUrl = "/uploads/ingredients/12.jpg?x-oss-process=image/resize,m_fixed,w_60,h_60";
+  const imageUrl = "/uploads/ingredients/12.jpg?x-oss-process=image/resize,m_fixed,w_300,h_300";
   assert.equal(service.buildImageUrl(imageUrl), imageUrl);
 });
