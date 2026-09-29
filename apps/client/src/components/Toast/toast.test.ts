@@ -22,7 +22,7 @@ test("toast keeps top motion and adds bottom slide-up motion with minimum width"
   assert.match(toastComponentSource, /translate3d\(0, -18rpx, 0\) scale\(0\.98\)/);
   assert.match(toastComponentSource, /\.toast-layer--bottom \.toast-card/);
   assert.match(toastComponentSource, /translate3d\(0, 28rpx, 0\) scale\(0\.98\)/);
-  assert.match(toastComponentSource, /paddingBottom: `calc\(env\(safe-area-inset-bottom\) \+ 32rpx\)`/);
+  assert.match(toastComponentSource, /paddingBottom: `calc\(env\(safe-area-inset-bottom\) \+ 32rpx \+ \$\{toast\.bottomOffset\}rpx\)`/);
 });
 
 console.log("toast contract tests loaded");

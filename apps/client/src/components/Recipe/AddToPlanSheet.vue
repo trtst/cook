@@ -94,6 +94,8 @@ const props = defineProps<{
   visible: boolean;
   items: AddToPlanRecipeItem[];
   initialMealSlot?: MealSlot;
+  successToastPlacement?: "top" | "bottom";
+  successToastBottomOffset?: number;
 }>();
 
 const loginModalStore = useLoginModalStore();
@@ -297,7 +299,12 @@ async function submit() {
       mealSlot: plan.mealSlot
     });
     emit("close");
-    await uniPlatform.feedback.toast({ title: "已加入计划", icon: "success" });
+    await uniPlatform.feedback.toast({
+      title: "已加入计划",
+      icon: "success",
+      placement: props.successToastPlacement ?? "top",
+      bottomOffset: props.successToastBottomOffset
+    });
   } catch (error) {
     if (error instanceof UnauthorizedError) {
       loginModalStore.open();

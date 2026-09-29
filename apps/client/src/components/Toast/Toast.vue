@@ -34,7 +34,7 @@ const layerStyle = computed(() => {
   const topOffset = Math.max(props.topOffset, statusBarHeight);
   if (toast.placement === "bottom") {
     return {
-      paddingBottom: `calc(env(safe-area-inset-bottom) + 32rpx)`
+      paddingBottom: `calc(env(safe-area-inset-bottom) + 32rpx + ${toast.bottomOffset}rpx)`
     };
   }
 

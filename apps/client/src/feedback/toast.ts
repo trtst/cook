@@ -10,6 +10,7 @@ export interface ToastOptions {
   tone?: ToastTone;
   duration?: number;
   placement?: ToastPlacement;
+  bottomOffset?: number;
 }
 
 type ToastPhase = "idle" | "enter" | "shown" | "leave";
@@ -22,6 +23,7 @@ interface ToastState {
   content: string;
   tone: ToastTone;
   placement: ToastPlacement;
+  bottomOffset: number;
 }
 
 const toastState = reactive<ToastState>({
@@ -31,7 +33,8 @@ const toastState = reactive<ToastState>({
   title: "",
   content: "",
   tone: "default",
-  placement: "top"
+  placement: "top",
+  bottomOffset: 0
 });
 
 let enterTimer: ReturnType<typeof setTimeout> | null = null;
@@ -69,6 +72,7 @@ function finalizeToast(expectedNonce: number) {
   toastState.content = "";
   toastState.tone = "default";
   toastState.placement = "top";
+  toastState.bottomOffset = 0;
 }
 
 export function useToastState() {
@@ -97,7 +101,8 @@ export function showToast(options: ToastOptions) {
   const content = String(options.content || "").trim();
   const tone = resolveTone(options);
   const placement = options.placement ?? "top";
-  const toastKey = `${title}::${content}::${tone}::${placement}`;
+  const bottomOffset = Math.max(0, options.bottomOffset ?? 0);
+  const toastKey = `${title}::${content}::${tone}::${placement}::${bottomOffset}`;
   const now = Date.now();
 
   if (toastKey === lastToastKey && now - lastToastAt < 300) {
@@ -117,6 +122,7 @@ export function showToast(options: ToastOptions) {
   toastState.content = content;
   toastState.tone = tone;
   toastState.placement = placement;
+  toastState.bottomOffset = bottomOffset;
 
   enterTimer = setTimeout(() => {
     if (toastState.nonce !== nonce || !toastState.visible) return;

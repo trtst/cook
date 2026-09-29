@@ -1538,7 +1538,7 @@ defineExpose({
 }
 
 .manage-fab__icon {
-  color: var(--color-text);
+  color: var(--color-text-secondary);
   font-size: 50rpx;
   line-height: 1;
   flex: 0 0 auto;

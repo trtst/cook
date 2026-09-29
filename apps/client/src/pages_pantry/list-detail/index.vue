@@ -111,7 +111,7 @@
                   <view
                     class="item-swipe"
                     @touchstart="handleItemTouchStart(group.id, $event)"
-                    @touchmove.stop="handleItemTouchMove($event)"
+                    @touchmove="handleItemTouchMove($event)"
                     @touchend="handleItemTouchEnd"
                     @touchcancel="handleItemTouchEnd"
                   >

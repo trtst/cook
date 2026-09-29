@@ -234,7 +234,7 @@
 
               <text v-if="attributionText" class="detail-curated">{{ attributionText }}</text>
 
-              <view v-if="primaryPlanLink" class="section section--plan-links">
+              <view v-if="primaryPlanLink" id="detail-plan-links" class="section section--plan-links">
                 <view class="section__head">
                   <text class="section__label">做饭安排</text>
                   <text
@@ -450,6 +450,8 @@
       <AddToPlanSheet
         :visible="planSheetVisible"
         :items="planSheetItems"
+        success-toast-placement="bottom"
+        :success-toast-bottom-offset="showStickyActions ? DETAIL_ACTIONS_TOAST_OFFSET : 0"
         @close="closePlanSheet"
         @success="handlePlanSuccess"
       />
@@ -616,6 +618,7 @@ const pageStyle = usePageScrollStyle();
 const { themeVars, themeClasses } = useTheme();
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const DETAIL_ACTIONS_SHOW_OFFSET = 24;
+const DETAIL_ACTIONS_TOAST_OFFSET = 136;
 const reportReasonOptions: ReportReasonOption[] = [
   { value: "AD", label: "广告营销" },
   { value: "FALSE", label: "内容不实" },
@@ -1297,6 +1300,18 @@ function handlePlanSuccess(payload: {
     hasDiningEvent: false
   };
   syncDetailPlanLinks(nextLink);
+  void scrollToPlanSection();
+}
+
+async function scrollToPlanSection() {
+  await nextTick();
+  const [scrollRect, planRect] = await Promise.all([
+    uniPlatform.system.measure("#detail-scroll"),
+    uniPlatform.system.measure("#detail-plan-links")
+  ]);
+  if (!scrollRect || !planRect) return;
+  const top = scrollTop.value + planRect.top - scrollRect.top - navBarTotalHeight.value - 18;
+  setDetailScrollTop(top);
 }
 
 function openPlanLink(link: RecipePlanLinkSummary | null | undefined) {

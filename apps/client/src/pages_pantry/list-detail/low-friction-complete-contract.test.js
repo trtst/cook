@@ -48,19 +48,20 @@ nodeTest("清单作废仍从导航栏设置打开", () => {
 
 nodeTest("添加食材固定显示在页面底部，清单项使用自定义勾选框", () => {
   nodeAssert.match(pageSource, /class="detail-footer"/);
-  nodeAssert.match(pageSource, /class="detail-footer__add"/);
+  nodeAssert.match(pageSource, /<MealFooterActions[\s\S]*?:quick-action="\{ label: '添加食材', iconClass: 'icon-add' \}"/);
+  nodeAssert.match(pageSource, /@quick="openAddSheet"/);
   nodeAssert.match(pageSource, /class="purchase-check"/);
   nodeAssert.match(pageSource, /purchase-check--checked/);
   nodeAssert.doesNotMatch(pageSource, /<ImageLoader class="item-row__image"/);
   nodeAssert.doesNotMatch(pageSource, /class="mini-pill[\s\S]*?已购/);
-  nodeAssert.match(pageSource, /查看来源/);
+  nodeAssert.match(pageSource, /class="item-origin-list"/);
 });
 
 nodeTest("食材分类随名称排列，状态与来源位于右侧，来源箭头随展开翻转", () => {
   nodeAssert.match(pageSource, /class="item-row__identity"[\s\S]*?class="item-row__title"[\s\S]*?class="item-row__category"/);
-  nodeAssert.match(pageSource, /class="item-row__top"[\s\S]*?class="item-row__identity"[\s\S]*?class="item-row__fridge-hint"/);
-  nodeAssert.match(pageSource, /class="item-row__bottom"[\s\S]*?class="item-row__quantity"[\s\S]*?class="item-row__origin-toggle"/);
+  nodeAssert.match(pageSource, /class="item-row__left"[\s\S]*?class="item-row__identity"[\s\S]*?class="item-row__quantity"/);
+  nodeAssert.match(pageSource, /class="item-row__right"[\s\S]*?class="item-row__fridge-hint"[\s\S]*?class="item-row__origin-toggle"/);
   nodeAssert.match(pageSource, /\.item-row__quantity\s*\{[^}]*text-align:\s*left/);
   nodeAssert.match(pageSource, /item-row__origin-arrow--open/);
-  nodeAssert.match(pageSource, /\.item-row__origin-arrow--open\s*\{[^}]*transform:\s*rotate\(180deg\)/);
+  nodeAssert.match(pageSource, /\.item-row__origin-arrow--open\s*\{[^}]*transform:\s*rotate\(-90deg\)/);
 });

@@ -2,7 +2,7 @@
 	<page-meta :page-style="themePageStyle" />
 	<Layout :class="themeClasses" title="" current-tab="me" :show-left="false" full-screen :navbar-placeholder="false" navbar-transparent>
 		<scroll-view class="me-page" scroll-y>
-			<view class="profile-hero" :class="profileHeroVariant" :style="profileHeroStyle">
+			<view class="profile-hero profile-hero--halo" :style="profileHeroStyle">
 				<image v-if="profileCoverUrl" class="profile-hero__cover" :src="profileCoverUrl" mode="aspectFill" />
 				<view v-if="profileCoverUrl" class="profile-hero__frost" />
 				<view class="profile-hero__mask" />
@@ -258,8 +258,6 @@ const { navBarTotalHeight } = useSystemInfo();
 const profileLoading = ref(false);
 readNotificationBadgeSnapshot();
 const notificationBadge = notificationBadgeState;
-const profileHeroVariants = ["profile-hero--mist", "profile-hero--halo", "profile-hero--ripple"] as const;
-const profileHeroVariant = profileHeroVariants[Math.floor(Math.random() * profileHeroVariants.length)];
 let restoredOnce = false;
 let loadMePromise: Promise<void> | null = null;
 const showMemberEntrances = false;

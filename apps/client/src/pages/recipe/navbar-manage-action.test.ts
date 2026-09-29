@@ -28,7 +28,7 @@ for (const snippet of ["display: flex;", "align-items: center;", "justify-conten
   assert.ok(manageStyle.includes(snippet), `Expected Navbar action style: ${snippet}`);
 }
 
-assert.ok(manageIconStyle.includes("color: var(--color-text);"), "Expected the manage icon to use the default text color");
+assert.ok(manageIconStyle.includes("color: var(--color-text-secondary);"), "Expected the manage icon to match the unselected tab color");
 for (const snippet of ["padding:", "background:", "box-shadow:"]) {
   assert.ok(!manageStyle.includes(snippet), `Expected icon-only Navbar action style to exclude: ${snippet}`);
 }

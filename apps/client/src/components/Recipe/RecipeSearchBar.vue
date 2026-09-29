@@ -100,5 +100,7 @@ function handleClear() {
 
 :deep(.recipe-search__placeholder) {
   color: var(--color-text-tertiary);
+  font-weight: var(--font-weight-regular);
+  opacity: 0.75;
 }
 </style>
