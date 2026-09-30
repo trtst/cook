@@ -115,6 +115,7 @@ expectIncludes(fallbackColorsSource, "--button-primary-gradient-start: var(--the
 expectIncludes(fallbackColorsSource, "--button-primary-bg: var(--theme-primary);");
 expectIncludes(fallbackColorsSource, "--color-tabbar-bg: #{rgba(color.mix($primary, $surface, 5%), 0.78)};");
 expectIncludes(fallbackColorsSource, "--color-tabbar-active-bg: #{color.mix($primary, $surface, 28%)};");
+expectIncludes(fallbackColorsSource, "--color-tabbar-shell-overlay: #{rgba($primary, 0.05)};");
 expectIncludes(fallbackColorsSource, "--material-tabbar-bg: #{rgba($surface, theme-value($dark, 0.9, 0.92))};");
 expectExcludes(fallbackColorsSource, "--color-raw-primary: #");
 expectExcludes(fallbackColorsSource, "--button-primary-gradient-start: #");
@@ -1235,7 +1236,9 @@ expectSelectorExcludes(textFieldSheetSource, ".text-field-sheet__button--cancel"
 expectSelectorExcludes(textFieldSheetSource, ".text-field-sheet__button--confirm", ["border: 1rpx solid var(--button-primary-border);"]);
 
 expectIncludes(tabbarSource, "background: var(--color-tabbar-bg);");
-expectSelectorIncludes(tabbarSource, ".tabbar-shell::after", ["background: #fefefe;"]);
+expectSelectorIncludes(tabbarSource, ".tabbar-shell::after", [
+  "background: var(--color-tabbar-shell-overlay);"
+]);
 expectSelectorIncludes(tabbarSource, ".tabbar__active-pill", ["background: var(--color-tabbar-active-bg);"]);
 expectIncludes(tabbarSource, "box-shadow: var(--material-tabbar-shadow);");
 expectIncludes(tabbarSource, "backdrop-filter: var(--material-tabbar-filter);");

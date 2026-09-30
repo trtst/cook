@@ -260,6 +260,8 @@
   --color-cover-empty-warm-bg: radial-gradient(circle at top right, var(--color-secondary-soft), transparent 40%), linear-gradient(135deg, var(--color-surface-primary-panel-soft), var(--color-state-warning-soft));
   --color-tabbar-bg: #{rgba(color.mix($primary, $surface, 5%), 0.78)};
   --color-tabbar-active-bg: #{color.mix($primary, $surface, 28%)};
+  // TabBar 外层的主题色轻叠加，供磨砂遮罩使用。
+  --color-tabbar-shell-overlay: #{rgba($primary, 0.05)};
 
   --button-primary-gradient-start: var(--theme-primary);
   --button-primary-gradient-end: var(--theme-secondary);

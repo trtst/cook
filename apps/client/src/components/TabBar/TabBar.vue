@@ -132,7 +132,8 @@ async function syncBadgeSnapshot() {
   position: absolute;
   inset: 0;
   z-index: 0;
-  background: #fefefe;
+  /* 用主题主色的轻量叠加替代写死的白色，保持磨砂层随主题变化。 */
+  background: var(--color-tabbar-shell-overlay);
   -webkit-mask-image: var(--frosted-mask-image);
   mask-image: var(--frosted-mask-image);
   -webkit-backdrop-filter: var(--material-mask-filter);
