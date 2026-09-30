@@ -35,7 +35,7 @@
       </view>
     </template>
 
-    <view class="recipe-page">
+    <view class="recipe-page" :class="{ 'recipe-page--with-return': showInspirationReturn }">
       <view class="recipe-head">
         <view class="search-row">
           <view class="search-row__inner">
@@ -312,6 +312,12 @@
         </view>
       </SheetShell>
     </view>
+    <InspirationReturnBar
+      v-if="showInspirationReturn"
+      :label="inspirationReturnLabel"
+      bottom="calc(var(--tabbar-shell-height) + env(safe-area-inset-bottom) + 24rpx)"
+      @return="returnToMealDetail"
+    />
   </Layout>
 </template>
 
@@ -338,6 +344,7 @@ import RecipeSearchLoading from "@/components/Recipe/RecipeSearchLoading.vue";
 import RecipeSearchBar from "@/components/Recipe/RecipeSearchBar.vue";
 import Skeleton from "@/components/Skeleton/Skeleton.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
+import InspirationReturnBar from "@/components/Recipe/InspirationReturnBar.vue";
 import { useCustomRefresher } from "@/composables/useCustomRefresher";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { usePageScrollLock } from "@/composables/usePageScrollLock";
@@ -347,6 +354,7 @@ import { uniPlatform } from "@/platform/uni";
 import { getRecipeViewVersion } from "@/pages/recipe/utils/recipe-view-sync";
 import { useLoginModalStore } from "@/stores/login-modal";
 import { useSessionStore } from "@/stores/session";
+import { useInspirationReturnStore } from "@/stores/inspiration-return";
 import { useSettingsStore, type ThemeMode, type ThemePalette, type ThemeSkin } from "@/stores/settings";
 import { formatThemeText } from "@/themes";
 import { difficultyOptions, durationOptions } from "@/utils/recipe-meta";
@@ -355,7 +363,6 @@ import { defaultRecipeTab } from "@/utils/recipe-access";
 type RecipeTab = "my" | "inspiration";
 type SheetMode = "" | "my";
 type LoadSource = "idle" | "initial" | "search" | "refresh" | "switch" | "retry";
-const RECIPE_HOME_INTENT_STORAGE_KEY = "recipe-home-intent-tab";
 
 interface CategoryItem {
 	id: UUID | "";
@@ -397,6 +404,7 @@ const settingsStore = useSettingsStore();
 const { themeVars, themeClasses, effectiveSkin, effectivePalette, themeMode, canSwitchPalette } = useTheme();
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const sessionStore = useSessionStore();
+const inspirationReturnStore = useInspirationReturnStore();
 const loginModalStore = useLoginModalStore();
 const currentThemeText = computed(() => {
   return formatThemeText(themeMode.value, effectiveSkin.value, effectivePalette.value, canSwitchPalette.value);
@@ -552,6 +560,8 @@ const loadedMoreOnceMap = ref<Record<RecipeTab, boolean>>({
 	inspiration: false
 });
 const showFooter = computed(() => cards.value.length > 0 && !errorText.value);
+const showInspirationReturn = computed(() => activeTab.value === "inspiration" && Boolean(inspirationReturnStore.context));
+const inspirationReturnLabel = computed(() => inspirationReturnStore.context?.kind === "event" ? "返回饭局" : "返回计划");
 const inlineLoading = computed(() => loading.value && cards.value.length > 0 && loadSource.value !== "refresh");
 const inlineLoadingText = computed(() => {
 	if (loadSource.value === "search") {
@@ -567,6 +577,11 @@ onShow(() => {
 onHide(() => {
 	showFilters.value = false;
 	closeSheet(true);
+	setTimeout(() => {
+		const pages = getCurrentPages();
+		const currentRoute = pages[pages.length - 1]?.route;
+		if (currentRoute !== "pages_recipe/detail/index") inspirationReturnStore.clear();
+	}, 0);
 });
 
 watch(
@@ -611,6 +626,7 @@ watch(
 	}
 );
 function switchTab(tab: RecipeTab) {
+	if (tab !== "inspiration") inspirationReturnStore.clear();
 	if (activeTab.value === tab) return;
 	const previousTab = activeTab.value;
 	activeTab.value = tab;
@@ -627,9 +643,8 @@ function switchTab(tab: RecipeTab) {
 }
 
 function consumeRecipeTabIntent() {
-	const intentTab = uniPlatform.storage.getSync<RecipeTab | null>(RECIPE_HOME_INTENT_STORAGE_KEY);
+	const intentTab = inspirationReturnStore.consumePendingTab();
 	if (!intentTab) return;
-	uniPlatform.storage.removeSync(RECIPE_HOME_INTENT_STORAGE_KEY);
 	if (intentTab !== "my" && intentTab !== "inspiration") return;
 	if (intentTab === "my" && !sessionStore.isLoggedIn) return;
 	if (activeTab.value === intentTab) return;
@@ -1006,6 +1021,12 @@ function goToInspiration() {
 	errorText.value = "";
 	showFilters.value = false;
 	void loadActiveTab({ source: "switch" });
+}
+
+function returnToMealDetail() {
+	const targetUrl = inspirationReturnStore.context?.targetUrl;
+	inspirationReturnStore.clear();
+	if (targetUrl) void uniPlatform.navigation.navigateTo(targetUrl);
 }
 
 function toMyCard(item: MyRecipeSummary): CardItem {
@@ -1394,6 +1415,11 @@ defineExpose({
 
 .list-shell {
   padding-bottom: calc(24rpx + var(--tabbar-shell-height) + env(safe-area-inset-bottom));
+}
+
+.recipe-page--with-return .list-shell,
+.recipe-page--with-return .recipe-list-skeleton {
+  padding-bottom: calc(136rpx + var(--tabbar-shell-height) + env(safe-area-inset-bottom));
 }
 
 .recipe-list-skeleton {

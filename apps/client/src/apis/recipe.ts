@@ -907,6 +907,13 @@ export const recipeApi = {
 	listRecipeViewHistory(query: RecipeViewHistoryQuery) {
 		return get<PageResult<RecipeViewHistoryItem>>(`${cfg.domain}/api/users/me/recipe-history`, { ...query });
 	},
+	deleteRecipeViewHistory(historyId: UUID, operationId: OperationId) {
+		return post<null>(
+			`${cfg.domain}/api/users/me/recipe-history/${encodeURIComponent(String(historyId))}/delete`,
+			undefined,
+			{ idempotencyKey: operationId }
+		);
+	},
 	getRecipeVersionCookAssistant(recipeVersionId: UUID) {
 		return get<RecipeCookAssistantResponse>(
 			`${cfg.domain}/api/recipe-versions/${encodeURIComponent(String(recipeVersionId))}/cook-assistant`

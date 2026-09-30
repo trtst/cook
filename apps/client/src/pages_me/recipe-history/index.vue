@@ -71,19 +71,47 @@
               <view
                 v-for="item in items"
                 :key="item.id"
-                class="history-card"
-                hover-class="history-card--pressed"
-                hover-stay-time="100"
-                @click="openItem(item)"
+                class="history-card-wrap"
+                :class="{ 'history-card-wrap--open': openHistoryId === item.id }"
+                @touchstart="onTouchStart($event, item)"
+                @touchmove="onTouchMove($event, item)"
+                @touchend="onTouchEnd"
+                @touchcancel="onTouchEnd"
               >
-                <view class="history-card__cover">
-                  <image v-if="item.coverImageUrl" class="history-card__image" :src="item.coverImageUrl" mode="aspectFill" />
-                  <ImageEmpty v-else class="history-card__image history-card__image--empty" copy="封面图" ratio="fill" />
+                <view class="history-card__actions">
+                  <view class="history-card__action history-card__action--plan" @click.stop="openPlanSheet(item)">
+                    <text class="cookfont icon-add-plan history-card__action-icon" />
+                    <text class="history-card__action-label">添加到计划</text>
+                  </view>
+                  <view
+                    v-if="item.sourceType !== 'MY'"
+                    class="history-card__action history-card__action--private"
+                    @click.stop="openPrivateSheet(item)"
+                  >
+                    <text class="cookfont icon-add-list history-card__action-icon" />
+                    <text class="history-card__action-label">添加到私房菜</text>
+                  </view>
+                  <view class="history-card__action history-card__action--delete" @click.stop="deleteHistory(item)">
+                    <text class="cookfont icon-close history-card__action-icon" />
+                    <text class="history-card__action-label">删除</text>
+                  </view>
                 </view>
-                <view class="history-card__main">
-                  <text class="history-card__title">{{ item.title }}</text>
-                  <text class="history-card__source">{{ sourceText(item.sourceType) }}</text>
-                  <text class="history-card__time">{{ formatViewTime(item.lastViewedAt) }}</text>
+                <view
+                  class="history-card"
+                  :style="{ transform: `translateX(-${openHistoryId === item.id ? actionWidth(item) : 0}rpx)` }"
+                  hover-class="history-card--pressed"
+                  hover-stay-time="100"
+                  @click="openItem(item)"
+                >
+                  <view class="history-card__cover">
+                    <image v-if="item.coverImageUrl" class="history-card__image" :src="item.coverImageUrl" mode="aspectFill" />
+                    <ImageEmpty v-else class="history-card__image history-card__image--empty" copy="封面图" ratio="fill" />
+                  </view>
+                  <view class="history-card__main">
+                    <text class="history-card__title">{{ item.title }}</text>
+                    <text class="history-card__source">{{ sourceText(item.sourceType) }}</text>
+                    <text class="history-card__time">{{ formatViewTime(item.lastViewedAt) }}</text>
+                  </view>
                 </view>
               </view>
 
@@ -99,6 +127,20 @@
         </scroll-view>
       </view>
     </view>
+    <AddToPlanSheet
+      :visible="planSheetVisible"
+      :items="planSheetItems"
+      success-toast-placement="bottom"
+      @close="closePlanSheet"
+    />
+    <AddToPrivateSheet
+      v-if="privateSource"
+      :visible="privateSheetVisible"
+      :source-recipe-id="privateSource.recipeId"
+      :source-version-id="privateSource.versionId"
+      @close="closePrivateSheet"
+      @success="handlePrivateSuccess"
+    />
   </Layout>
 </template>
 
@@ -106,6 +148,7 @@
 import { computed, ref } from "vue";
 import { onShow } from "@dcloudio/uni-app";
 import { recipeApi, type RecipeViewHistoryItem, type RecipeViewHistoryQuery } from "@/apis/recipe";
+import type { UUID } from "@/apis/http";
 import emptyStateArt from "@/assets/empty.png";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
@@ -121,6 +164,9 @@ import { useTheme } from "@/composables/useTheme";
 import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
 import { formatDateTimeSecond } from "@/utils/date";
+import { createOperationId } from "@/utils/operation-id";
+import AddToPlanSheet from "@/components/Recipe/AddToPlanSheet.vue";
+import AddToPrivateSheet from "@/components/Recipe/AddToPrivateSheet.vue";
 
 const pageStyle = usePageScrollStyle();
 const { themeVars, themeClasses } = useTheme();
@@ -155,6 +201,14 @@ const page = ref(1);
 const pageSize = ref(20);
 const hasNext = ref(false);
 const loadedMoreOnce = ref(false);
+const openHistoryId = ref<UUID | null>(null);
+const actionLoadingId = ref<UUID | null>(null);
+const planSheetVisible = ref(false);
+const privateSheetVisible = ref(false);
+const planSheetItems = ref<Array<{ recipeId: UUID; recipeVersionId?: UUID }>>([]);
+const privateSource = ref<{ recipeId: UUID; versionId: UUID } | null>(null);
+let touchStart: { x: number; y: number; itemId: UUID } | null = null;
+let lastSwipeAt = 0;
 
 onShow(() => {
   if (sessionStore.isLoggedIn) void loadPage(true);
@@ -168,6 +222,7 @@ async function loadPage(reset = true) {
   if (!sessionStore.isLoggedIn) return false;
   if (loading.value || loadingMore.value) return false;
 
+  if (reset) openHistoryId.value = null;
   if (reset) loading.value = true;
   else loadingMore.value = true;
   errorText.value = "";
@@ -231,10 +286,106 @@ function formatViewTime(value: string) {
 }
 
 function openItem(item: RecipeViewHistoryItem) {
+  if (Date.now() - lastSwipeAt < 350) return;
+  if (openHistoryId.value !== null) {
+    openHistoryId.value = null;
+    return;
+  }
   if (!item.isAvailable || !item.recipeId) return;
   void uniPlatform.navigation.navigateTo(
     `/pages_recipe/detail/index?recipeId=${encodeURIComponent(String(item.recipeId))}&kind=${item.sourceType === "MY" ? "my" : "inspiration"}`
   );
+}
+
+function actionWidth(item: RecipeViewHistoryItem) {
+  return (item.sourceType === "MY" ? 2 : 3) * 130;
+}
+
+function onTouchStart(event: TouchEvent, item: RecipeViewHistoryItem) {
+  const touch = event.touches[0];
+  if (!touch) return;
+  touchStart = { x: touch.clientX, y: touch.clientY, itemId: item.id };
+}
+
+function onTouchMove(event: TouchEvent, item: RecipeViewHistoryItem) {
+  if (!touchStart || touchStart.itemId !== item.id) return;
+  const touch = event.touches[0];
+  if (!touch) return;
+  const deltaX = touch.clientX - touchStart.x;
+  const deltaY = touch.clientY - touchStart.y;
+  if (Math.abs(deltaX) < 12 || Math.abs(deltaX) < Math.abs(deltaY)) return;
+  lastSwipeAt = Date.now();
+  if (deltaX < 0) openHistoryId.value = item.id;
+  else if (openHistoryId.value === item.id) openHistoryId.value = null;
+}
+
+function onTouchEnd() {
+  touchStart = null;
+}
+
+async function openPlanSheet(item: RecipeViewHistoryItem) {
+  if (!item.recipeId || !item.isAvailable || actionLoadingId.value !== null) return;
+  actionLoadingId.value = item.id;
+  try {
+    const recipeVersionId = item.sourceType === "INSPIRATION"
+      ? (await recipeApi.getRecipeDetail(item.recipeId)).contentVersionId
+      : undefined;
+    planSheetItems.value = [{ recipeId: item.recipeId, ...(recipeVersionId ? { recipeVersionId } : {}) }];
+    planSheetVisible.value = true;
+    openHistoryId.value = null;
+  } catch (error) {
+    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "菜谱加载失败", icon: "none" });
+  } finally {
+    actionLoadingId.value = null;
+  }
+}
+
+async function openPrivateSheet(item: RecipeViewHistoryItem) {
+  if (!item.recipeId || !item.isAvailable || item.sourceType === "MY" || actionLoadingId.value !== null) return;
+  actionLoadingId.value = item.id;
+  try {
+    const detail = await recipeApi.getRecipeDetail(item.recipeId);
+    privateSource.value = { recipeId: item.recipeId, versionId: detail.contentVersionId };
+    privateSheetVisible.value = true;
+    openHistoryId.value = null;
+  } catch (error) {
+    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "菜谱加载失败", icon: "none" });
+  } finally {
+    actionLoadingId.value = null;
+  }
+}
+
+async function deleteHistory(item: RecipeViewHistoryItem) {
+  if (actionLoadingId.value !== null || loading.value || loadingMore.value) return;
+  actionLoadingId.value = item.id;
+  try {
+    await recipeApi.deleteRecipeViewHistory(item.id, createOperationId());
+    openHistoryId.value = null;
+    const visibleCount = items.value.length;
+    if (await loadPage(true)) {
+      while (hasNext.value && items.value.length < visibleCount) {
+        const loadedMore = await loadPage(false);
+        if (!loadedMore) break;
+      }
+    }
+  } catch (error) {
+    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "删除浏览记录失败", icon: "none" });
+  } finally {
+    actionLoadingId.value = null;
+  }
+}
+
+function closePlanSheet() {
+  planSheetVisible.value = false;
+}
+
+function closePrivateSheet() {
+  privateSheetVisible.value = false;
+  privateSource.value = null;
+}
+
+function handlePrivateSuccess() {
+  closePrivateSheet();
 }
 
 async function automatorApplySession(snapshot: { token: string; uid?: number; expiresAt: string; refreshCheckedAt?: number }) {
@@ -308,7 +459,7 @@ defineExpose({
 }
 
 .notice,
-.history-card {
+.history-card-wrap {
   border-radius: var(--radius-xs);
   background: var(--material-card-bg);
   box-shadow: var(--material-card-shadow);
@@ -359,14 +510,63 @@ defineExpose({
   font-size: var(--font-size-xs);
 }
 
+.history-card-wrap {
+  position: relative;
+  overflow: hidden;
+}
+
 .history-card {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
   min-height: 156rpx;
+  transition: transform 180ms ease;
+  background: var(--material-card-bg);
 }
 
 .history-card--pressed {
   opacity: 0.82;
+}
+
+.history-card__actions {
+  position: absolute;
+  inset: 0 0 0 auto;
+  display: flex;
+  height: 100%;
+}
+
+.history-card__action {
+  display: flex;
+  width: 130rpx;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 8rpx;
+  color: #fff;
+}
+
+.history-card__action--plan {
+  background: var(--color-primary);
+}
+
+.history-card__action--private {
+  background: var(--color-support-action);
+}
+
+.history-card__action--delete {
+  background: var(--color-danger, #c9544d);
+}
+
+.history-card__action-icon {
+  color: #fff;
+  font-size: 36rpx;
+}
+
+.history-card__action-label {
+  font-size: 19rpx;
+  line-height: 1.2;
+  text-align: center;
 }
 
 .history-card__cover {

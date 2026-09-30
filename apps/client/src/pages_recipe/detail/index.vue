@@ -61,7 +61,7 @@
               </view>
             </view>
 
-            <view class="content" :class="{ 'content--with-actions': showStickyActions }">
+            <view class="content" :class="{ 'content--with-actions': showStickyActions, 'content--with-return': Boolean(inspirationReturnStore.context) }">
 	            <view class="summary-card">
                 <view class="summary-card__title-row">
 	                <text id="detail-title" class="summary-card__title">{{ detailTitle }}</text>
@@ -519,6 +519,12 @@
           <button class="danger" @click="handleReport">提交举报</button>
       </SheetShell>
     </template>
+    <InspirationReturnBar
+      v-if="inspirationReturnStore.context"
+      :label="inspirationReturnLabel"
+      :bottom="inspirationReturnBottom"
+      @return="returnToMealDetail"
+    />
   </Layout>
 </template>
 
@@ -541,6 +547,7 @@ import {
 import { shoppingApi } from "@/apis/shopping";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
+import InspirationReturnBar from "@/components/Recipe/InspirationReturnBar.vue";
 import ImageLoader from "@/components/ImageLoader.vue";
 import RecipeDetailSkeleton from "./RecipeDetailSkeleton.vue";
 import AddToPrivateSheet from "@/components/Recipe/AddToPrivateSheet.vue";
@@ -557,6 +564,7 @@ import { useSystemInfo } from "@/composables/useSystemInfo";
 import { markRecipeHomeDirty, markRecipeManageDirty } from "@/pages/recipe/utils/recipe-view-sync";
 import { uniPlatform } from "@/platform/uni";
 import { useLoginModalStore } from "@/stores/login-modal";
+import { useInspirationReturnStore } from "@/stores/inspiration-return";
 import { useRecipePreviewStore, type RecipePreviewAmount, type RecipePreviewDetail } from "../stores/recipe-preview";
 import { useSessionStore } from "@/stores/session";
 import { userApi, type CookAssistantUsageResponse } from "@/apis/user";
@@ -628,6 +636,7 @@ const reportReasonOptions: ReportReasonOption[] = [
 ];
 
 const sessionStore = useSessionStore();
+const inspirationReturnStore = useInspirationReturnStore();
 const loginModalStore = useLoginModalStore();
 const recipePreviewStore = useRecipePreviewStore();
 const { navBarTotalHeight } = useSystemInfo();
@@ -833,6 +842,11 @@ const showRecommendEntry = computed(() => isOwnedDetail.value && (canRecommendRe
 const showStickyActions = computed(
   () => mode.value === "published" && (isExternalDetail.value || isReadablePrivateDetail.value)
 );
+const inspirationReturnLabel = computed(() => inspirationReturnStore.context?.kind === "event" ? "返回饭局" : "返回计划");
+const inspirationReturnBottom = computed(() => showStickyActions.value
+  ? "calc(152rpx + env(safe-area-inset-bottom) + 24rpx)"
+  : "calc(env(safe-area-inset-bottom) + 24rpx)"
+);
 const detailActionsVisible = computed(
   () =>
     showStickyActions.value &&
@@ -1026,10 +1040,23 @@ function handleDetailScroll(event: { detail?: { scrollTop?: number } }) {
   navOpacity.value = Math.max(0, Math.min(1, nextScrollTop / NAV_FADE_RANGE));
 }
 
+function returnToMealDetail() {
+	const targetUrl = inspirationReturnStore.context?.targetUrl;
+	inspirationReturnStore.clear();
+	if (targetUrl) void uniPlatform.navigation.navigateTo(targetUrl);
+}
+
 onHide(() => {
   if (mode.value === "preview") {
     recipePreviewStore.clearPreview();
   }
+	setTimeout(() => {
+		const pages = getCurrentPages();
+		const currentRoute = pages[pages.length - 1]?.route;
+		if (currentRoute !== "pages/recipe/index" && currentRoute !== "pages_recipe/detail/index") {
+			inspirationReturnStore.clear();
+		}
+	}, 0);
 });
 
 onUnload(() => {
@@ -2010,6 +2037,14 @@ defineExpose({
 
 .content--with-actions {
   padding-bottom: calc(160rpx + env(safe-area-inset-bottom));
+}
+
+.content--with-return {
+  padding-bottom: calc(160rpx + env(safe-area-inset-bottom));
+}
+
+.content--with-actions.content--with-return {
+  padding-bottom: calc(280rpx + env(safe-area-inset-bottom));
 }
 
 .summary-card {
