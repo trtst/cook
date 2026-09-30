@@ -939,9 +939,11 @@ import {
   type ShoppingGapPreviewItem
 } from "@/apis/shopping";
 import { userApi, type CookAssistantUsageResponse, type TasteProfileResponse } from "@/apis/user";
+import { authApi } from "@/apis/auth";
 import { fridgeApi } from "@/apis/fridge";
 import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
+import { useInspirationReturnStore } from "@/stores/inspiration-return";
 import { createOperationId } from "@/utils/operation-id";
 import { getCookAssistantLoadingDuration, waitForCookAssistantLoading } from "../utils/cook-assistant-loading";
 import { formatMealSlot, isPastLocalDateTime, resolveMealSlotByTime, resolveMealSlotExpireMs, resolveMealSlotSuggestedTime } from "@/utils/meal-slot";
@@ -1055,7 +1057,6 @@ type CompletedIngredientItem = {
 };
 type RecipeSheetItem = MyRecipeSummary;
 type RecipeSheetMode = "menu" | "bring" | "wish";
-const RECIPE_HOME_INTENT_STORAGE_KEY = "recipe-home-intent-tab";
 const RECIPE_SHEET_PAGE_SIZE = 20;
 const MAX_EVENT_RECIPE_SELECTION = 3;
 
@@ -1064,6 +1065,7 @@ const pageStyle = usePageScrollStyle();
 const { themeVars, themeClasses } = useTheme();
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const sessionStore = useSessionStore();
+const inspirationReturnStore = useInspirationReturnStore();
 const { navBarTotalHeight } = useSystemInfo();
 const loading = ref(false);
 const submitting = ref(false);
@@ -2207,9 +2209,30 @@ async function handleMealReminderAction() {
   }
   if (!eventDetail.value && !planDetail.value) return;
 
+  const userId = sessionStore.uid;
+  const isCurrentUser = () => sessionStore.isLoggedIn && sessionStore.uid === userId;
   reminderSubmitting.value = true;
   try {
+    if (uniPlatform.system.getRuntimeChannel() === "mini_program") {
+      let wechatLinked = sessionStore.user?.wechatLinked;
+      if (wechatLinked !== true) {
+        wechatLinked = (await authApi.getMe()).wechatLinked;
+        if (!isCurrentUser()) return;
+        await sessionStore.setWechatLinked(wechatLinked);
+        if (!isCurrentUser()) return;
+      }
+      if (!wechatLinked) {
+        const login = await uniPlatform.auth.login();
+        if (!isCurrentUser()) return;
+        await authApi.bindWechatIdentity({ code: login.code, deviceId: uniPlatform.auth.getDeviceId() });
+        if (!isCurrentUser()) return;
+        await sessionStore.setWechatLinked(true);
+      }
+    }
+
+    if (!isCurrentUser()) return;
     const authorization = await uniPlatform.messaging.requestSubscribeMessage([MEAL_REMINDER_TEMPLATE_ID]);
+    if (!isCurrentUser()) return;
     const status = authorization[MEAL_REMINDER_TEMPLATE_ID];
     if (status !== "accept") {
       const title = status === "ban" ? "微信已限制该模板订阅，请检查微信设置" : "未开启微信提醒";
@@ -2219,6 +2242,7 @@ async function handleMealReminderAction() {
     const result = eventDetail.value
       ? await mealApi.subscribeDiningEventReminder(eventDetail.value.id, createOperationId())
       : await mealApi.subscribePlanReminder(planDetail.value!.id, createOperationId());
+    if (!isCurrentUser()) return;
     reminderState.value = result;
     if (result.status === "SCHEDULED") {
       await uniPlatform.feedback.toast({ title: "微信提醒已预约", icon: "success" });
@@ -2553,9 +2577,17 @@ function handleRecipeSheetAfterClose() {
 }
 
 function openInspirationSquare() {
-  uniPlatform.storage.setSync(RECIPE_HOME_INTENT_STORAGE_KEY, "inspiration");
-  closeRecipeSheet();
-  void uniPlatform.navigation.switchTab("/pages/recipe/index");
+	const query = [
+		planItemId.value ? `planItemId=${encodeURIComponent(String(planItemId.value))}` : "",
+		planDate.value ? `planDate=${encodeURIComponent(planDate.value)}` : "",
+		eventId.value ? `eventId=${encodeURIComponent(String(eventId.value))}` : "",
+		entryFocus.value ? `focus=${encodeURIComponent(entryFocus.value)}` : ""
+	].filter(Boolean);
+	const targetUrl = query.length ? `/pages_meal/detail/index?${query.join("&")}` : "";
+	if (!targetUrl) return;
+	inspirationReturnStore.openFromMeal(targetUrl, eventId.value ? "event" : "plan");
+	closeRecipeSheet();
+	void uniPlatform.navigation.switchTab("/pages/recipe/index");
 }
 
 function toggleRecipeSelection(item: RecipeSheetItem) {

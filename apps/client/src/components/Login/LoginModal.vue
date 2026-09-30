@@ -204,7 +204,6 @@ const phone = ref("");
 const code = ref("");
 const password = ref("");
 const passwordVisible = ref(false);
-const wechatSessionId = ref("");
 const loading = ref(false);
 const countdown = ref(0);
 const errorText = ref("");
@@ -288,7 +287,6 @@ function handleClose() {
 function openPhoneMode() {
   errorText.value = "";
   agreementWarn.value = false;
-  wechatSessionId.value = sessionStore.wechatSessionId;
   loginModalStore.openPhoneMode();
 }
 
@@ -322,61 +320,6 @@ async function ensureAgreementAccepted() {
     placement: "bottom"
   });
   return false;
-}
-
-async function handleWeChatPhoneLogin(event: unknown) {
-  if (loading.value) return;
-  if (!(await ensureAgreementAccepted())) return;
-
-  loading.value = true;
-  errorText.value = "";
-
-  try {
-    const deviceId = uniPlatform.auth.getDeviceId();
-    let currentWechatSessionId = sessionStore.wechatSessionId;
-
-    if (!currentWechatSessionId) {
-      const login = await uniPlatform.auth.login();
-      const result = await authApi.wechatSessionResult({
-        code: login.code,
-        deviceId
-      });
-      if (!result.ok) {
-        await showAuthResultError(result);
-        return;
-      }
-
-      if (result.data.status === "BLOCKED") {
-        await showAuthError(blockedText(result.data.retryAfterSeconds));
-        return;
-      }
-
-      if (result.data.status === "BOUND") {
-        await applySession(result.data.session);
-        return;
-      }
-
-      currentWechatSessionId = result.data.wechatSessionId;
-      sessionStore.setWechatSessionId(currentWechatSessionId);
-    }
-
-    const phoneCode = await uniPlatform.auth.getPhoneNumberCode(event);
-    wechatSessionId.value = currentWechatSessionId;
-    const result = await authApi.loginWithWechatPhoneResult({
-      wechatSessionId: currentWechatSessionId,
-      phoneCode,
-      deviceId
-    });
-    if (!result.ok) {
-      await showAuthResultError(result);
-      return;
-    }
-    await applySession(result.data);
-  } catch (error) {
-    await showAuthError(error);
-  } finally {
-    loading.value = false;
-  }
 }
 
 async function sendCode() {
@@ -436,7 +379,6 @@ async function handlePhoneLogin() {
       code: codeText,
       deviceId: uniPlatform.auth.getDeviceId()
     };
-    if (wechatSessionId.value) request.wechatSessionId = wechatSessionId.value;
     const result = await authApi.loginWithSmsResult(request);
     if (!result.ok) {
       await showAuthResultError(result);
@@ -496,6 +438,7 @@ async function applySession(session: AuthSessionResult) {
     refreshExpiresAt: session.refreshExpiresAt
   });
   userStore.setProfile(await userApi.getCurrent(), session.user.uid);
+  void tryBindWechatIdentity();
 
   const { sourceId, action } = loginModalStore.complete();
   await emitLoginSuccess({
@@ -503,6 +446,28 @@ async function applySession(session: AuthSessionResult) {
     session
   });
   action?.();
+}
+
+async function tryBindWechatIdentity() {
+  if (uniPlatform.system.getRuntimeChannel() !== "mini_program") return;
+  const userId = sessionStore.uid;
+  if (!sessionStore.isLoggedIn || userId <= 0) return;
+  const isCurrentUser = () => sessionStore.isLoggedIn && sessionStore.uid === userId;
+  try {
+    const currentUser = await authApi.getMe();
+    if (!isCurrentUser()) return;
+    if (currentUser.wechatLinked) {
+      await sessionStore.setWechatLinked(true);
+      return;
+    }
+    const login = await uniPlatform.auth.login();
+    if (!isCurrentUser()) return;
+    await authApi.bindWechatIdentity({ code: login.code, deviceId: uniPlatform.auth.getDeviceId() });
+    if (!isCurrentUser()) return;
+    await sessionStore.setWechatLinked(true);
+  } catch {
+    // 账号登录不因微信补绑失败而失败，提醒入口仍可在后续重新尝试补绑。
+  }
 }
 
 function validatePhone(phoneText: string) {
@@ -525,11 +490,6 @@ function validatePasswordLogin(phoneText: string, passwordText: string) {
   if (!passwordText) return "请输入密码";
   if (passwordText.length < 6) return "密码至少 6 位";
   return "";
-}
-
-function blockedText(retryAfterSeconds: number | null) {
-  if (retryAfterSeconds && retryAfterSeconds > 0) return `登录请求过于频繁，请 ${retryAfterSeconds} 秒后再试`;
-  return "登录请求过于频繁，请稍后再试";
 }
 
 async function showAuthError(error: unknown) {
@@ -565,7 +525,6 @@ function resetForm() {
   code.value = "";
   password.value = "";
   passwordVisible.value = false;
-  wechatSessionId.value = sessionStore.wechatSessionId;
   errorText.value = "";
   messageTone.value = "error";
   agreementChecked.value = false;

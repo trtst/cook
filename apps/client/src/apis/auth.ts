@@ -72,6 +72,12 @@ export interface AuthMeResponse extends SessionUserSnapshot {
 	phone: string | null;
 	hasPassword: boolean;
 	status: string;
+	wechatLinked: boolean;
+}
+
+export interface BindWechatIdentityRequest {
+	code: string;
+	deviceId: string;
 }
 
 export type AuthApiResult<T> = ApiResult<T>;
@@ -121,6 +127,9 @@ export const authApi = {
 	},
 	getMe() {
 		return get<AuthMeResponse>(`${cfg.authDomain}/api/auth/me`);
+	},
+	bindWechatIdentity(body: BindWechatIdentityRequest) {
+		return post<{ wechatLinked: true }>(`${cfg.authDomain}/api/auth/wechat/bind`, body);
 	}
 };
 

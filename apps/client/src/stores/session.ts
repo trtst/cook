@@ -8,6 +8,7 @@ export interface SessionUserSnapshot {
 	nickname: string | null;
 	avatarUrl: string | null;
 	phone: string | null;
+	wechatLinked?: boolean;
 }
 
 export interface SessionSnapshot {
@@ -143,6 +144,12 @@ export const useSessionStore = defineStore("session", {
 		setWechatSessionId(wechatSessionId: string) {
 			this.wechatSessionId = wechatSessionId.trim();
 			this.authStatus = "guest";
+		},
+
+		async setWechatLinked(wechatLinked: boolean) {
+			if (!this.user) return;
+			this.user = { ...this.user, wechatLinked };
+			await this.persist();
 		},
 
 		markBlocked() {

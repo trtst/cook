@@ -1,9 +1,7 @@
 import { authApi, refreshSessionIfNeeded } from "@/apis/auth";
 import { userApi } from "@/apis/user";
-import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
 import { useUserStore } from "@/stores/user";
-import { restoreWechatSession } from "./wechat-session";
 
 // 当前用户资料的本地缓存只保留短时间。
 // 登录 token 才是真正的会话事实，资料缓存只是为了减少额外 `/me` 请求。
@@ -33,22 +31,9 @@ async function restoreCurrentUser() {
 	// 第一步：先从本地恢复登录 session。
 	await sessionStore.restore();
 	if (!sessionStore.isLoggedIn) {
-		await tryRestoreWechatIdentity();
 		return;
 	}
 	await restoreAuthenticatedUser();
-}
-
-async function tryRestoreWechatIdentity() {
-	const sessionStore = useSessionStore();
-	if (sessionStore.logoutExplicit || uniPlatform.system.getRuntimeChannel() !== "mini_program") return;
-
-	try {
-		const restored = await restoreWechatSession(sessionStore);
-		if (restored) await restoreAuthenticatedUser();
-	} catch {
-		// 启动静默识别失败时保留 guest，让用户仍可从登录弹窗重试。
-	}
 }
 
 async function restoreAuthenticatedUser() {
@@ -68,13 +53,13 @@ async function restoreAuthenticatedUser() {
 		return;
 	}
 
-	await restoreAuthUserSummary();
+	await restoreAuthUserSummary().catch(() => undefined);
 	await refreshSessionIfNeeded().catch(() => undefined);
 }
 
 async function restoreAuthUserSummary() {
 	const sessionStore = useSessionStore();
-	if (!sessionStore.isLoggedIn || !sessionStore.user || "phone" in sessionStore.user) return;
+	if (!sessionStore.isLoggedIn) return;
 
 	const authUser = await authApi.getMe();
 	await sessionStore.setSession({
@@ -85,7 +70,8 @@ async function restoreAuthUserSummary() {
 			uid: authUser.uid,
 			nickname: authUser.nickname,
 			avatarUrl: authUser.avatarUrl,
-			phone: authUser.phone
+			phone: authUser.phone,
+			wechatLinked: authUser.wechatLinked
 		},
 		expiresAt: sessionStore.expiresAt,
 		refreshExpiresAt: sessionStore.refreshExpiresAt,
