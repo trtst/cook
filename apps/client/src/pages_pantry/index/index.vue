@@ -1,10 +1,10 @@
 <template>
   <page-meta :page-style="themePageStyle" />
-  <Layout title="食材参考" :class="themeClasses">
+  <Layout title="家里的食材" :class="themeClasses">
     <Empty
       v-if="!sessionStore.isLoggedIn"
       :art="emptyStateArt"
-      title="登录后查看食材参考"
+      title="登录后看看家里的食材"
       description="这里会显示最近买过或用过的食材痕迹，不需要维护精确库存。"
       clickable
       @click="openLogin"
@@ -22,14 +22,13 @@
         <scroll-view
           class="trace-scroll"
           scroll-y
-          :scroll-top="traceScrollTop"
+          :scroll-top="scrollResetTop"
           refresher-enabled
           refresher-default-style="none"
           :show-scrollbar="false"
           :refresher-threshold="refresherThreshold"
           :refresher-triggered="refresherTriggered"
           @scrolltolower="handleScrollToLower"
-          @scroll="handleTraceScroll"
           @refresherpulling="onRefresherPulling"
           @refresherrefresh="handleRefresherRefresh"
           @refresherrestore="onRefresherRestore"
@@ -57,12 +56,9 @@
                   >{{ category.name }}</view>
               </view>
             </scroll-view>
-            <view v-if="hasTraceItems" class="trace-manage__actions">
+            <view class="trace-manage__actions">
               <text v-if="!manageMode" class="trace-manage__action" @click="enterManageMode">管理</text>
-              <template v-else>
-                <text class="trace-manage__action" @click="toggleSelectAll">{{ selectingAll ? "加载中..." : allVisibleSelected ? "取消全选" : "全选" }}</text>
-                <text class="trace-manage__action" @click="exitManageMode">取消</text>
-              </template>
+              <text v-else class="trace-manage__action" @click="exitManageMode">完成</text>
             </view>
           </view>
 
@@ -148,7 +144,7 @@
               />
               <view v-if="moreErrorText" class="trace-state trace-state--error" @click="loadMoreTraces()">{{ moreErrorText }}，点此重试</view>
             <LoadMore
-              :loading="loadingMore || selectingAll"
+              :loading="loadingMore"
               :has-next="hasNext"
               :show-done="loadedMoreOnce && !hasNext"
               next-text="继续上滑，查看更多食材"
@@ -170,17 +166,57 @@
             @primary="openAddSheet"
           />
         </template>
-        <button
-          v-else
-          class="trace-actions__mark-empty"
-          :class="{ 'trace-actions__mark-empty--disabled': !selectedTraceIds.size || updatingTraces }"
-          :disabled="!selectedTraceIds.size || updatingTraces"
-          @click="confirmMarkSelectedEmpty"
-        >
-          {{ updatingTraces ? "处理中..." : "家里没有了" }}
-        </button>
+        <view v-else class="trace-actions__manage">
+          <view
+            class="trace-actions__select-all"
+            role="checkbox"
+            :aria-label="allVisibleSelected ? '取消全选' : '全选'"
+            :aria-checked="allVisibleSelected"
+            :class="{ 'trace-actions__button--disabled': !selectableTraces.length || loading || loadingMore || updatingTraces || shoppingSubmitting }"
+            @click="toggleSelectAll"
+          >
+            <view class="trace-card__select" :class="{ 'trace-card__select--checked': allVisibleSelected }">
+              <text v-if="allVisibleSelected" class="trace-card__check-icon">✓</text>
+            </view>
+            <text>{{ allVisibleSelected ? "取消全选" : "全选" }}</text>
+          </view>
+          <text v-if="selectedTraceIds.size" class="trace-actions__selected-count">已选 {{ selectedTraceIds.size }} 种</text>
+          <button
+            class="trace-actions__button trace-actions__button--secondary"
+            :class="{ 'trace-actions__button--disabled': !selectedTraceIds.size || updatingTraces || shoppingSubmitting }"
+            :disabled="!selectedTraceIds.size || updatingTraces || shoppingSubmitting"
+            @click="openShoppingSheet"
+          >
+            添加清单
+          </button>
+          <button
+            class="trace-actions__button trace-actions__button--secondary"
+            :class="{ 'trace-actions__button--disabled': !selectedTraceIds.size || updatingTraces || shoppingSubmitting }"
+            :disabled="!selectedTraceIds.size || updatingTraces || shoppingSubmitting"
+            @click="confirmMarkSelectedEmpty"
+          >
+            {{ updatingTraces ? "处理中..." : "家里没有了" }}
+          </button>
+        </view>
       </view>
     </view>
+
+    <ShoppingListPickerSheet
+      :visible="shoppingSheetVisible"
+      :loading="shoppingListLoading"
+      :error-text="shoppingListError"
+      :items="shoppingLists"
+      :selected-id="selectedShoppingListId"
+      :create-name="shoppingCreateName"
+      :submitting="shoppingSubmitting"
+      @close="closeShoppingSheet"
+      @after-close="handleShoppingSheetAfterClose"
+      @retry="loadShoppingLists(true)"
+      @create="createShoppingList"
+      @confirm="addSelectedToShoppingList"
+      @update:selected-id="selectedShoppingListId = $event"
+      @update:create-name="shoppingCreateName = $event"
+    />
 
     <SheetShell
       :visible="addSheetVisible"
@@ -236,6 +272,7 @@ import Empty from "@/components/Empty/Empty.vue";
 import IngredientPickerContent from "@/components/Ingredient/IngredientPickerContent.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import MealFooterActions from "@/components/Meal/MealFooterActions.vue";
+import ShoppingListPickerSheet from "@/components/Shopping/ShoppingListPickerSheet.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
 import { recipeApi, type IngredientCategorySummary, type IngredientSummary } from "@/apis/recipe";
 import type { UUID } from "@/apis/http";
@@ -250,6 +287,8 @@ import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
 import { createOperationId } from "@/utils/operation-id";
 import { fridgeApi, type FridgeTraceSummary } from "../apis/fridge";
+import { shoppingApi, type ShoppingListSummary } from "../apis/shopping";
+import { buildDefaultShoppingListName } from "../utils/shopping";
 
 type TracePageCache = {
   items: FridgeTraceSummary[];
@@ -266,15 +305,17 @@ const { openLogin } = useLoginEmptyState(handleLoginSuccess);
 const traces = ref<FridgeTraceSummary[]>([]);
 const traceCache = new Map<string, TracePageCache>();
 let traceCacheUserId: number | null = null;
+const selectedTraceIds = ref(new Set<FridgeTraceSummary["id"]>());
+const selectedTraceItems = ref(new Map<FridgeTraceSummary["id"], FridgeTraceSummary>());
 const currentTraces = computed(() => traces.value.filter(trace => !trace.archived && trace.presence !== "EMPTY"));
 const archivedTraces = computed(() => traces.value.filter(trace => trace.archived));
 const categoryFilter = ref<UUID | null>(null);
-const hasTraceItems = computed(() => currentTraces.value.length > 0 || archivedTraces.value.length > 0);
 const filteredCurrentTraces = computed(() => currentTraces.value);
 const filteredArchivedTraces = computed(() => archivedTraces.value);
+const selectedTraces = computed(() => [...selectedTraceItems.value.values()]);
 const activeCategoryName = computed(() => ingredientCategories.value.find(item => item.id === categoryFilter.value)?.name || "");
 const loading = ref(false);
-const traceScrollTop = ref(0);
+const scrollResetTop = ref(0);
 const loadingMore = ref(false);
 const loadedMoreOnce = ref(false);
 const hasNext = ref(false);
@@ -282,16 +323,13 @@ const tracePage = ref(1);
 const errorText = ref("");
 const moreErrorText = ref("");
 const traceRequestSeed = ref(0);
-const selectingAll = ref(false);
 const archiveExpanded = ref(false);
 const manageMode = ref(false);
-const selectedTraceIds = ref(new Set<FridgeTraceSummary["id"]>());
 const updatingTraces = ref(false);
 const selectableTraces = computed(() => archiveExpanded.value
   ? [...filteredCurrentTraces.value, ...filteredArchivedTraces.value]
   : filteredCurrentTraces.value);
 const allVisibleSelected = computed(() => selectableTraces.value.length > 0
-  && !hasNext.value
   && selectableTraces.value.every(trace => selectedTraceIds.value.has(trace.id)));
 const addSheetVisible = ref(false);
 const ingredientKeyword = ref("");
@@ -310,6 +348,13 @@ const ingredientSearchPending = ref(false);
 let ingredientSearchTimer: ReturnType<typeof setTimeout> | null = null;
 const selectedIngredients = ref<IngredientSummary[]>([]);
 const submitting = ref(false);
+const shoppingSheetVisible = ref(false);
+const shoppingListLoading = ref(false);
+const shoppingListError = ref("");
+const shoppingLists = ref<ShoppingListSummary[]>([]);
+const selectedShoppingListId = ref<UUID | "">("");
+const shoppingCreateName = ref("");
+const shoppingSubmitting = ref(false);
 const {
   threshold: refresherThreshold,
   pullDistance,
@@ -386,6 +431,7 @@ function clearTraceCache() {
   hasNext.value = false;
   loadedMoreOnce.value = false;
   selectedTraceIds.value = new Set();
+  selectedTraceItems.value = new Map();
   loading.value = false;
   loadingMore.value = false;
 }
@@ -393,7 +439,6 @@ function clearTraceCache() {
 function prepareTraceCacheForUser() {
   if (traceCacheUserId === sessionStore.uid) return;
   clearTraceCache();
-  selectedTraceIds.value = new Set();
   traceCacheUserId = sessionStore.uid;
 }
 
@@ -443,7 +488,7 @@ async function loadPage(options: { reset?: boolean; refreshCategories?: boolean 
     errorText.value = "";
   } catch (error) {
     if (requestId === traceRequestSeed.value && key === traceCacheKey()) {
-      const message = error instanceof Error ? error.message : "食材参考加载失败";
+      const message = error instanceof Error ? error.message : "食材加载失败";
       if (cached) {
         applyTraceCache(cached);
         await uniPlatform.feedback.toast({ title: message, icon: "none" });
@@ -489,8 +534,8 @@ function handleScrollToLower() {
   void loadMoreTraces();
 }
 
-function handleTraceScroll(event: { detail?: { scrollTop?: number } }) {
-  traceScrollTop.value = event.detail?.scrollTop ?? 0;
+function resetTraceScroll() {
+  scrollResetTop.value = scrollResetTop.value === 0 ? 1 : 0;
 }
 
 async function handleRefresherRefresh() {
@@ -515,8 +560,7 @@ function formatRecordedAt(value: string) {
 function changeCategory(categoryId: UUID | null) {
   if (categoryFilter.value === categoryId) return;
   categoryFilter.value = categoryId;
-  traceScrollTop.value = 0;
-  selectedTraceIds.value = new Set();
+  resetTraceScroll();
   archiveExpanded.value = false;
   errorText.value = "";
   moreErrorText.value = "";
@@ -530,7 +574,6 @@ function changeCategory(categoryId: UUID | null) {
     tracePage.value = 1;
     hasNext.value = false;
     loadedMoreOnce.value = false;
-    selectingAll.value = false;
     void loadPage({ reset: true });
   }
 }
@@ -688,44 +731,50 @@ function openShopping() {
 function enterManageMode() {
   manageMode.value = true;
   selectedTraceIds.value = new Set();
+  selectedTraceItems.value = new Map();
 }
 
 function exitManageMode() {
   manageMode.value = false;
   selectedTraceIds.value = new Set();
+  selectedTraceItems.value = new Map();
 }
 
-async function toggleSelectAll() {
-  if (selectingAll.value || loading.value || loadingMore.value) return;
-  if (!allVisibleSelected.value && hasNext.value) {
-    selectingAll.value = true;
-    try {
-      while (hasNext.value) {
-        const loaded = await loadMoreTraces();
-        if (!loaded) return;
-      }
-    } finally {
-      selectingAll.value = false;
+function toggleSelectAll() {
+  if (loading.value || loadingMore.value || updatingTraces.value || shoppingSubmitting.value) return;
+  const next = new Set(selectedTraceIds.value);
+  const nextItems = new Map(selectedTraceItems.value);
+  const deselect = allVisibleSelected.value;
+  for (const trace of selectableTraces.value) {
+    if (deselect) {
+      next.delete(trace.id);
+      nextItems.delete(trace.id);
+    } else {
+      next.add(trace.id);
+      nextItems.set(trace.id, trace);
     }
   }
-  const next = new Set(selectedTraceIds.value);
-  for (const trace of selectableTraces.value) {
-    if (allVisibleSelected.value) next.delete(trace.id);
-    else next.add(trace.id);
-  }
   selectedTraceIds.value = next;
+  selectedTraceItems.value = nextItems;
 }
 
 function toggleTraceSelected(trace: FridgeTraceSummary) {
   const next = new Set(selectedTraceIds.value);
-  if (next.has(trace.id)) next.delete(trace.id);
-  else next.add(trace.id);
+  const nextItems = new Map(selectedTraceItems.value);
+  if (next.has(trace.id)) {
+    next.delete(trace.id);
+    nextItems.delete(trace.id);
+  } else {
+    next.add(trace.id);
+    nextItems.set(trace.id, trace);
+  }
   selectedTraceIds.value = next;
+  selectedTraceItems.value = nextItems;
 }
 
 async function confirmMarkSelectedEmpty() {
   if (!selectedTraceIds.value.size || updatingTraces.value || loading.value) return;
-  const selected = traces.value.filter(trace => selectedTraceIds.value.has(trace.id));
+  const selected = selectedTraces.value;
   if (!selected.length) return;
   const confirmed = await uniPlatform.feedback.confirm({
     title: "整理食材",
@@ -734,12 +783,20 @@ async function confirmMarkSelectedEmpty() {
   if (!confirmed) return;
 
   updatingTraces.value = true;
+  let updatedCount = 0;
   try {
-    await fridgeApi.markEmptyBatch(selected.map(trace => ({
-      ingredientId: trace.ingredientId,
-      name: trace.name,
-      categoryName: trace.categoryName
-    })), createOperationId());
+    for (let index = 0; index < selected.length; index += 100) {
+      const batch = selected.slice(index, index + 100);
+      await fridgeApi.markEmptyBatch(batch.map(trace => ({
+        ingredientId: trace.ingredientId,
+        name: trace.name,
+        categoryName: trace.categoryName
+      })), createOperationId());
+      updatedCount += batch.length;
+      const updatedIds = new Set(batch.map(trace => trace.id));
+      selectedTraceIds.value = new Set([...selectedTraceIds.value].filter(id => !updatedIds.has(id)));
+      selectedTraceItems.value = new Map([...selectedTraceItems.value].filter(([id]) => !updatedIds.has(id)));
+    }
     exitManageMode();
     clearTraceCache();
     await loadPage({ reset: true });
@@ -748,9 +805,143 @@ async function confirmMarkSelectedEmpty() {
       icon: errorText.value ? "none" : "success"
     });
   } catch (error) {
-    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "更新食材状态失败", icon: "none" });
+    if (updatedCount) {
+      traceCache.clear();
+      traces.value = [];
+      tracePage.value = 1;
+      hasNext.value = false;
+      loadedMoreOnce.value = false;
+      await loadPage({ reset: true });
+    }
+    const message = error instanceof Error ? error.message : "更新食材状态失败";
+    const errorText = updatedCount ? `已更新 ${updatedCount} 项，其余更新失败：${message}` : message;
+    await uniPlatform.feedback.toast({ title: errorText, icon: "none" });
   } finally {
     updatingTraces.value = false;
+  }
+}
+
+async function loadShoppingLists(force = false) {
+  if (shoppingListLoading.value && !force) return;
+  shoppingListLoading.value = true;
+  shoppingListError.value = "";
+  try {
+    const result = await shoppingApi.listLists("ACTIVE");
+    shoppingLists.value = result.items;
+    if (selectedShoppingListId.value && !shoppingLists.value.some(item => item.id === selectedShoppingListId.value)) {
+      selectedShoppingListId.value = "";
+    }
+    if (!selectedShoppingListId.value) {
+      selectedShoppingListId.value = shoppingLists.value[0]?.id || "";
+    }
+  } catch (error) {
+    shoppingListError.value = error instanceof Error ? error.message : "清单加载失败";
+  } finally {
+    shoppingListLoading.value = false;
+  }
+}
+
+async function openShoppingSheet() {
+  if (!selectedTraceIds.value.size || shoppingSubmitting.value) return;
+  await loadShoppingLists(true);
+  if (!shoppingCreateName.value.trim()) {
+    shoppingCreateName.value = buildDefaultShoppingListName();
+  }
+  shoppingSheetVisible.value = true;
+}
+
+function closeShoppingSheet(force = false) {
+  if (shoppingSubmitting.value && !force) return;
+  shoppingSheetVisible.value = false;
+}
+
+function handleShoppingSheetAfterClose() {
+  shoppingListError.value = "";
+  shoppingCreateName.value = "";
+}
+
+async function createShoppingList() {
+  if (shoppingSubmitting.value) return;
+  shoppingSubmitting.value = true;
+  try {
+    const createdList = await shoppingApi.createList({
+      operationId: createOperationId(),
+      name: shoppingCreateName.value.trim() || null
+    });
+    shoppingLists.value = [createdList, ...shoppingLists.value.filter(item => item.id !== createdList.id)];
+    selectedShoppingListId.value = createdList.id;
+    shoppingCreateName.value = buildDefaultShoppingListName();
+    await uniPlatform.feedback.toast({ title: "已新建清单", icon: "success" });
+  } catch (error) {
+    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "创建失败", icon: "none" });
+  } finally {
+    shoppingSubmitting.value = false;
+  }
+}
+
+async function addSelectedToShoppingList() {
+  if (!selectedShoppingListId.value || shoppingSubmitting.value) return;
+  const selected = selectedTraces.value;
+  if (!selected.length) return;
+
+  shoppingSubmitting.value = true;
+  let addedCount = 0;
+  let alreadyInListTraceIds = new Set<FridgeTraceSummary["id"]>();
+  const addedTraceIds = new Set<FridgeTraceSummary["id"]>();
+  try {
+    const detail = await shoppingApi.getListDetail(selectedShoppingListId.value);
+    const existingIngredientIds = new Set(
+      detail.items
+        .filter(item => item.status !== "REMOVED" && item.ingredientId)
+        .map(item => item.ingredientId as UUID)
+    );
+    const additions = selected.filter(trace => {
+      if (trace.ingredientId && existingIngredientIds.has(trace.ingredientId)) {
+        alreadyInListTraceIds.add(trace.id);
+        return false;
+      }
+      return true;
+    });
+
+    if (!additions.length) {
+      selectedTraceIds.value = new Set();
+      selectedTraceItems.value = new Map();
+      closeShoppingSheet(true);
+      await uniPlatform.feedback.toast({ title: "所选食材已在清单中", icon: "none" });
+      return;
+    }
+
+    for (const trace of additions) {
+      await shoppingApi.createListItem(selectedShoppingListId.value, {
+        operationId: createOperationId(),
+        name: trace.name,
+        ingredientId: trace.ingredientId,
+        quantityText: null,
+        note: null
+      });
+      addedCount += 1;
+      addedTraceIds.add(trace.id);
+    }
+
+    selectedTraceIds.value = new Set();
+    selectedTraceItems.value = new Map();
+    closeShoppingSheet(true);
+    const skippedCount = selected.length - additions.length;
+    const successText = skippedCount
+      ? `已添加 ${addedCount} 项，${skippedCount} 项已在清单中`
+      : `已添加 ${addedCount} 项`;
+    await uniPlatform.feedback.toast({ title: successText, icon: "success" });
+  } catch (error) {
+    if (addedCount || alreadyInListTraceIds.size) {
+      const resolvedIds = new Set([...alreadyInListTraceIds, ...addedTraceIds]);
+      selectedTraceIds.value = new Set([...selectedTraceIds.value].filter(id => !resolvedIds.has(id)));
+      selectedTraceItems.value = new Map([...selectedTraceItems.value].filter(([id]) => !resolvedIds.has(id)));
+    }
+    const message = error instanceof Error ? error.message : "添加失败";
+    const errorText = addedCount ? `已添加 ${addedCount} 项，其余添加失败：${message}` : message;
+    await uniPlatform.feedback.toast({ title: errorText, icon: "none" });
+  } finally {
+    shoppingSubmitting.value = false;
   }
 }
 </script>
@@ -1046,23 +1237,49 @@ async function confirmMarkSelectedEmpty() {
   min-width: 0;
 }
 
-.trace-actions__mark-empty {
+.trace-actions__manage {
+  display: flex;
   flex: 1;
+  align-items: center;
+  min-width: 0;
+  gap: 20rpx;
+  padding: 0 24rpx;
+}
+
+.trace-actions__select-all {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 12rpx;
+  font-size: 24rpx;
+}
+
+.trace-actions__selected-count {
+  flex: none;
+  color: var(--color-text-secondary);
+  font-size: 22rpx;
+  white-space: nowrap;
+}
+
+.trace-actions__button {
+  flex: 1;
+  min-width: 0;
   height: 88rpx;
   margin: 0;
+  padding: 0 8rpx;
   border: 0;
   border-radius: var(--radius-pill);
-  font-size: 28rpx;
+  font-size: 24rpx;
   font-weight: 600;
   line-height: 88rpx;
 }
 
-.trace-actions__mark-empty {
-  background: var(--color-primary);
-  color: var(--button-primary-text);
+.trace-actions__button--secondary {
+  background: var(--color-surface-muted);
+  color: var(--color-text);
 }
 
-.trace-actions__mark-empty--disabled {
+.trace-actions__button--disabled {
   opacity: 0.48;
 }
 </style>

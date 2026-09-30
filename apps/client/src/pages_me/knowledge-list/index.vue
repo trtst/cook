@@ -131,7 +131,6 @@ import Skeleton from "@/components/Skeleton/Skeleton.vue";
 import { useCustomRefresher } from "@/composables/useCustomRefresher";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { buildThemePageStyle } from "@/composables/theme-page-style";
-import { useSystemInfo } from "@/composables/useSystemInfo";
 import { useTheme } from "@/composables/useTheme";
 import {
   buildKnowledgeDetailPath,
@@ -142,7 +141,6 @@ import { uniPlatform } from "@/platform/uni";
 import { knowledgeApi, type KnowledgeArticleSummary } from "../apis/knowledge";
 
 const pageStyle = usePageScrollStyle();
-const { navBarTotalHeight } = useSystemInfo();
 const { themeVars, themeClasses } = useTheme();
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const {
@@ -175,11 +173,9 @@ const scrollTop = ref(0);
 const staticChannelMeta = computed(() => getKnowledgeChannel(channelCode.value));
 const channelMeta = computed(() => serverChannel.value ?? staticChannelMeta.value);
 const showSkeleton = computed(() => loading.value && !loaded.value);
-const KNOWLEDGE_LIST_TOP = 180;
 const NAVBAR_TITLE_FADE_DISTANCE = 96;
 const navbarTitleOpacity = computed(() => {
-  const distanceToNavbar = KNOWLEDGE_LIST_TOP - (scrollTop.value + navBarTotalHeight.value);
-  return Math.min(1, Math.max(0, (NAVBAR_TITLE_FADE_DISTANCE - distanceToNavbar) / NAVBAR_TITLE_FADE_DISTANCE));
+  return Math.min(1, Math.max(0, scrollTop.value / NAVBAR_TITLE_FADE_DISTANCE));
 });
 
 onLoad((query) => {
