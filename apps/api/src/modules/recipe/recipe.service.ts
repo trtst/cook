@@ -1646,6 +1646,36 @@ export class RecipeService {
     };
   }
 
+  async deleteRecipeViewHistory(userId: UUID, operationId: OperationId, historyId: UUID): Promise<true> {
+    const requestHash = String(historyId);
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getIdempotentResult<{ deleted: true }>(
+        tx,
+        operationId,
+        "recipe:view-history:delete",
+        userId,
+        null,
+        requestHash
+      );
+      if (repeated) return true as const;
+
+      await startIdempotentOperation(tx, operationId, "recipe:view-history:delete", userId, null, requestHash);
+      const deleted = await tx.recipeViewHistory.deleteMany({ where: { id: historyId, userId } });
+      if (!deleted.count) throw new NotFoundException("浏览记录不存在");
+
+      await completeIdempotentOperation(
+        tx,
+        operationId,
+        "recipe:view-history:delete",
+        userId,
+        null,
+        requestHash,
+        { deleted: true }
+      );
+      return true as const;
+    });
+  }
+
   async getRecipeDetail(userId: UUID | null, recipeId: UUID): Promise<RecipeDetail> {
     const recipe = await this.loadReadableRecipe(this.prisma, userId, recipeId);
     const ownedRecipe = userId !== null && userId === recipe.ownerId

@@ -7,8 +7,10 @@ import { maskPhone } from "../../common/phone";
 import { hashPassword, passwordPolicyError, verifyPassword } from "../../common/security/password";
 import type {
   AuthMeResponse,
+  AuthProfileResponse,
   AuthPasswordLoginRequest,
   AuthSessionResult,
+  AuthWechatBindRequest,
   ChangeCurrentPasswordRequest,
   CompletePhoneChangeRequest,
   NewPhoneCodeSendRequest,
@@ -107,6 +109,58 @@ export class AuthService {
       reason: "PASSWORD_VALID"
     });
     return this.authSession.create(user, toSessionContext(body, context));
+  }
+
+  async bindWechatIdentity(userId: number, body: AuthWechatBindRequest, context: AuthRequestContext) {
+    // 账号已登录后才允许补绑微信身份，避免未登录静默创建账号。
+    await this.risk.assertAllowed({
+      channel: "WECHAT_PHONE",
+      operation: "SESSION",
+      ip: context.ip,
+      deviceId: body.deviceId
+    });
+
+    const identity = await this.wechatAuth.login(body.code);
+    let alreadyBound = false;
+    try {
+      await this.prisma.$transaction(async tx => {
+        const user = await tx.user.findUnique({ where: { id: userId }, select: { id: true, status: true } });
+        this.assertActiveUser(user);
+        await this.persistWechatIdentity(tx, userId, {
+          appid: identity.appid,
+          openid: identity.openid
+        });
+      });
+    } catch (error) {
+      if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002") throw error;
+
+      const identityOwner = await this.prisma.userWechatIdentity.findUnique({
+        where: { appid_openid: { appid: identity.appid, openid: identity.openid } },
+        select: { userId: true }
+      });
+      if (identityOwner?.userId === userId) {
+        alreadyBound = true;
+      } else {
+        if (identityOwner) throw new BadRequestException("微信已绑定其他账号");
+
+        const accountIdentity = await this.prisma.userWechatIdentity.findUnique({
+          where: { userId_appid: { userId, appid: identity.appid } },
+          select: { openid: true }
+        });
+        if (accountIdentity) throw new BadRequestException("当前账号已关联其他微信");
+
+        throw new BadRequestException("微信身份绑定冲突，请重试");
+      }
+    }
+    await this.risk.record({
+      scene: "WECHAT_IDENTITY_BIND",
+      openid: identity.openid,
+      ip: context.ip,
+      deviceId: body.deviceId,
+      decision: "ALLOW",
+      reason: alreadyBound ? "IDENTITY_ALREADY_BOUND" : "IDENTITY_BOUND"
+    });
+    return { wechatLinked: true as const };
   }
 
   async setPassword(userId: number, body: SetPasswordRequest) {
@@ -253,11 +307,11 @@ export class AuthService {
     return this.smsAuth.sendPhoneChangeCode(body.phone, { ip: context.ip, deviceId: body.deviceId });
   }
 
-  async bindCurrentPhone(userId: number, operationId: OperationId, body: StartPhoneChangeRequest): Promise<AuthMeResponse> {
+  async bindCurrentPhone(userId: number, operationId: OperationId, body: StartPhoneChangeRequest): Promise<AuthProfileResponse> {
     assertPhone(body.phone);
     const requestHash = JSON.stringify({ phone: body.phone, code: body.code });
     const updated = await this.prisma.$transaction(async tx => {
-      const repeated = await getIdempotentResult<AuthMeResponse>(tx, operationId, "user:phone:bind", userId, null, requestHash);
+      const repeated = await getIdempotentResult<AuthProfileResponse>(tx, operationId, "user:phone:bind", userId, null, requestHash);
       if (repeated) return repeated;
       await startIdempotentOperation(tx, operationId, "user:phone:bind", userId, null, requestHash);
 
@@ -317,11 +371,11 @@ export class AuthService {
     return updated;
   }
 
-  async completePhoneChange(userId: number, operationId: OperationId, body: CompletePhoneChangeRequest): Promise<AuthMeResponse> {
+  async completePhoneChange(userId: number, operationId: OperationId, body: CompletePhoneChangeRequest): Promise<AuthProfileResponse> {
     assertPhone(body.phone);
     const requestHash = JSON.stringify({ changeToken: body.changeToken, phone: body.phone, code: body.code });
     const updated = await this.prisma.$transaction(async tx => {
-      const repeated = await getIdempotentResult<AuthMeResponse>(tx, operationId, "user:phone-change:complete", userId, null, requestHash);
+      const repeated = await getIdempotentResult<AuthProfileResponse>(tx, operationId, "user:phone-change:complete", userId, null, requestHash);
       if (repeated) return repeated;
       await startIdempotentOperation(tx, operationId, "user:phone-change:complete", userId, null, requestHash);
 
@@ -531,7 +585,7 @@ export class AuthService {
     const user = await this.prisma.$transaction(async tx => {
       const currentUser = await this.findOrCreateUserByPhone(tx, phoneResult.phone);
       if (currentUser.status !== "ACTIVE") throw new UnauthorizedException("账号不可用");
-      await this.bindWechatIdentity(tx, currentUser.id, {
+      await this.persistWechatIdentity(tx, currentUser.id, {
         appid: wechatSession.appid,
         openid: wechatSession.openid,
         unionid: wechatSession.unionid
@@ -594,7 +648,7 @@ export class AuthService {
           where: { wechatSessionIdHash: hashSecret(body.wechatSessionId) }
         });
         this.assertWechatSession(wechatSession);
-        await this.bindWechatIdentity(tx, currentUser.id, {
+        await this.persistWechatIdentity(tx, currentUser.id, {
           appid: wechatSession.appid,
           openid: wechatSession.openid,
           unionid: wechatSession.unionid
@@ -635,6 +689,13 @@ export class AuthService {
       select: { id: true, uid: true, nickname: true, avatarUrl: true, phone: true, passwordHash: true, status: true }
     });
     this.assertActiveUser(user);
+    const appid = process.env.WECHAT_APP_ID?.trim() || "";
+    const wechatIdentity = appid
+      ? await this.prisma.userWechatIdentity.findUnique({
+          where: { userId_appid: { userId, appid } },
+          select: { id: true }
+        })
+      : null;
     return {
       id: user.id,
       uid: user.uid,
@@ -642,7 +703,8 @@ export class AuthService {
       avatarUrl: user.avatarUrl,
       phone: maskPhone(user.phone),
       hasPassword: Boolean(user.passwordHash),
-      status: user.status
+      status: user.status,
+      wechatLinked: Boolean(wechatIdentity)
     };
   }
 
@@ -719,10 +781,10 @@ export class AuthService {
     throw new BadRequestException("创建用户失败，请稍后重试");
   }
 
-  private async bindWechatIdentity(
+  private async persistWechatIdentity(
     db: Pick<Prisma.TransactionClient, "user" | "userWechatIdentity">,
     userId: number,
-    identity: Pick<WechatIdentitySession, "appid" | "openid" | "unionid">
+    identity: Pick<WechatIdentitySession, "appid" | "openid"> & { unionid?: string | null }
   ) {
     const existing = await db.userWechatIdentity.findUnique({
       where: { appid_openid: { appid: identity.appid, openid: identity.openid } }
@@ -730,10 +792,12 @@ export class AuthService {
     if (existing && existing.userId !== userId) throw new BadRequestException("微信已绑定其他账号");
 
     if (existing) {
-      await db.userWechatIdentity.update({
-        where: { id: existing.id },
-        data: { unionid: identity.unionid }
-      });
+      if (identity.unionid) {
+        await db.userWechatIdentity.update({
+          where: { id: existing.id },
+          data: { unionid: identity.unionid }
+        });
+      }
     } else {
       await db.userWechatIdentity.create({
         data: {

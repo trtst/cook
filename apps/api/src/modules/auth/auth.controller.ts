@@ -10,8 +10,7 @@ import {
   AuthSetPasswordDto,
   AuthSmsLoginDto,
   AuthSmsSendDto,
-  AuthWechatPhoneLoginDto,
-  AuthWechatSessionDto,
+  AuthWechatBindDto,
   LogoutAuthSessionDto,
   RefreshAuthSessionDto
 } from "../../contracts/dtos";
@@ -22,7 +21,7 @@ import {
   AuthSessionResultModel,
   AuthSmsSendResultModel,
   ChangePasswordResultModel,
-  WechatSessionResultModel
+  AuthWechatBindResultModel
 } from "../../contracts/openapi";
 import { AuthService } from "./auth.service";
 
@@ -31,18 +30,12 @@ import { AuthService } from "./auth.service";
 export class AuthController {
   constructor(@Inject(AuthService) private readonly authService: AuthService) {}
 
-  @Post("wechat/session")
-  @UseGuards(LoginRateLimitGuard)
-  @ApiOkModel(WechatSessionResultModel, "识别当前微信身份并返回已绑定会话或短期手机号授权会话")
-  wechatSession(@Req() request: RequestWithContext, @Body() body: AuthWechatSessionDto) {
-    return this.authService.wechatSession(body, request.context).then(result => ok(result));
-  }
-
-  @Post("wechat/phone-login")
-  @UseGuards(LoginRateLimitGuard)
-  @ApiOkModel(AuthSessionResultModel, "使用微信手机号组件授权完成登录或手机号账号绑定")
-  loginWithWechatPhone(@Req() request: RequestWithContext, @Body() body: AuthWechatPhoneLoginDto) {
-    return this.authService.loginWithWechatPhone(body, request.context).then(result => ok(result));
+  @Post("wechat/bind")
+  @UseGuards(UserAuthGuard, LoginRateLimitGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiOkModel(AuthWechatBindResultModel, "将当前微信小程序身份关联到已登录账号")
+  bindWechatIdentity(@Req() request: RequestWithUser & RequestWithContext, @Body() body: AuthWechatBindDto) {
+    return this.authService.bindWechatIdentity(request.user.userId, body, request.context).then(result => ok(result));
   }
 
   @Post("sms/send")

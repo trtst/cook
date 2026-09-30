@@ -43,6 +43,7 @@ import {
 import {
   ApiOkArray,
   ApiOkModel,
+  ApiOkNull,
   ApiOkPage,
   CollectionListModel,
   CollectedRecipeDetailModel,
@@ -520,6 +521,19 @@ export class RecipeController {
   @ApiOkPage(RecipeViewHistoryItemModel, "分页读取当前用户最近查看的菜谱")
   listRecipeViewHistory(@Req() request: RequestWithUser, @Query() query: PageQueryDto) {
     return this.recipeService.listRecipeViewHistory(request.user.userId, query.page, query.pageSize).then(result => ok(result));
+  }
+
+  @Post("users/me/recipe-history/:historyId/delete")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkNull("删除当前用户的一条菜谱浏览记录")
+  deleteRecipeViewHistory(
+    @Req() request: RequestWithUser,
+    @ReadIdempotencyKey() operationId: string,
+    @Param("historyId", ParseIntPipe) historyId: number
+  ) {
+    return this.recipeService.deleteRecipeViewHistory(request.user.userId, operationId, historyId).then(() => ok(null));
   }
 
   @Get("recipes/:recipeId")
