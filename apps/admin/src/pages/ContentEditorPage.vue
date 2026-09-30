@@ -8,6 +8,7 @@ import { contentApi, type AdminSiteContentChannelItem, type AdminSiteContentDeta
 import { useAdminHeaderState } from "@/composables/useAdminHeader";
 import { sanitizeContentHtml } from "@/utils/content-html";
 import { formatDateTime } from "@/utils/date";
+import { processImageFile } from "@/utils/image-processing";
 import { markdownToRichText } from "@/utils/markdown-rich-text";
 import { createOperationId } from "@/utils/operation-id";
 
@@ -18,7 +19,8 @@ const headerState = useAdminHeaderState();
 const loading = ref(false);
 const saving = ref(false);
 const statusSaving = ref(false);
-const imageUploading = ref(false);
+const pendingImageUploads = ref(0);
+const imageUploading = computed(() => pendingImageUploads.value > 0);
 const channels = ref<AdminSiteContentChannelItem[]>([]);
 const contentId = ref<number | null>(null);
 const currentStatus = ref<SiteContentStatus>("DRAFT");
@@ -27,6 +29,9 @@ const updatedAt = ref<string | null>(null);
 const fileInputRef = ref<HTMLInputElement | null>(null);
 const markdownInputRef = ref<HTMLInputElement | null>(null);
 const publicArticleChannelCodes = new Set(["KITCHEN", "COOK", "FOOD"]);
+// 内容图片先在浏览器端统一处理为 4:3，最大宽度 1875 像素后再上传。
+const contentImageMaxWidth = 375 * 5;
+const contentImageQuality = 0.8;
 const sourceMode = computed(() => {
   const raw = Array.isArray(route.query.source) ? route.query.source[0] : route.query.source;
   return raw === "official-message" ? "official-message" : "";
@@ -243,6 +248,11 @@ function validateForm() {
 }
 
 async function persistContent() {
+  if (imageUploading.value) {
+    ElMessage.warning("请等待图片处理完成后再保存或发布");
+    return null;
+  }
+
   const payload = validateForm();
   if (!payload) return null;
 
@@ -308,13 +318,53 @@ async function updateStatus(status: SiteContentStatus) {
 }
 
 async function uploadImage(file: File) {
-  imageUploading.value = true;
+  if (saving.value || statusSaving.value) {
+    throw new Error("内容正在保存，请稍后再上传图片");
+  }
+  pendingImageUploads.value += 1;
   try {
-    const result = await contentApi.uploadImage(file, createOperationId());
+    const sourceUrl = URL.createObjectURL(file);
+    let processedFile: File;
+    try {
+      const image = await loadImage(sourceUrl);
+      const width = image.naturalWidth || image.width;
+      const height = image.naturalHeight || image.height;
+      if (width * 3 !== height * 4) {
+        throw new Error("图片必须为 4:3 比例，否则无法上传");
+      }
+
+      const outputWidth = Math.floor(Math.min(width, contentImageMaxWidth) / 4) * 4;
+      const outputHeight = (outputWidth * 3) / 4;
+      processedFile = await processImageFile({
+        source: image,
+        sourceRect: { x: 0, y: 0, width, height },
+        outputWidth,
+        outputHeight,
+        quality: contentImageQuality,
+        fileName: "site-content.jpg"
+      });
+    } finally {
+      URL.revokeObjectURL(sourceUrl);
+    }
+
+    const result = await contentApi.uploadImage(processedFile, createOperationId());
     return result.imageUrl;
   } finally {
-    imageUploading.value = false;
+    pendingImageUploads.value -= 1;
   }
+}
+
+function loadImage(url: string) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = reject;
+    image.src = url;
+  });
+}
+
+function showImageUploadError(message: string) {
+  ElMessage.error(message);
 }
 
 function chooseCoverImage() {
@@ -452,9 +502,10 @@ onMounted(() => {
                   <div v-else class="cover-editor__empty">当前未设置封面图</div>
                 </div>
                 <div class="cover-editor__actions">
-                  <el-button type="primary" :icon="Upload" :loading="imageUploading" @click="chooseCoverImage">上传封面</el-button>
-                  <el-button :icon="Picture" @click="form.coverImageUrl = ''">清空</el-button>
-                  <el-input v-model="form.coverImageUrl" placeholder="也可直接粘贴图片 URL" />
+                  <el-button type="primary" :icon="Upload" :loading="imageUploading" :disabled="saving || statusSaving" @click="chooseCoverImage">上传封面</el-button>
+                  <el-button :icon="Picture" :disabled="saving || statusSaving || imageUploading" @click="form.coverImageUrl = ''">清空</el-button>
+                  <el-input v-model="form.coverImageUrl" :disabled="saving || statusSaving || imageUploading" placeholder="也可直接粘贴图片 URL" />
+                  <div class="table-hint">原图大小不限，必须为 4:3；宽度超过 1875px 会等比例缩小，比例不符会拒绝上传。封面和正文图片都适用。</div>
                 </div>
               </div>
             </el-form-item>
@@ -465,15 +516,15 @@ onMounted(() => {
                   <el-button v-if="!isPage" size="small" :icon="Upload" @click="chooseMarkdownFile">导入 Markdown</el-button>
                 </div>
               </template>
-              <RichTextEditor v-model="form.bodyHtml" :upload-image="uploadImage" @update:text="form.bodyText = $event" />
+              <RichTextEditor v-model="form.bodyHtml" :disabled="saving || statusSaving" :upload-image="uploadImage" @upload-error="showImageUploadError" @update:text="form.bodyText = $event" />
             </el-form-item>
           </div>
         </el-form>
 
         <div class="editor-actions">
-          <el-button type="primary" :loading="saving" @click="saveDraft">保存草稿</el-button>
-          <el-button type="success" :loading="statusSaving" @click="updateStatus('PUBLISHED')">发布</el-button>
-          <el-button v-if="isEdit" type="warning" :loading="statusSaving" @click="updateStatus('UNLISTED')">下架</el-button>
+          <el-button type="primary" :loading="saving" :disabled="imageUploading || statusSaving" @click="saveDraft">保存草稿</el-button>
+          <el-button type="success" :loading="statusSaving" :disabled="imageUploading || saving" @click="updateStatus('PUBLISHED')">发布</el-button>
+          <el-button v-if="isEdit" type="warning" :loading="statusSaving" :disabled="imageUploading || saving" @click="updateStatus('UNLISTED')">下架</el-button>
         </div>
       </div>
 

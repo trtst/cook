@@ -22,6 +22,7 @@ const props = withDefaults(
 const emit = defineEmits<{
   "update:modelValue": [value: string];
   "update:text": [value: string];
+  "upload-error": [message: string];
 }>();
 
 const rootRef = ref<HTMLDivElement | null>(null);
@@ -51,13 +52,18 @@ async function handleImageChange(event: Event) {
   const file = input?.files?.[0] ?? null;
   if (!file || !props.uploadImage || !quill) return;
 
-  const url = await props.uploadImage(file);
-  const range = quill.getSelection(true);
-  const index = range?.index ?? quill.getText().length;
-  quill.insertEmbed(index, "image", url, "user");
-  quill.setSelection(index + 1, 0);
-  if (input) input.value = "";
-  emitChange();
+  try {
+    const url = await props.uploadImage(file);
+    const range = quill.getSelection(true);
+    const index = range?.index ?? quill.getText().length;
+    quill.insertEmbed(index, "image", url, "user");
+    quill.setSelection(index + 1, 0);
+    emitChange();
+  } catch (error) {
+    emit("upload-error", error instanceof Error ? error.message : "图片上传失败");
+  } finally {
+    if (input) input.value = "";
+  }
 }
 
 onMounted(async () => {
