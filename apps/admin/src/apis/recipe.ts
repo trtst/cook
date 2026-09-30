@@ -122,6 +122,30 @@ export interface AdminRecipeImageUploadResult {
   };
 }
 
+export interface AdminRecipeImageExportItem {
+  recipeId: UUID;
+  contentVersionId: UUID;
+  title: string;
+  description: string;
+  keywords: string[];
+  tips: string;
+  steps: Array<{ order: number; imagePrompt: string | null }>;
+  wikiSteps: Array<{ order: number; imagePrompt: string | null }>;
+}
+
+export interface AdminRecipeImageBackfillResult {
+  recipeId: UUID;
+  contentVersionId: UUID;
+  nextContentVersionId: UUID;
+  updatedCount: number;
+  items: Array<{
+    fileName: string;
+    target: "COVER" | "RECIPE_STEP" | "WIKI_STEP";
+    order: number | null;
+    imageUrl: string;
+  }>;
+}
+
 export interface AdminRecipeDetail {
   id: UUID;
   title: string;
@@ -495,6 +519,18 @@ export const recipeApi = {
   list(query: AdminRecipeQuery) {
     return requestData<PageResult<AdminRecipeSummary>>("/admin/recipes", {
       query: { ...query }
+    });
+  },
+  exportImages(query: Pick<AdminRecipeQuery, "page" | "pageSize" | "keyword" | "status" | "categoryId">) {
+    return requestData<PageResult<AdminRecipeImageExportItem>>("/admin/recipes/export", {
+      query: { ...query }
+    });
+  },
+  backfillImages(recipeId: UUID, images: Array<{ fileName: string; tempKey: string }>, operationId: OperationId) {
+    return requestData<AdminRecipeImageBackfillResult>(`/admin/recipes/${encodeURIComponent(String(recipeId))}/images/backfill`, {
+      method: "POST",
+      body: { images },
+      idempotencyKey: operationId
     });
   },
   listWiki(query: AdminRecipeWikiQuery) {
