@@ -234,11 +234,20 @@ export interface RefreshAuthSessionRequest {
 
 export interface LogoutAuthSessionRequest extends RefreshAuthSessionRequest {}
 
-export interface AuthMeResponse extends SessionUser {
+export interface AuthProfileResponse extends SessionUser {
   id: UUID;
   phone: string | null;
   hasPassword: boolean;
   status: string;
+}
+
+export interface AuthMeResponse extends AuthProfileResponse {
+  wechatLinked: boolean;
+}
+
+export interface AuthWechatBindRequest {
+  code: string;
+  deviceId: string;
 }
 
 export interface LoginImageConfig {
@@ -932,6 +941,7 @@ export interface AdminSiteContentSummary {
   heroNote: string | null;
   coverImageUrl: string | null;
   publishedAt: IsoDateTime | null;
+  scheduledPublishAt: IsoDateTime | null;
   effectiveAt: IsoDateTime | null;
   sortOrder: number;
   version: number;
@@ -1005,6 +1015,12 @@ export interface UpdateAdminSiteContentRequest extends CreateAdminSiteContentReq
 export interface UpdateAdminSiteContentStatusRequest {
   operationId: OperationId;
   status: "DRAFT" | "PUBLISHED" | "UNLISTED";
+  expectedVersion: number;
+}
+
+export interface ScheduleAdminSiteContentRequest {
+  operationId: OperationId;
+  scheduledPublishAt: IsoDateTime | null;
   expectedVersion: number;
 }
 
@@ -1916,6 +1932,36 @@ export interface AdminRecipeWikiExportDocument {
 export interface AdminRecipeWikiBatchExportDocument {
   schemaVersion: "recipe.wiki.batch.v1";
   recipes: Array<Omit<AdminRecipeWikiExportDocument, "schemaVersion">>;
+}
+
+export interface AdminRecipeImageExportItem {
+  contentVersionId: UUID;
+  title: string;
+  description: string;
+  keywords: string[];
+  tips: string;
+  steps: Array<{ order: number; imagePrompt: string | null }>;
+  wikiSteps: Array<{ order: number; imagePrompt: string | null }>;
+}
+
+export type AdminRecipeImageExport = Record<string, AdminRecipeImageExportItem>;
+
+export interface AdminRecipeImageBackfillRequest {
+  operationId: OperationId;
+  images: Array<{ fileName: string; tempKey: string }>;
+}
+
+export interface AdminRecipeImageBackfillResult {
+  recipeId: UUID;
+  contentVersionId: UUID;
+  nextContentVersionId: UUID;
+  updatedCount: number;
+  items: Array<{
+    fileName: string;
+    target: "COVER" | "RECIPE_STEP" | "WIKI_STEP";
+    order: number | null;
+    imageUrl: string;
+  }>;
 }
 
 export interface AdminRecipeWikiRejectResult {

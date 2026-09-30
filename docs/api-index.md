@@ -18,8 +18,7 @@
 
 | 模块 | 方法 | 路径 | 说明 |
 | --- | --- | --- | --- |
-| Auth | POST | `/auth/wechat/session` | 识别微信身份，返回已绑定会话或短期手机号授权会话 |
-| Auth | POST | `/auth/wechat/phone-login` | 使用微信手机号组件授权登录或绑定手机号账号 |
+| Auth | POST | `/auth/wechat/bind` | 将微信小程序身份关联到当前登录账号 |
 | Auth | POST | `/auth/sms/send` | 发送真实短信登录验证码，仅支持 `scene=LOGIN` |
 | Auth | POST | `/auth/sms/login` | 使用短信验证码登录或创建手机号账号 |
 | Auth | POST | `/auth/password/login` | 使用手机号密码登录 |
@@ -27,7 +26,7 @@
 | Auth | POST | `/auth/password/change` | 修改当前手机号账号密码 |
 | Auth | POST | `/auth/refresh` | 轮换 refresh token 并刷新会话 |
 | Auth | POST | `/auth/logout` | 吊销 refresh token |
-| Auth | GET | `/auth/me` | 读取当前登录用户的最小认证资料 |
+| Auth | GET | `/auth/me` | 读取当前登录用户的最小认证资料和微信关联状态 |
 | Home | GET | `/home-entries` | 首页快捷入口四宫格：只返回当前已上架的 `QUICK_1 ... QUICK_4` |
 | Home | GET | `/home/week-overview` | 首页左侧“这周吃饭安排”状态聚合主卡 |
 | HomeTopic | GET | `/home-topics/current` | 当前本周灵感专题页 |
@@ -73,6 +72,7 @@
 | AdminMedal | POST | `/admin/medal-templates` | 后台新增勋章模板 |
 | AdminMedal | PUT | `/admin/medal-templates/{templateId}` | 后台编辑勋章模板 |
 | AdminMedal | POST | `/admin/medal-templates/{templateId}/status` | 后台切换勋章模板状态 |
+| AdminContent | POST | `/admin/content/{contentId}/schedule` | 预约或取消知识文章的定时发布 |
 | AdminMedal | POST | `/admin/medal-templates/{templateId}/image/{imageType}` | 后台上传或替换勋章图片，`imageType=earned/locked`，当前支持 `JPG/PNG/WEBP/SVG` |
 | AdminMedal | PUT | `/admin/medal-templates/{templateId}/image/{imageType}` | 设置已配置静态资源域名下的勋章图片地址，`imageType=earned/locked` |
 | AdminMedal | DELETE | `/admin/medal-templates/{templateId}/image/{imageType}` | 后台清空勋章图片，`imageType=earned/locked` |
@@ -99,6 +99,7 @@
 | Recipe | GET | `/recipes` | 当前用户已发布菜谱分页 |
 | Recipe | POST | `/recipes/from-inspiration` | 从灵感详情保存到私房菜，供加入计划流程复用 |
 | Recipe | GET | `/recipes/{recipeId}` | 可选登录读取菜谱详情；匿名/非持有人仅返回公开正文，持有人额外返回 `personal` |
+| Recipe | POST | `/users/me/recipe-history/{historyId}/delete` | 只删除当前用户自己的菜谱浏览记录 |
 | Recipe | POST | `/recipes/{recipeId}/recommendations` | 推荐当前个人菜谱到系统菜谱审核 |
 | Recipe | POST | `/recipe-recommendations/{recommendationId}/withdraw` | 撤回待审核的菜谱推荐 |
 | Recipe | POST | `/recipes/reorder` | 当前分类下重排我的菜谱 |
@@ -204,6 +205,8 @@
 | Shopping | GET | `/meal-plans/{planItemId}/shopping-gap` | 预览指定计划餐次的完整准备需求 |
 | Shopping | GET | `/dining-events/{eventId}/shopping-gap` | 预览指定饭局的完整准备需求 |
 | AdminRecipe | GET | `/admin/recipes` | 后台系统菜谱列表 |
+| AdminRecipe | GET | `/admin/recipes/export` | 按筛选条件分页读取菜谱图片导出资料 |
+| AdminRecipe | POST | `/admin/recipes/{recipeId}/images/backfill` | 按文件名回填菜谱封面、正文步骤与 Wiki 步骤图片地址 |
 | AdminRecipe | DELETE | `/admin/inspiration-categories/{categoryId}` | 删除空的系统菜谱分类 |
 | AdminRecipe | POST | `/admin/recipes` | 后台新增系统菜谱 |
 | AdminRecipe | GET | `/admin/recipes/{recipeId}` | 后台菜谱详情 |

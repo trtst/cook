@@ -153,6 +153,22 @@ export class AuthWechatSessionDto {
   deviceId!: string;
 }
 
+export class AuthWechatBindDto {
+  @ApiProperty({ example: "081xYfll2l7mBh4sFEnl2H0jQY0xYfli" })
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(128)
+  code!: string;
+
+  @ApiProperty({ example: "device-8c5c" })
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(128)
+  deviceId!: string;
+}
+
 export class AuthWechatPhoneLoginDto {
   @ApiProperty({ example: "short-wechat-session" })
   @Transform(({ value }) => trimString(value))
@@ -2722,6 +2738,44 @@ export class AdminRecipeQueryDto extends PageQueryDto {
   status?: string;
 }
 
+export class AdminRecipeExportQueryDto extends PageQueryDto {
+  @ApiPropertyOptional({ example: resourceIdExample })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  categoryId?: number;
+
+  @ApiPropertyOptional({ example: "ACTIVE", enum: ["ACTIVE", "RECYCLED", "BLOCKED", "DELETED"] })
+  @IsOptional()
+  @IsIn(["ACTIVE", "RECYCLED", "BLOCKED", "DELETED"])
+  status?: string;
+}
+
+export class AdminRecipeImageBackfillFileDto {
+  @ApiProperty({ example: "10000002_10000001_step1.jpg" })
+  @IsString()
+  @MaxLength(180)
+  @Matches(/^\d+_\d+(?:_step(?:_wiki)?\d+)?\.jpg$/i)
+  fileName!: string;
+
+  @ApiProperty({ example: "f436aa44-1868-4f52-9c62-a42d74911172.jpg" })
+  @IsString()
+  @MaxLength(80)
+  @Matches(/^[a-z0-9-]+\.(png|jpg|jpeg|webp)$/i)
+  tempKey!: string;
+}
+
+export class AdminRecipeImageBackfillDto {
+  @ApiProperty({ type: [AdminRecipeImageBackfillFileDto], minItems: 1, maxItems: 100 })
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(100)
+  @ValidateNested({ each: true })
+  @Type(() => AdminRecipeImageBackfillFileDto)
+  images!: AdminRecipeImageBackfillFileDto[];
+}
+
 export class AdminRecipeWikiQueryDto extends PageQueryDto {
 }
 
@@ -4321,6 +4375,20 @@ export class UpdateAdminSiteContentStatusDto extends OperationDto {
   @ApiProperty({ enum: siteContentStatusValues })
   @IsIn(siteContentStatusValues)
   status!: "DRAFT" | "PUBLISHED" | "UNLISTED";
+
+  @ApiProperty({ minimum: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  expectedVersion!: number;
+}
+
+export class ScheduleAdminSiteContentDto extends OperationDto {
+  @ApiProperty({ type: String, format: "date-time", nullable: true, pattern: "(?:Z|[+-]\\d{2}:\\d{2})$" })
+  @ValidateIf((_object, value) => value !== null)
+  @IsISO8601({ strict: true })
+  @Matches(/(?:Z|[+-]\d{2}:\d{2})$/i, { message: "scheduledPublishAt 必须包含时区" })
+  scheduledPublishAt!: string | null;
 
   @ApiProperty({ minimum: 1 })
   @Type(() => Number)

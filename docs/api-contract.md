@@ -228,8 +228,7 @@ interface StorageUsageSummary {
 ### Auth 与 User
 
 ```text
-POST /auth/wechat/session
-POST /auth/wechat/phone-login
+POST /auth/wechat/bind
 POST /auth/sms/send
 POST /auth/sms/login
 POST /auth/password/login
@@ -263,14 +262,8 @@ POST /users/me/phone/change-complete
 ```
 
 ```ts
-interface WechatSessionRequest {
+interface AuthWechatBindRequest {
   code: string;
-  deviceId: string;
-}
-
-interface WechatPhoneLoginRequest {
-  wechatSessionId: string;
-  phoneCode: string;
   deviceId: string;
 }
 
@@ -284,7 +277,6 @@ interface SmsLoginRequest {
   phone: string;
   code: string;
   deviceId: string;
-  wechatSessionId?: string;
 }
 
 interface PasswordLoginRequest {
@@ -320,10 +312,9 @@ interface AuthSessionResult {
   user: AuthSessionUser;
 }
 
-type WechatSessionResult =
-  | { status: "BOUND"; session: AuthSessionResult; wechatSessionId: null; retryAfterSeconds: null }
-  | { status: "UNBOUND"; session: null; wechatSessionId: string; retryAfterSeconds: null }
-  | { status: "BLOCKED"; session: null; wechatSessionId: null; retryAfterSeconds: number | null };
+interface AuthWechatBindResult {
+  wechatLinked: true;
+}
 
 interface SmsSendResult {
   cooldownSeconds: number;
@@ -359,7 +350,7 @@ interface CompletePhoneChangeRequest {
 
 旧的 `/auth/login`、`/auth/code-send`、`/auth/code-login` 和 `/auth/wechat-login` 已从当前实现移除，不提供兼容别名。登录短信验证码只支持 `scene="LOGIN"`；换绑手机号使用用户域专用接口和 `PHONE_CHANGE` 服务端场景，不复用登录路径。
 
-`/auth/wechat/session` 只识别微信身份：已绑定身份直接返回完整会话，未绑定身份返回短期 `wechatSessionId`，不会提前创建用户。随后小程序通过微信 `getPhoneNumber` 组件取得 `phoneCode`，提交 `/auth/wechat/phone-login` 完成手机号账号创建或绑定微信身份。
+小程序只使用短信验证码或手机号密码建立炊火记账号会话。登录成功后，客户端查询 `/auth/me.wechatLinked`；未关联时调用 `wx.login / uni.login` 获取一次性 `code`，并携带当前账号 Bearer token 提交 `/auth/wechat/bind`。服务端通过微信 `code2session` 获取当前小程序 `openid`，将身份唯一关联到当前账号；响应只返回 `wechatLinked=true`，不返回 `openid / unionid / session_key`。绑定失败不会撤销账号登录，详情页点击微信提醒时会重新检查关联并尝试补绑，成功后再发起订阅授权。未登录启动不会调用微信身份接口，也不会静默建立会话。
 
 `/auth/logout` 吊销 refresh token，成功时 `data=null`；`/auth/refresh` 每次轮换 refresh token。refresh token 仅以哈希形式落库，微信 `session_key` 仅在服务端短期使用并以哈希形式保存。
 
@@ -368,6 +359,7 @@ interface AuthMeResponse extends SessionUser {
   phone: string | null;
   hasPassword: boolean;
   status: "ACTIVE" | "DISABLED";
+  wechatLinked: boolean;
 }
 
 interface AppConfigResponse {
@@ -606,11 +598,9 @@ interface RedeemMembershipCodeResult {
 
 `POST /users/me/phone/bind` 仅用于当前账号尚未绑定手机号时绑定手机号，提交手机号和登录短信验证码，必须携带 `Idempotency-Key`。已绑定账号更换手机号必须走换绑流程：`change-current-code` 先按当前绑定手机号、短信频控和 30 天限制发送原手机号验证码；`change-start` 消费原手机号验证码并返回短期 `changeToken`，必须携带 `Idempotency-Key`；`change-new-code` 提交 `changeToken` 后发送新手机号验证码；`change-complete` 提交 `changeToken`、新手机号和新验证码，必须携带 `Idempotency-Key`，在事务内完成唯一性校验、换绑、换绑时间记录和审计。一个账号 30 天内只能更换一次手机号。
 
-`POST /auth/wechat/session` 是当前小程序的微信身份识别入口。客户端先通过微信 `wx.login / uni.login` 获取一次性 `code`，服务端调用微信 `code2session` 识别微信身份；已绑定身份直接返回 `BOUND` 和完整会话，未绑定身份返回短期 `wechatSessionId`，`BLOCKED` 则返回风控冷却信息。响应不返回 `openid / unionid / session_key` 等微信身份细节，也不会在未绑定时提前创建用户。
+`POST /auth/wechat/bind` 仅允许当前登录用户调用，请求体为微信登录 code 与设备 ID。服务端调用微信 `code2session`，在事务内按 `appid + openid` 唯一性将身份关联到当前账号，只保存提醒所需的 AppID 与 OpenID；如果该 OpenID 已属于其他站内账号则返回业务 `code=400`，不自动合并账号。微信配置缺失或微信侧不可达时返回业务 `code=503`；微信 code 无效时返回业务 `code=400`，不暴露外部凭据。`GET /auth/me` 返回 `wechatLinked`，只表示当前账号是否关联本小程序身份，不返回 OpenID。
 
-`POST /auth/wechat/phone-login` 接收微信 `getPhoneNumber` 组件返回的一次性 `phoneCode`，消费短期 `wechatSessionId`，按授权手机号创建或复用唯一手机号账号，并在同一事务内绑定微信身份后签发完整会话。微信配置缺失或微信侧不可达时返回业务 `code=503`；微信 code 或手机号授权 code 无效时返回业务 `code=400`，不暴露外部凭据。
-
-`POST /auth/sms/send` 和 `POST /auth/sms/login` 是手机号短信兜底链路。发码请求固定为 `phone + scene=LOGIN + deviceId`，由服务端调用真实短信认证 provider；当前个人资质阶段使用阿里云号码认证服务 PNVS 短信认证，验证码由平台生成并由平台核验。验证码有效期为 5 分钟、60 秒冷却、只能消费一次，并按手机号 / IP / 设备做频控；服务端不保存明文验证码，只保存发送挑战流水、过期时间、消费状态、IP 和设备事实。短信登录成功后按手机号创建或复用账号，也可在携带有效微信短会话时完成身份绑定。短信验证码登录错误和密码登录错误共同进入登录失败风控：同一手机号、IP 或设备在 10 分钟内连续 3 次登录失败时限制登录 1 分钟；1 分钟内累计失败超过 10 次时限制登录 10 分钟；成功登录后清除该手机号、IP 和设备的连续失败计数。风控限制返回业务 `code=429` 和 `retryAfterSeconds`。
+`POST /auth/sms/send` 和 `POST /auth/sms/login` 是手机号短信登录链路。发码请求固定为 `phone + scene=LOGIN + deviceId`，由服务端调用真实短信认证 provider；当前个人资质阶段使用阿里云号码认证服务 PNVS 短信认证，验证码由平台生成并由平台核验。验证码有效期为 5 分钟、60 秒冷却、只能消费一次，并按手机号 / IP / 设备做频控；服务端不保存明文验证码，只保存发送挑战流水、过期时间、消费状态、IP 和设备事实。短信登录成功后按手机号创建或复用账号，不承担微信身份绑定。短信验证码登录错误和密码登录错误共同进入登录失败风控：同一手机号、IP 或设备在 10 分钟内连续 3 次登录失败时限制登录 1 分钟；1 分钟内累计失败超过 10 次时限制登录 10 分钟；成功登录后清除该手机号、IP 和设备的连续失败计数。风控限制返回业务 `code=429` 和 `retryAfterSeconds`。
 
 `POST /auth/password/login` 使用 `phone + password + deviceId` 登录，不消耗短信或微信手机号授权额度，但仍受账号安全风控限制。`POST /auth/password/set` 为当前账号设置初始密码，`POST /auth/password/change` 修改当前密码；设置初始密码和修改新密码均执行 8-20 位、字母 / 数字 / 符号任意两类的统一强度规则，登录密码本身只做哈希比对和登录失败风控。密码只以哈希形式保存。上述登录方式最终都签发统一的 `accessToken + refreshToken` 会话。
 
@@ -724,6 +714,7 @@ GET  /admin/content/{contentId}
 POST /admin/content
 PUT  /admin/content/{contentId}
 POST /admin/content/{contentId}/status
+POST /admin/content/{contentId}/schedule
 DELETE /admin/content/{contentId}
 POST /admin/content/images
 GET  /static/uploads/material-store/{fileName}
@@ -906,6 +897,7 @@ GET  /admin/content/{contentId}
 POST /admin/content
 PUT  /admin/content/{contentId}
 POST /admin/content/{contentId}/status
+POST /admin/content/{contentId}/schedule
 POST /admin/content/images
 GET  /site-contents/official-messages
 GET  /site-contents/official-messages/{contentId}
@@ -919,9 +911,11 @@ GET  /static/uploads/site-content-images/{fileName}
 
 `GET /admin/content/articles` 返回文章分页，查询参数固定为 `page / pageSize`，并支持 `channelId / status / keyword` 过滤；`keyword` 匹配标题、摘要、关键词和 slug；`status` 只允许 `DRAFT / PUBLISHED / UNLISTED`。`GET /admin/content/{contentId}` 返回后台详情。`POST /admin/content` 与 `PUT /admin/content/{contentId}` 都要求 `Idempotency-Key`，当前只治理两类内容：`PAGE` 与 `ARTICLE`。`PAGE` 必须命中受控固定页 slug；后台手工保存 `ARTICLE` 必须选择栏目，路径由服务端固定生成 `/guides/{slug}`，后台提交的自定义 `path` 不生效。导入脚本可以先写入无栏目草稿，但这类文章必须重新编辑选择栏目后才能发布；发布 `ARTICLE` 时服务端必须校验栏目存在且属于 `KITCHEN / COOK / FOOD / OFFICIAL_NOTICE`。文章关键词是后台运营字段，最多 200 字符，多个词用分号分隔；服务端会把中文分号规范为英文分号并去掉空项。正文固定使用 `bodyHtml + bodyText` 双写；服务端 HTML 白名单只保留 `p / br / h2 / h3 / strong / b / u / blockquote / ul / ol / li / a / img`，不开放 `h1 / em / i / s`、对齐、表格、视频、内嵌组件或任意 class/style；链接只允许 HTTPS 或站内路径，图片只允许本站内容图片路径；`bodyText` 为空时从 HTML 提取纯文本兜底。
 
-后台普通文章发布页只暴露 `标题 / 摘要 / 关键词 / 栏目 / 封面图 / 正文` 六类运营输入；`slug / path / label / heroNote / effectiveAt / sortOrder / type` 由页面和服务端自动处理或沿用既有值。普通文章正文编辑器只提供 `h2 / h3 / 加粗 / 下划线 / 引用 / 有序列表 / 无序列表 / 链接 / 图片 / 清除格式`，不提供 H1、斜体、对齐、表格、视频或更多通用编辑能力。普通文章正文支持从本地 Markdown 文件导入为富文本，转换结果仍走同一套 `bodyHtml + bodyText` 保存和服务端 HTML 清洗；Markdown 导入只转换标题、加粗、引用、列表、图片和链接，`#` 正文标题降级为 `h2`，`####` 及更深层级收敛为 `h3`，斜体语法按普通文本处理。该入口只负责文章富文本转换；菜谱导入固定为 `files[]` 批量 JSON，不提供 ZIP、Markdown、Excel 等菜谱导入入口。
+后台普通文章发布页只暴露 `标题 / 摘要 / 关键词 / 栏目 / 封面图 / 正文` 六类运营输入；`slug / path / label / heroNote / effectiveAt / sortOrder / type` 由页面和服务端自动处理或沿用既有值。普通文章正文编辑器只提供 `h2 / h3 / 加粗 / 下划线 / 引用 / 有序列表 / 无序列表 / 链接 / 图片 / 清除格式`，不提供 H1、斜体、对齐、表格、视频或更多通用编辑能力。普通文章正文支持从本地 Markdown 文件导入为富文本，转换结果仍走同一套 `bodyHtml + bodyText` 保存和服务端 HTML 清洗；Markdown 导入只转换标题、加粗、引用、列表、图片和链接，`#` 正文标题降级为 `h2`，`####` 及更深层级收敛为 `h3`，斜体语法按普通文本处理。后台文章列表支持导入单个 JSON 文件，根对象固定为 `{ "articles": [...] }`，一次最多 100 篇；每篇必填 `title`（最多 80 字符）、`summary`（最多 240 字符）、`channelCode`（仅 `KITCHEN / COOK / FOOD`）和 `bodyMarkdown`，可选 `keywords`（字符串，最多 200 字符）与 `coverImageUrl`（最多 512 字符或 `null`）。导入前整批校验；正文使用同一 Markdown 转换器生成 `bodyHtml + bodyText`，正文图片仅接受本站内容图片路径。成功项通过既有 `POST /admin/content` 逐篇创建为 `DRAFT`，`slug` 从标题生成，`path / label / type` 由系统处理；不从 JSON 导入状态或发布时间。若创建中途请求失败，已成功创建的草稿保留，后台提示成功数量与失败项。该入口只服务知识文章，不导入官方消息。菜谱导入固定为 `files[]` 批量 JSON，不提供 ZIP、Markdown、Excel 等菜谱导入入口。
 
-`POST /admin/content/{contentId}/status` 只切换 `DRAFT / PUBLISHED / UNLISTED` 三种状态，且要求 `expectedVersion`。`DELETE /admin/content/{contentId}` 只允许删除 `ARTICLE`，要求 `Idempotency-Key + expectedVersion`；`PUBLISHED` 内容必须先切到 `UNLISTED` 或 `DRAFT` 后才能删除，官网固定页 `PAGE` 不支持删除。删除只移除内容记录及数据库级联的点赞关系，不删除富文本图片文件，因为正文图片当前没有独立引用表且可能被复用。内容摘要和详情固定返回 `type / status / channel / slug / path / title / summary / keywords / label / heroNote / coverImageUrl / publishedAt / effectiveAt / sortOrder / version / updatedBy / createdAt / updatedAt`；详情额外返回 `bodyHtml / bodyText`。
+`POST /admin/content/{contentId}/status` 只切换 `DRAFT / PUBLISHED / UNLISTED` 三种状态，且要求 `expectedVersion`。公开知识文章只有 `PUBLISHED` 可下架；`UNLISTED` 必须先转成 `DRAFT` 才能发布。官方消息继续使用原有状态操作。`DELETE /admin/content/{contentId}` 只允许删除 `ARTICLE`，要求 `Idempotency-Key + expectedVersion`；`PUBLISHED` 内容必须先切到 `UNLISTED` 或 `DRAFT` 后才能删除，官网固定页 `PAGE` 不支持删除。删除只移除内容记录及数据库级联的点赞关系，不删除富文本图片文件，因为正文图片当前没有独立引用表且可能被复用。内容摘要和详情固定返回 `type / status / channel / slug / path / title / summary / keywords / label / heroNote / coverImageUrl / publishedAt / scheduledPublishAt / effectiveAt / sortOrder / version / updatedBy / createdAt / updatedAt`；详情额外返回 `bodyHtml / bodyText`。
+
+`POST /admin/content/{contentId}/schedule` 仅用于 `KITCHEN / COOK / FOOD` 知识文章，要求 `Idempotency-Key`，请求体固定为 `scheduledPublishAt + expectedVersion`；`scheduledPublishAt` 是晚于当前时间且必须包含 `Z` 或 UTC offset 的 ISO 8601 时间，传 `null` 表示取消现有预约。只有 `DRAFT` 可以预约；`UNLISTED` 必须先通过状态接口转为 `DRAFT`，`PUBLISHED` 不支持预约。预约不会改变 `DRAFT` 状态。编辑保存保留预约时间；立即发布、下架和取消预约会清空预约时间。管理员预约、取消，及 Worker 自动发布均写入 `AuditEvent`。响应摘要和详情新增 `scheduledPublishAt`，表示仍待处理的预约时间，已发布或已取消时为 `null`。Worker 使用独立的 `ARTICLE_SCHEDULED_PUBLISH_WORKER_ENABLED` 开关轮询到期文章，不消费其他 Outbox 事件。
 
 `POST /admin/content/images` 是后台内容图片上传入口，只允许 `SUPER_ADMIN` 调用，请求头必须带 `Idempotency-Key`。内容编辑页先在浏览器校验图片为 `4:3`；比例不符时拒绝上传，宽度超过 `1875 px` 时等比例缩小，封面和正文图片都走该处理。所选原图不限制文件大小；处理后的文件以 `JPG` 上传，接口单图上限为 `8 MB`。服务端把文件写入统一静态资源存储，并返回 `imageUrl`；公开读取统一走 `GET /static/uploads/site-content-images/{fileName}`，当前只做静态资源读取，不建独立数据库表。后台图片素材库另走 `/admin/material-images`，用于可列表、可复制、可删除的运营素材，不复用这个富文本上传入口。
 
@@ -1005,7 +999,7 @@ DELETE /admin/ingredient-feedbacks/{feedbackId}
 
 系统食材图片 URL 指向 JPG 对象并使用 `x-oss-process=image/resize,m_fixed,w_300,h_300`；未配置静态域名时持久化 API 相对路径，避免把临时请求 Host 写入食材记录。
 
-后台单张图片输入原图限制为 `2 MB`、`1125×1125`，批量图片输入原图限制为 `4 MB`、`3750×3750`，批量不设张数上限并按文件顺序串行上传；API 对 Canvas 输出的 JPG 同样限制为 `2 MB`，对象尺寸限制在 `300×300` 至 `500×500`。批量结果每页显示 50 项。
+后台单张图片输入原图限制为 `2 MB`、`1125×1125`；批量图片逐张采用相同限制，批量不设张数上限并按文件顺序串行上传。API 对 Canvas 输出的 JPG 同样限制为 `2 MB`，对象尺寸限制在 `300×300` 至 `500×500`。批量结果每页显示 50 项。
 
 当前 `/admin/pending-ingredients` 统一返回待审核食材，包含用户提交的个人食材推荐和 JSON 导入创建的 `PENDING` 系统食材，并返回 `source = PERSONAL / JSON_IMPORT`；JSON 导入项的 `user` 为 `null`。JSON 未提供可识别单位时仍创建真实 `PENDING` 食材，响应中的 `defaultUnitId / defaultUnitName` 返回 `null`，后台显示“待补充”并要求管理员在通过前补齐，不推断默认单位。`GET /admin/ingredients` 的 `PENDING` 摘要允许 `defaultUnit = null`，`ACTIVE` 摘要仍保证非空。导入按规范化名称匹配系统食材，优先级固定为 `ACTIVE > MERGED（取 ACTIVE 目标） > PENDING > DISABLED`，命中后以最终食材分类覆盖 JSON 分类；命中 `MERGED` 或显式提交已归并 `ingredientId` 时保存目标 ID、名称和分类，目标无效则拒绝继续；`DISABLED` 保留引用并阻止发布，不自动上架、不重复创建 PENDING。导入任务详情条目摘要补充 `categoryCode / categoryName / defaultUnitName`，后台列表不展示内部 `sourcePath`；`GET /admin/ingredient-import-items/{itemId}` 仍保留原始来源路径供详情追溯。导入条目详情的 `ingredientRefs` 只批量返回当前 `recipeBody.ingredients` 实际引用的 `ACTIVE / PENDING / DISABLED` 后台食材摘要；归并操作会在事务内把所有未发布草稿的旧引用切到目标，因此不保留 `MERGED` 草稿引用。`recipeBody.ingredients[].categoryCode` 响应允许正式分类代码、`UNCLASSIFIED` 或 `null`。导入修正页据此分别显示正式选项、“待归类”和“已下架”，只有 `ingredientId = null` 才显示“未匹配”，PENDING 和 DISABLED 都不能作为新的正式匹配候选；已有 `ingredientId` 时分类控件只读。保存导入修正时，服务端按实际引用的系统食材批量覆盖 `ingredientName / categoryCode`，不接受客户端把系统分类改成另一分类。审核通过、归并或拒绝 JSON 导入项时，同步更新未发布导入草稿的食材引用、名称、分类和状态；`DELETE /admin/ingredient-import-items/{itemId}` 要求 `Idempotency-Key + expectedVersion`，删除导入条目；若条目创建的是仍为 `PENDING` 且无任何业务引用的系统食材，则事务内一并删除该食材及其营养/单位关联，否则只删除导入条目并保留已有食材。导入任务详情列表支持快捷审核和快捷删除；删除任务仍只删除导入记录，不删除已入库食材。`DELETE /admin/pending-ingredients/{ingredientId}` 仍只删除个人食材推荐记录。
 
@@ -1019,6 +1013,8 @@ DELETE /admin/inspiration-categories/{categoryId}
 POST /admin/inspiration-categories/reorder
 GET /admin/recipes
 POST /admin/recipes
+GET /admin/recipes/export
+POST /admin/recipes/{recipeId}/images/backfill
 GET /admin/recipes/{recipeId}
 PUT /admin/recipes/{recipeId}
 POST /admin/recipe-images
@@ -1044,6 +1040,12 @@ POST /admin/recipe-wiki/{recipeId}/reject
 菜谱导入接口接收批量选择的 `.json` / `.zip`，字段为 `files[]`；单菜使用 `recipe.import.v1`，批次使用 `recipe.import.batch.v1.recipes[]`，每道菜独立创建待审核项。ZIP 只允许 JSON；单 JSON 不超过 10 MB，展开后最多 100 道菜、总 JSON 不超过 20 MB；不支持 Markdown 或 Excel。`GET /admin/recipes/{recipeId}` 的后台详情返回当前正文版本、工具、业务标签、营养分析、做饭助手 Wiki 和七个 Wiki 质量卡；质量卡按当前版本实时返回状态、分数和阻断原因。
 
 `GET /admin/inspiration-categories` 返回后台系统菜谱分类列表，摘要包含 `id / name / iconKey / version / recipeCount / updatedAt`；`POST /admin/inspiration-categories`、`PUT /admin/inspiration-categories/{categoryId}` 和 `POST /admin/inspiration-categories/reorder` 分别用于新增、编辑和重排，`DELETE /admin/inspiration-categories/{categoryId}` 仅允许删除没有菜谱和待审核推荐引用的分类。请求头统一使用 `Idempotency-Key`，重排请求提交完整的 `id + expectedVersion` 集合。`GET /admin/recipes` 只返回后台系统菜谱列表最小摘要，查询参数固定为 `page`、`pageSize`，并支持 `categoryId`、`keyword`、`status` 过滤；系统菜谱口径固定为 `isInspiration = true` 且 `inspirationCategoryId != null`，列表摘要补充 `inspirationCategoryId / inspirationCategoryName / version`，排序统一按 `updatedAt desc`；后台页面将 `BLOCKED` 菜谱集中展示为“下架”视图。`POST /admin/recipe-images` 是后台系统菜谱独立的临时图片上传入口，只允许 `SUPER_ADMIN` 使用，只接受后台裁好的单张图片，并返回 `tempKey + 图片元信息`；封面图场景固定要求 `4:3`，步骤图不锁定固定比例。后台上传成功后不再暴露临时公网图片地址，页面预览使用浏览器本地 `blob`；服务端只在 `POST /admin/recipes` / `PUT /admin/recipes/{recipeId}` 真正消费 `*TempKey` 时把临时图固化成正式公开资源，并对 24 小时前未消费的后台临时图做过期清理。`POST /admin/recipes` 允许后台直接新建一条系统菜谱，请求头必须携带 `Idempotency-Key`，请求体除 `inspirationCategoryId` 和完整正文输入外，还可携带 `coverImageUrl / coverImageTempKey / steps[].imageUrl / steps[].imageTempKey`；服务端会把本次引用的临时图固化为正式公开资源，写入当前系统菜谱封面和新版本正文，再创建 `isInspiration = true` 的系统菜谱记录。`POST /admin/recipe-import-jobs/json` 接收 `files[]` 批量 JSON；每个条目先保存为待审核系统项，严格匹配食材，精确用量同时严格匹配单位，`fuzzyText = "适量"` 时不要求数量或单位；未匹配食材仍不得发布。发布时菜谱 ID、营养快照和归属用户由后台生成，归属用户从 100 人灵感用户池随机选择。`DELETE /admin/recipe-import-jobs/{jobId}` 只删除导入任务及其待审核条目，不删除已经发布的正式菜谱，处理中任务不能删除。`GET /admin/recipes/{recipeId}` 返回后台详情视图，覆盖系统菜谱和个人菜谱，但只读字段与正文内容分开：详情固定返回 `personalCategory / inspirationCategory`、`contentVersionId`、当前正文快照、`reportCount`、`blockedReason`、`collectCount`、`canEdit`，以及单菜 Wiki 状态 `assistantState(status / hasCandidate / hasSnapshot / generatedAt / lastAttemptAt / attemptCount / lastError)`。后台状态允许 `MISSING / PENDING / GENERATING / NEEDS_REVIEW / READY / FAILED`；只有 `READY + hasSnapshot=true` 表示前台可用，候选内容与当前可用快照必须分离。`PUT /admin/recipes/{recipeId}` 只允许 `SUPER_ADMIN` 编辑当前系统菜谱正文，且仅限 `isInspiration = true`、当前仍挂系统分类的菜谱；保存时服务端不得原地覆盖旧正文版本，而是新建一条 `RecipeContentVersion`，再把菜谱 `currentVersionId`、`title`、`searchText`、`inspirationCategoryId` 和当前封面图切到新版本，保证已收藏、已引用和历史固定版本不漂移。若本次仍沿用旧图，则请求中的 `coverImageUrl` 与 `steps[].imageUrl` 只能引用当前系统菜谱现有图片；若替换图片，则必须提交新的 `*TempKey`。`POST /admin/recipes/{recipeId}/assistant/regenerate` 用于后台重试当前固定版本的 Wiki 候选生成或验证，请求头必须携带 `Idempotency-Key`，响应仍返回完整后台详情；它不能覆盖已经供前台消费的成功快照。`DELETE /admin/recipes/{recipeId}` 仅允许对 `BLOCKED` 的系统菜谱执行物理删除，若仍被专题、计划、收藏或饭局引用则拒绝删除；删除后不会继续出现在“下架”视图。`GET /admin/pending-recipes` 返回待审核菜谱推荐分页，只收 `status = PENDING` 且来源个人菜谱仍为有效发布态的推荐记录，支持按菜谱名、建议系统分类、个人分类、推荐人昵称或 UID 搜索。`POST /admin/pending-recipes/{recommendationId}/review` 只支持两种结果：`APPROVE` 或 `REJECT`；通过时必须选择最终归入的系统菜谱分类，可与用户建议分类不同，且本期不在审核弹窗内编辑正文。审核通过后，服务端按推荐记录中的 `sourceVersionId` 复制固定版本正文，创建新的系统菜谱并写回 `adoptedRecipeId`；拒绝时只回写 `reviewNote`。后台系统菜谱创建、审核收录与正文编辑时，食材和单位只允许引用当前可选的系统食材与系统单位；图片链路独立于用户草稿上传，不复用 `draftId`。每次发布新的固定版本时只登记 `PENDING` Wiki 生产事实，不在发布事务内调用 AI；生成失败不得回滚主菜谱版本。正式 AI 服务和批量任务载体尚未确认，第一阶段只消费已经验证的 `READY` Wiki，不实现同步生成或假 Worker。
+
+`GET /admin/recipes/export` 按可选 `categoryId / keyword / status` 筛选系统菜谱，并接收 `page + pageSize` 分页参数（每页最多 100 条），返回统一 `PageResult`：`items / page / pageSize / total / hasNext`。每条只含导出所需的菜谱 ID、当前 `contentVersionId`、标题、故事、关键词、小贴士、正文步骤提示词和 Wiki 步骤提示词。Admin 按页依次读取并整理全部筛选结果为以菜谱 ID 为 key 的 JSON；步骤序号各自从 1 开始。
+
+`POST /admin/recipe-images` 是后台系统菜谱独立的临时图片上传入口，只允许 `SUPER_ADMIN` 使用，只接受单张 JPG、PNG 或 WEBP 图片，原图上限为 10 MB、像素总数上限为 4000 万。服务端实际解码并校验图片，应用 EXIF 方向后重新编码以移除元数据；损坏、截断或超像素图片会被拒绝。封面图场景固定要求纠正方向后的比例为 `4:3`，步骤图不锁定比例。接口返回规范化临时图片的 `tempKey + 图片元信息`；临时图只在正式写入时复制，不再重复有损编码。
+
+`POST /admin/recipes/{recipeId}/images/backfill` 只允许 `SUPER_ADMIN` 调用，必须带数字字符串 `Idempotency-Key`。请求按菜谱分组，提交 `images[{fileName, tempKey}]`；文件名严格使用 `{contentVersionId}_{recipeId}.jpg`、`{contentVersionId}_{recipeId}_step{n}.jpg` 或 `{contentVersionId}_{recipeId}_step_wiki{n}.jpg`。服务端必须校验菜谱仍为 ACTIVE 系统菜谱、文件名 ID 对应路径菜谱、版本仍为当前版本、槽位存在且目标唯一，再将临时图片固化并回填。仅封面图时更新 `Recipe.coverImageUrl`；任一正文或 Wiki 步骤图回填时，创建新的当前 `RecipeContentVersion`，仅替换命中的图片 URL，并复制原版本的标签、营养、完整度、Wiki 快照与已解锁记录；历史固定版本和其引用不变。版本冲突或目标校验失败时不写入数据库并清理本次已固化的未引用图片。封面图片保持 `4:3` 校验，步骤图片保持原比例。
 
 `GET /admin/recipe-wiki` 只返回 `Recipe.status = ACTIVE` 且当前固定正文版本 Wiki 尚未 `READY` 的菜谱，草稿、回收、下架和删除菜谱不进入列表。列表同时返回 `contentVersionId`、来源（用户 UID/昵称或“公共内容池”）、Wiki 状态、是否存在申请、最近申请时间和最近申请人。`GET /admin/recipe-wiki/{recipeId}/export` 与 `POST /admin/recipe-wiki/export` 分别导出单个或批量 `recipe.wiki.v1` / `recipe.wiki.batch.v1` JSON；每条数据必须带 `recipeId`、`contentVersionId`，正文不在导出范围内。`POST /admin/recipe-wiki/import` 只接受这两种 JSON，服务端校验菜谱仍为 ACTIVE 且正文版本 ID 一致，只替换当前版本的 Wiki 标签和助理步骤，并将 Wiki 置为 `READY`，不创建或修改菜谱正文；READY 会把对应申请的预扣次数转为正式消耗并通知申请人。`POST /admin/recipe-wiki/{recipeId}/reject` 写入拒绝原因、释放当前版本所有申请人的预扣次数并向申请人提供拒绝提示。上述后台写接口均要求管理员权限和数字字符串 `Idempotency-Key`（单纯导出和列表除外）。
 
@@ -2830,6 +2832,7 @@ POST /recipes/reorder
   POST /recipes/{recipeId}/delete
   POST /users/me/recipe-history
   GET /users/me/recipe-history
+  POST /users/me/recipe-history/{historyId}/delete
 ```
 
 `GET /recipes` 只返回本人已发布私房菜，支持分页、关键词、个人分类、系统分类、难度和时长筛选。查询参数为 `page`、`pageSize`、`keyword`、`categoryId`、`inspirationCategoryId`、`difficulty` 和 `duration`。私房菜固定按个人分类顺序、更新时间返回，不提供灵感专属的推荐/最新排序；用户显式保存到私房菜但未指定分类时允许 `category = null`，客户端展示为“未分类”，用户可之后在编辑时归类。加入计划不创建私房菜。新建和编辑正文统一经过草稿发布，系统分类可由用户在高级设置中选择。
@@ -2838,7 +2841,7 @@ POST /recipes/reorder
 
 `GET /recipe-versions/{recipeVersionId}/cook-assistant` 只允许能访问该固定菜谱版本的登录用户调用，始终返回 Wiki 状态、当前用户申请时间/拒绝原因和是否已可直接打开；非 `READY` 时 `assistant = null`，不得泄露 Wiki 正文，不能用 Wiki 是否有值代替状态判断。`POST /recipe-versions/{recipeVersionId}/cook-assistant/request` 请求体为空，必须携带数字字符串 `Idempotency-Key`；首次申请立即预扣当前用户当日 `1` 次，重复申请只更新最近申请时间且不重复扣次，申请本身不因用户或菜谱来源共享次数。后台置为 `READY` 后预扣转为正式消耗，申请用户再次点击直接打开且不再扣次；后台拒绝时释放预扣并返回拒绝原因。申请中的 `PENDING / GENERATING / NEEDS_REVIEW` 和 `REJECTED` 不允许重复申请，拒绝后应先重新编辑菜谱生成新正文版本。`POST /recipe-versions/{recipeVersionId}/cook-assistant/unlock` 仅保留已存在的直接解锁兼容流程；单菜目标绑定 `recipeVersionId`，同一菜谱后续新版本是新的 Wiki 目标，不继承旧版本申请或解锁事实。
 
-`POST /users/me/recipe-history` 只允许登录用户调用，请求体只接收当前可访问的 `recipeId`，请求头必须带 `Idempotency-Key`。服务端按用户和菜谱 ID 去重，重复查看更新 `lastViewedAt`，返回 `RecipeViewHistoryItem`。`GET /users/me/recipe-history` 只返回当前用户记录，按 `lastViewedAt desc, id desc` 分页，服务端当前最多返回最近 `100` 条，单页最多 `20` 条。列表会关联菜谱当前最新摘要；菜谱不可用时保留记录并返回 `isAvailable = false`、`title = "该菜谱已不可用"`、`coverImageUrl = null`。这组接口不返回固定正文版本，也不参与随机一桌推荐。
+`POST /users/me/recipe-history` 只允许登录用户调用，请求体只接收当前可访问的 `recipeId`，请求头必须带 `Idempotency-Key`。服务端按用户和菜谱 ID 去重，重复查看更新 `lastViewedAt`，返回 `RecipeViewHistoryItem`。`GET /users/me/recipe-history` 只返回当前用户记录，按 `lastViewedAt desc, id desc` 分页，服务端当前最多返回最近 `100` 条，单页最多 `20` 条。列表会关联菜谱当前最新摘要；菜谱不可用时保留记录并返回 `isAvailable = false`、`title = "该菜谱已不可用"`、`coverImageUrl = null`。`POST /users/me/recipe-history/{historyId}/delete` 只删除当前登录用户自己的浏览记录，不删除菜谱；路径 `historyId` 为正整数，请求头必须带数字字符串 `Idempotency-Key`，成功返回 `data = null`。这组接口不返回固定正文版本，也不参与随机一桌推荐。
 
 调用方不要再使用以下旧路径或旧参数：
 

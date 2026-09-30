@@ -134,6 +134,11 @@ export class AuthMeResponseModel extends SessionUserModel {
   @ApiProperty(nullableString) phone!: string | null;
   @ApiProperty({ type: Boolean }) hasPassword!: boolean;
   @ApiProperty({ type: String }) status!: string;
+  @ApiProperty({ type: Boolean, description: "当前账号是否已关联微信小程序身份" }) wechatLinked!: boolean;
+}
+
+export class AuthWechatBindResultModel {
+  @ApiProperty({ type: Boolean, enum: [true] }) wechatLinked!: true;
 }
 
 export class LoginImageConfigModel {
@@ -674,6 +679,7 @@ export class AdminSiteContentSummaryModel {
   @ApiProperty(nullableString) heroNote!: string | null;
   @ApiProperty(nullableString) coverImageUrl!: string | null;
   @ApiProperty({ ...dateTime, nullable: true }) publishedAt!: string | null;
+  @ApiProperty({ ...dateTime, nullable: true }) scheduledPublishAt!: string | null;
   @ApiProperty({ ...dateTime, nullable: true }) effectiveAt!: string | null;
   @ApiProperty({ type: Number, minimum: 0 }) sortOrder!: number;
   @ApiProperty({ type: Number, minimum: 1 }) version!: number;
@@ -1445,6 +1451,37 @@ export class AdminRecipeModel {
   @ApiProperty({ type: String }) inspirationCategoryName!: string;
   @ApiProperty(dateTime) updatedAt!: string;
   @ApiProperty({ type: Number, nullable: true }) ownerUid!: number | null;
+}
+
+export class AdminRecipeImagePromptModel {
+  @ApiProperty({ type: Number, minimum: 1 }) order!: number;
+  @ApiProperty(nullableString) imagePrompt!: string | null;
+}
+
+export class AdminRecipeImageExportItemModel {
+  @ApiProperty({ type: Number, minimum: 1 }) recipeId!: number;
+  @ApiProperty({ type: Number, minimum: 1 }) contentVersionId!: number;
+  @ApiProperty({ type: String }) title!: string;
+  @ApiProperty({ type: String }) description!: string;
+  @ApiProperty({ type: [String] }) keywords!: string[];
+  @ApiProperty({ type: String }) tips!: string;
+  @ApiProperty({ type: [AdminRecipeImagePromptModel] }) steps!: AdminRecipeImagePromptModel[];
+  @ApiProperty({ type: [AdminRecipeImagePromptModel] }) wikiSteps!: AdminRecipeImagePromptModel[];
+}
+
+export class AdminRecipeImageBackfillItemResultModel {
+  @ApiProperty({ type: String }) fileName!: string;
+  @ApiProperty({ type: String, enum: ["COVER", "RECIPE_STEP", "WIKI_STEP"] }) target!: string;
+  @ApiProperty({ type: Number, nullable: true, minimum: 1 }) order!: number | null;
+  @ApiProperty({ type: String, format: "uri" }) imageUrl!: string;
+}
+
+export class AdminRecipeImageBackfillResultModel {
+  @ApiProperty({ type: Number, minimum: 1 }) recipeId!: number;
+  @ApiProperty({ type: Number, minimum: 1 }) contentVersionId!: number;
+  @ApiProperty({ type: Number, minimum: 1 }) nextContentVersionId!: number;
+  @ApiProperty({ type: Number, minimum: 1 }) updatedCount!: number;
+  @ApiProperty({ type: [AdminRecipeImageBackfillItemResultModel] }) items!: AdminRecipeImageBackfillItemResultModel[];
 }
 
 export class AdminRecipeWikiSummaryModel {
