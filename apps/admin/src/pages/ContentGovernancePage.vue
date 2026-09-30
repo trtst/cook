@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { Edit, Plus, Refresh } from "@element-plus/icons-vue";
+import { Edit, Plus, Refresh, Upload } from "@element-plus/icons-vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { contentApi, type AdminSiteContentChannelItem, type AdminSiteContentSummary, type AdminSitePageSummary, type SiteContentStatus } from "@/apis/content";
 import { useAdminHeaderRefresh } from "@/composables/useAdminHeader";
+import { sanitizeContentHtml } from "@/utils/content-html";
 import { formatDateTime } from "@/utils/date";
+import { markdownToRichText } from "@/utils/markdown-rich-text";
 import { createOperationId } from "@/utils/operation-id";
 
 type ContentPageMode = "pages" | "articles" | "official-messages" | "channels";
@@ -19,6 +21,12 @@ const articleRows = ref<AdminSiteContentSummary[]>([]);
 const channelRows = ref<AdminSiteContentChannelItem[]>([]);
 const articleTotal = ref(0);
 const channelOptions = ref<AdminSiteContentChannelItem[]>([]);
+const articleImporting = ref(false);
+const articleImportInput = ref<HTMLInputElement | null>(null);
+const scheduleDialogOpen = ref(false);
+const scheduleSaving = ref(false);
+const scheduleTime = ref<string | null>(null);
+const scheduleTarget = ref<AdminSiteContentSummary | null>(null);
 
 const publicArticleChannelCodes = new Set(["KITCHEN", "COOK", "FOOD"]);
 const publicChannelOptions = computed(() => channelOptions.value.filter(item => publicArticleChannelCodes.has(item.code)));
@@ -65,6 +73,84 @@ function formatTime(value: string | null) {
   return formatDateTime(value);
 }
 
+function formatScheduleTime(value: string | null) {
+  if (!value) return "";
+  return new Intl.DateTimeFormat("zh-CN", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23"
+  }).format(new Date(value));
+}
+
+function toShanghaiDateInput(value: string) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23"
+  }).formatToParts(new Date(value));
+  const field = (name: string) => parts.find(part => part.type === name)?.value ?? "";
+  return `${field("year")}-${field("month")}-${field("day")} ${field("hour")}:${field("minute")}:${field("second")}`;
+}
+
+function openSchedule(row: AdminSiteContentSummary) {
+  scheduleTarget.value = row;
+  const nextTime = row.scheduledPublishAt ?? new Date(Date.now() + 60 * 60 * 1000).toISOString();
+  scheduleTime.value = toShanghaiDateInput(nextTime);
+  scheduleDialogOpen.value = true;
+}
+
+async function saveSchedule() {
+  const row = scheduleTarget.value;
+  if (!row || !scheduleTime.value || new Date(`${scheduleTime.value.replace(" ", "T")}+08:00`).getTime() <= Date.now()) {
+    ElMessage.warning("请选择晚于当前时间的发布时间");
+    return;
+  }
+  scheduleSaving.value = true;
+  try {
+    await contentApi.setSchedule(row.id, {
+      operationId: createOperationId(),
+      expectedVersion: row.version,
+      scheduledPublishAt: new Date(`${scheduleTime.value.replace(" ", "T")}+08:00`).toISOString()
+    });
+    scheduleDialogOpen.value = false;
+    await loadArticles();
+    ElMessage.success("已预约定时发布");
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : "预约定时发布失败");
+  } finally {
+    scheduleSaving.value = false;
+  }
+}
+
+async function cancelSchedule(row: AdminSiteContentSummary) {
+  try {
+    await ElMessageBox.confirm(`取消“${row.title}”的定时发布？`, "取消预约", {
+      confirmButtonText: "确认取消",
+      cancelButtonText: "返回",
+      type: "warning"
+    });
+    await contentApi.setSchedule(row.id, {
+      operationId: createOperationId(),
+      expectedVersion: row.version,
+      scheduledPublishAt: null
+    });
+    await loadArticles();
+    ElMessage.success("已取消定时发布");
+  } catch (error) {
+    if (error === "cancel" || error === "close") return;
+    ElMessage.error(error instanceof Error ? error.message : "取消定时发布失败");
+  }
+}
+
 function openEditor(id?: number) {
   const officialQuery = { channelCode: "OFFICIAL_NOTICE", source: "official-message" };
   void router.push({
@@ -77,6 +163,127 @@ function openEditor(id?: number) {
         ? { type: "ARTICLE", ...officialQuery }
         : { type: "ARTICLE" }
   });
+}
+
+function openArticleImport() {
+  articleImportInput.value?.click();
+}
+
+function articleImportError(index: number, message: string): never {
+  throw new Error(`第 ${index + 1} 篇文章：${message}`);
+}
+
+function prepareArticleImport(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("JSON 根节点必须是包含 articles 数组的对象");
+  }
+  const articles = (value as { articles?: unknown }).articles;
+  if (!Array.isArray(articles) || !articles.length || articles.length > 100) {
+    throw new Error("articles 必须包含 1 到 100 篇文章");
+  }
+
+  const usedSlugs = new Set<string>();
+  return articles.map((value, index) => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      return articleImportError(index, "必须是对象");
+    }
+    const article = value as Record<string, unknown>;
+    const title = typeof article.title === "string" ? article.title.trim() : "";
+    const summary = typeof article.summary === "string" ? article.summary.trim() : "";
+    const channelCode = typeof article.channelCode === "string" ? article.channelCode.trim().toUpperCase() : "";
+    const bodyMarkdown = typeof article.bodyMarkdown === "string" ? article.bodyMarkdown : "";
+    const keywords = article.keywords == null ? "" : typeof article.keywords === "string" ? article.keywords.trim() : null;
+    const coverImageUrl = article.coverImageUrl == null ? "" : typeof article.coverImageUrl === "string" ? article.coverImageUrl.trim() : null;
+
+    if (!title || title.length > 80) return articleImportError(index, "title 必填且最多 80 个字符");
+    if (!summary || summary.length > 240) return articleImportError(index, "summary 必填且最多 240 个字符");
+    if (!bodyMarkdown.trim()) return articleImportError(index, "bodyMarkdown 必填");
+    if (keywords === null || (keywords && keywords.length > 200)) return articleImportError(index, "keywords 必须是最多 200 个字符的字符串");
+    if (coverImageUrl === null || coverImageUrl.length > 512) return articleImportError(index, "coverImageUrl 必须是最多 512 个字符的字符串或 null");
+
+    const channel = publicChannelOptions.value.find(item => item.code === channelCode);
+    if (!channel) return articleImportError(index, "channelCode 只能是 KITCHEN、COOK 或 FOOD");
+
+    const richText = markdownToRichText(bodyMarkdown);
+    const bodyHtml = sanitizeContentHtml(richText.html);
+    if (!bodyHtml.trim() || !richText.text.trim()) return articleImportError(index, "正文转换后不能为空");
+
+    const baseSlug = title
+      .toLowerCase()
+      .replace(/[^a-z0-9-]+/g, "-")
+      .replace(/-{2,}/g, "-")
+      .replace(/^-|-$/g, "") || `article-${Date.now().toString(36)}-${index + 1}`;
+    let slug = baseSlug.slice(0, 80);
+    let suffix = 2;
+    while (usedSlugs.has(slug)) {
+      const suffixText = `-${suffix++}`;
+      slug = `${baseSlug.slice(0, 80 - suffixText.length)}${suffixText}`;
+    }
+    usedSlugs.add(slug);
+
+    return {
+      channel,
+      slug,
+      title,
+      summary,
+      keywords: keywords || null,
+      coverImageUrl: coverImageUrl || null,
+      bodyHtml,
+      bodyText: richText.text
+    };
+  });
+}
+
+async function importArticles(event: Event) {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = "";
+  if (!file) return;
+
+  articleImporting.value = true;
+  try {
+    const parsed = JSON.parse(await file.text()) as unknown;
+    await loadChannelOptions();
+    const articles = prepareArticleImport(parsed);
+    await ElMessageBox.confirm(`将导入 ${articles.length} 篇文章，并全部保存为草稿。`, "导入文章", {
+      type: "info",
+      confirmButtonText: "导入草稿",
+      cancelButtonText: "取消"
+    });
+
+    let importedCount = 0;
+    for (const article of articles) {
+      try {
+        await contentApi.createContent({
+          operationId: createOperationId(),
+          type: "ARTICLE",
+          channelId: article.channel.id,
+          slug: article.slug,
+          title: article.title,
+          summary: article.summary,
+          keywords: article.keywords,
+          label: article.channel.name,
+          coverImageUrl: article.coverImageUrl,
+          bodyHtml: article.bodyHtml,
+          bodyText: article.bodyText
+        });
+        importedCount += 1;
+      } catch (error) {
+        await loadArticles();
+        const detail = error instanceof Error ? error.message : "请求失败";
+        ElMessage.error(`已导入 ${importedCount} 篇；第 ${importedCount + 1} 篇失败：${detail}`);
+        return;
+      }
+    }
+
+    await loadArticles();
+    ElMessage.success(`已导入 ${importedCount} 篇文章草稿`);
+  } catch (error) {
+    if (error === "cancel" || error === "close") return;
+    ElMessage.error(error instanceof Error ? error.message : "导入文章失败");
+  } finally {
+    articleImporting.value = false;
+  }
 }
 
 async function loadChannelOptions() {
@@ -274,6 +481,15 @@ onMounted(() => {
       <el-button v-if="pageMode === 'articles' || pageMode === 'official-messages'" type="primary" :icon="Plus" @click="openEditor()">
         {{ pageMode === "official-messages" ? "新建官方消息" : "新建文章" }}
       </el-button>
+      <el-button v-if="pageMode === 'articles'" :icon="Upload" :loading="articleImporting" @click="openArticleImport">JSON 导入</el-button>
+      <input
+        v-if="pageMode === 'articles'"
+        ref="articleImportInput"
+        class="hidden-file-input"
+        type="file"
+        accept="application/json,.json"
+        @change="importArticles"
+      />
       <el-button :icon="Refresh" @click="loadCurrentPage">刷新</el-button>
       <div class="toolbar-spacer" />
       <span class="page-note">{{ pageNote }}</span>
@@ -336,15 +552,30 @@ onMounted(() => {
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="发布时间" min-width="180">
-          <template #default="{ row }">{{ formatTime(row.publishedAt) }}</template>
+        <el-table-column label="发布时间" min-width="200">
+          <template #default="{ row }">
+            <span v-if="row.publishedAt">{{ formatTime(row.publishedAt) }}</span>
+            <el-tag v-else-if="row.scheduledPublishAt" type="warning" effect="light">预约 {{ formatScheduleTime(row.scheduledPublishAt) }}</el-tag>
+            <span v-else>-</span>
+          </template>
         </el-table-column>
         <el-table-column label="更新时间" min-width="180">
           <template #default="{ row }">{{ formatTime(row.updatedAt) }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="120" fixed="right">
+        <el-table-column label="操作" width="350" fixed="right">
           <template #default="{ row }">
             <el-button size="small" type="primary" @click="openEditor(row.id)">编辑</el-button>
+            <template v-if="pageMode === 'articles'">
+              <el-button v-if="row.status === 'DRAFT'" size="small" type="success" @click="setContentStatus(row, 'PUBLISHED')">发布</el-button>
+              <el-button v-if="row.status === 'DRAFT' && !row.scheduledPublishAt" size="small" type="primary" plain @click="openSchedule(row)">定时发布</el-button>
+              <el-button v-if="row.status === 'DRAFT' && row.scheduledPublishAt" size="small" type="warning" plain @click="cancelSchedule(row)">取消预约</el-button>
+              <el-button v-if="row.status === 'PUBLISHED'" size="small" type="warning" @click="setContentStatus(row, 'UNLISTED')">下架</el-button>
+            </template>
+            <template v-else>
+              <el-button v-if="row.status !== 'PUBLISHED'" size="small" type="success" @click="setContentStatus(row, 'PUBLISHED')">上架</el-button>
+              <el-button v-else size="small" type="warning" @click="setContentStatus(row, 'UNLISTED')">下架</el-button>
+              <el-button size="small" type="danger" :disabled="row.status === 'PUBLISHED'" @click="removeContent(row)">删除</el-button>
+            </template>
           </template>
         </el-table-column>
       </el-table>
@@ -359,6 +590,22 @@ onMounted(() => {
           @change="loadArticles"
         />
       </div>
+
+      <el-dialog v-model="scheduleDialogOpen" title="定时发布" width="420px">
+        <p class="schedule-help">文章将在所选北京时间自动发布。</p>
+        <el-date-picker
+          v-model="scheduleTime"
+          type="datetime"
+          value-format="YYYY-MM-DD HH:mm:ss"
+          format="YYYY-MM-DD HH:mm:ss"
+          placeholder="选择发布时间"
+          style="width: 100%"
+        />
+        <template #footer>
+          <el-button @click="scheduleDialogOpen = false">取消</el-button>
+          <el-button type="primary" :loading="scheduleSaving" @click="saveSchedule">确认预约</el-button>
+        </template>
+      </el-dialog>
     </div>
 
     <div v-else class="table-panel">
@@ -409,5 +656,10 @@ onMounted(() => {
 <style scoped lang="scss">
 .content-filter {
   margin-bottom: 16px;
+}
+
+.schedule-help {
+  margin: 0 0 16px;
+  color: #606266;
 }
 </style>

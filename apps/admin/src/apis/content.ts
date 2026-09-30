@@ -34,6 +34,7 @@ export interface AdminSiteContentSummary {
   heroNote: string | null;
   coverImageUrl: string | null;
   publishedAt: IsoDateTime | null;
+  scheduledPublishAt: IsoDateTime | null;
   effectiveAt: IsoDateTime | null;
   sortOrder: number;
   version: number;
@@ -106,6 +107,12 @@ export interface SetAdminSiteContentStatusRequest {
   expectedVersion: number;
 }
 
+export interface ScheduleAdminSiteContentRequest {
+  operationId: OperationId;
+  scheduledPublishAt: IsoDateTime | null;
+  expectedVersion: number;
+}
+
 export interface DeleteAdminSiteContentRequest {
   operationId: OperationId;
   expectedVersion: number;
@@ -167,6 +174,14 @@ export const contentApi = {
   setStatus(contentId: UUID, body: SetAdminSiteContentStatusRequest) {
     const { operationId, ...payload } = body;
     return requestData<AdminSiteContentDetail>(`/admin/content/${encodeURIComponent(String(contentId))}/status`, {
+      method: "POST",
+      body: payload,
+      idempotencyKey: operationId
+    });
+  },
+  setSchedule(contentId: UUID, body: ScheduleAdminSiteContentRequest) {
+    const { operationId, ...payload } = body;
+    return requestData<AdminSiteContentDetail>(`/admin/content/${encodeURIComponent(String(contentId))}/schedule`, {
       method: "POST",
       body: payload,
       idempotencyKey: operationId

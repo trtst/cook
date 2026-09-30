@@ -19,8 +19,13 @@ const headerState = useAdminHeaderState();
 const loading = ref(false);
 const saving = ref(false);
 const statusSaving = ref(false);
+const scheduleSaving = ref(false);
+const scheduleDialogOpen = ref(false);
+const scheduleTime = ref<string | null>(null);
+const scheduledPublishAt = ref<string | null>(null);
 const pendingImageUploads = ref(0);
 const imageUploading = computed(() => pendingImageUploads.value > 0);
+const formLocked = computed(() => saving.value || statusSaving.value || scheduleSaving.value || imageUploading.value);
 const channels = ref<AdminSiteContentChannelItem[]>([]);
 const contentId = ref<number | null>(null);
 const currentStatus = ref<SiteContentStatus>("DRAFT");
@@ -123,6 +128,7 @@ function formatTime(value: string | null) {
 }
 
 function resetForm(type: SiteContentType) {
+  scheduledPublishAt.value = null;
   currentStatus.value = "DRAFT";
   currentVersion.value = 1;
   updatedAt.value = null;
@@ -161,6 +167,7 @@ function syncRouteState() {
 function applyDetail(detail: AdminSiteContentDetail) {
   contentId.value = detail.id;
   currentStatus.value = detail.status;
+  scheduledPublishAt.value = detail.scheduledPublishAt;
   currentVersion.value = detail.version;
   updatedAt.value = detail.updatedAt;
   form.type = detail.type;
@@ -177,6 +184,25 @@ function applyDetail(detail: AdminSiteContentDetail) {
   form.sortOrder = detail.sortOrder;
   form.bodyHtml = detail.bodyHtml;
   form.bodyText = detail.bodyText;
+}
+
+function toShanghaiDateInput(value: string) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23"
+  }).formatToParts(new Date(value));
+  const field = (name: string) => parts.find(part => part.type === name)?.value ?? "";
+  return `${field("year")}-${field("month")}-${field("day")} ${field("hour")}:${field("minute")}:${field("second")}`;
+}
+
+function fromShanghaiDateInput(value: string) {
+  return new Date(`${value.replace(" ", "T")}+08:00`).toISOString();
 }
 
 async function loadChannels() {
@@ -276,6 +302,14 @@ async function saveDraft() {
     const detail = await persistContent();
     if (!detail) return;
     applyDetail(detail);
+    if (detail.status === "UNLISTED") {
+      const draft = await contentApi.setStatus(detail.id, {
+        operationId: createOperationId(),
+        status: "DRAFT",
+        expectedVersion: detail.version
+      });
+      applyDetail(draft);
+    }
     if (route.query.id !== String(detail.id)) {
       await router.replace({
         path: "/content/articles/editor",
@@ -287,6 +321,61 @@ async function saveDraft() {
     ElMessage.error(error instanceof Error ? error.message : "保存草稿失败");
   } finally {
     saving.value = false;
+  }
+}
+
+function openScheduleDialog() {
+  const nextTime = scheduledPublishAt.value ?? new Date(Date.now() + 60 * 60 * 1000).toISOString();
+  scheduleTime.value = toShanghaiDateInput(nextTime);
+  scheduleDialogOpen.value = true;
+}
+
+async function saveSchedule() {
+  if (!scheduleTime.value || new Date(`${scheduleTime.value.replace(" ", "T")}+08:00`).getTime() <= Date.now()) {
+    ElMessage.warning("请选择晚于当前时间的发布时间");
+    return;
+  }
+  scheduleSaving.value = true;
+  try {
+    const saved = await persistContent();
+    if (!saved) return;
+    applyDetail(saved);
+    if (route.query.id !== String(saved.id)) {
+      await router.replace({ path: "/content/articles/editor", query: { id: String(saved.id), ...editorRouteQuery.value } });
+    }
+    const detail = await contentApi.setSchedule(saved.id, {
+      operationId: createOperationId(),
+      scheduledPublishAt: fromShanghaiDateInput(scheduleTime.value),
+      expectedVersion: saved.version
+    });
+    applyDetail(detail);
+    scheduleDialogOpen.value = false;
+    ElMessage.success("已预约定时发布");
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : "预约定时发布失败");
+  } finally {
+    scheduleSaving.value = false;
+  }
+}
+
+async function cancelSchedule() {
+  if (!contentId.value || !scheduledPublishAt.value) return;
+  scheduleSaving.value = true;
+  try {
+    const saved = await persistContent();
+    if (!saved) return;
+    applyDetail(saved);
+    const detail = await contentApi.setSchedule(saved.id, {
+      operationId: createOperationId(),
+      scheduledPublishAt: null,
+      expectedVersion: saved.version
+    });
+    applyDetail(detail);
+    ElMessage.success("已取消定时发布");
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : "取消定时发布失败");
+  } finally {
+    scheduleSaving.value = false;
   }
 }
 
@@ -458,7 +547,7 @@ onMounted(() => {
           <p v-if="isEdit">最近更新时间：{{ formatTime(updatedAt) }}</p>
         </div>
 
-        <el-form label-position="top">
+        <el-form label-position="top" :disabled="formLocked">
           <div class="editor-grid">
             <el-form-item v-if="isPage" label="内容类型">
               <el-input model-value="官网固定页" disabled />
@@ -502,9 +591,9 @@ onMounted(() => {
                   <div v-else class="cover-editor__empty">当前未设置封面图</div>
                 </div>
                 <div class="cover-editor__actions">
-                  <el-button type="primary" :icon="Upload" :loading="imageUploading" :disabled="saving || statusSaving" @click="chooseCoverImage">上传封面</el-button>
-                  <el-button :icon="Picture" :disabled="saving || statusSaving || imageUploading" @click="form.coverImageUrl = ''">清空</el-button>
-                  <el-input v-model="form.coverImageUrl" :disabled="saving || statusSaving || imageUploading" placeholder="也可直接粘贴图片 URL" />
+                  <el-button type="primary" :icon="Upload" :loading="imageUploading" :disabled="formLocked" @click="chooseCoverImage">上传封面</el-button>
+                  <el-button :icon="Picture" :disabled="formLocked" @click="form.coverImageUrl = ''">清空</el-button>
+                  <el-input v-model="form.coverImageUrl" :disabled="formLocked" placeholder="也可直接粘贴图片 URL" />
                   <div class="table-hint">原图大小不限，必须为 4:3；宽度超过 1875px 会等比例缩小，比例不符会拒绝上传。封面和正文图片都适用。</div>
                 </div>
               </div>
@@ -513,20 +602,39 @@ onMounted(() => {
               <template #label>
                 <div class="form-label-row">
                   <span>正文</span>
-                  <el-button v-if="!isPage" size="small" :icon="Upload" @click="chooseMarkdownFile">导入 Markdown</el-button>
+                  <el-button v-if="!isPage" size="small" :icon="Upload" :disabled="formLocked" @click="chooseMarkdownFile">导入 Markdown</el-button>
                 </div>
               </template>
-              <RichTextEditor v-model="form.bodyHtml" :disabled="saving || statusSaving" :upload-image="uploadImage" @upload-error="showImageUploadError" @update:text="form.bodyText = $event" />
+              <RichTextEditor v-model="form.bodyHtml" :disabled="formLocked" :upload-image="uploadImage" @upload-error="showImageUploadError" @update:text="form.bodyText = $event" />
             </el-form-item>
           </div>
         </el-form>
 
         <div class="editor-actions">
-          <el-button type="primary" :loading="saving" :disabled="imageUploading || statusSaving" @click="saveDraft">保存草稿</el-button>
-          <el-button type="success" :loading="statusSaving" :disabled="imageUploading || saving" @click="updateStatus('PUBLISHED')">发布</el-button>
-          <el-button v-if="isEdit" type="warning" :loading="statusSaving" :disabled="imageUploading || saving" @click="updateStatus('UNLISTED')">下架</el-button>
+          <el-button v-if="currentStatus !== 'PUBLISHED' || isOfficialMessage" type="primary" :loading="saving" :disabled="imageUploading || statusSaving || scheduleSaving" @click="saveDraft">保存草稿</el-button>
+          <el-button v-if="currentStatus !== 'UNLISTED' || isOfficialMessage" type="success" :loading="statusSaving" :disabled="imageUploading || saving || scheduleSaving" @click="updateStatus('PUBLISHED')">发布</el-button>
+          <el-button v-if="currentStatus === 'PUBLISHED'" type="warning" :loading="statusSaving" :disabled="imageUploading || saving || scheduleSaving" @click="updateStatus('UNLISTED')">下架</el-button>
+          <el-button v-if="!isPage && !isOfficialMessage && currentStatus === 'DRAFT'" type="primary" plain :loading="scheduleSaving" :disabled="imageUploading || saving || statusSaving" @click="openScheduleDialog">定时发布</el-button>
+          <el-button v-if="scheduledPublishAt && currentStatus === 'DRAFT'" :loading="scheduleSaving" :disabled="imageUploading || saving || statusSaving" @click="cancelSchedule">取消定时发布</el-button>
         </div>
       </div>
+
+      <el-dialog v-model="scheduleDialogOpen" title="定时发布" width="420px">
+        <p class="schedule-help">文章将在所选北京时间自动发布。</p>
+        <el-date-picker
+          v-model="scheduleTime"
+          :disabled="scheduleSaving"
+          type="datetime"
+          value-format="YYYY-MM-DD HH:mm:ss"
+          format="YYYY-MM-DD HH:mm:ss"
+          placeholder="选择发布时间"
+          style="width: 100%"
+        />
+        <template #footer>
+          <el-button :disabled="scheduleSaving" @click="scheduleDialogOpen = false">取消</el-button>
+          <el-button type="primary" :loading="scheduleSaving" @click="saveSchedule">确认预约</el-button>
+        </template>
+      </el-dialog>
 
       <div class="table-panel editor-preview-panel">
         <div class="panel-heading">
@@ -646,6 +754,11 @@ onMounted(() => {
 
 .hidden-file-input {
   display: none;
+}
+
+.schedule-help {
+  margin: 0 0 16px;
+  color: #606266;
 }
 
 @media (max-width: 1200px) {
