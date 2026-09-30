@@ -23,10 +23,11 @@ type IngredientImageFilter = "ALL" | "MISSING";
 type IngredientProteinType = NonNullable<AdminIngredientSummary["proteinType"]>;
 
 const cropFrameSize = 240;
-// 食材图片统一保留 300～500 像素，超出上限再缩至 500×500。
-// 原图只负责浏览器端解码，服务端继续校验最终 JPG 的大小和尺寸。
+// 食材图保存为 300～500 像素 JPG；单张和批量上传原图均不超过 2 MB、边长不超过 1125 像素。
 const minIngredientImageSize = 300;
 const maxIngredientImageSize = 500;
+const maxIngredientImageFileBytes = 2 * 1024 * 1024;
+const maxIngredientImageSourceSize = 1125;
 const batchImageResultPageSize = 50;
 const imageQuality = 0.8;
 const batchImageQuality = 1;
@@ -76,6 +77,7 @@ const fileInput = ref<HTMLInputElement | null>(null);
 const batchImageInput = ref<HTMLInputElement | null>(null);
 const categories = ref<AdminIngredientCategorySummary[]>([]);
 const ingredients = ref<AdminIngredientSummary[]>([]);
+const selectedIngredients = ref(new Map<UUID, string>());
 const units = ref<AdminUnitSummary[]>([]);
 const total = ref(0);
 const draggingIngredientId = ref<UUID | "">("");
@@ -304,6 +306,7 @@ async function loadPage() {
 
 async function selectCategory(categoryId: UUID | "") {
   if (query.categoryId === categoryId) return;
+  selectedIngredients.value.clear();
   query.categoryId = categoryId;
   query.page = 1;
   query.keyword = "";
@@ -313,19 +316,33 @@ async function selectCategory(categoryId: UUID | "") {
 }
 
 async function changeStatus(status: IngredientStatusFilter) {
+  selectedIngredients.value.clear();
   query.page = 1;
   if (status === "MERGED") query.factStatus = "ALL";
   await loadIngredients();
 }
 
 async function changeFactStatus() {
+  selectedIngredients.value.clear();
   query.page = 1;
   await loadIngredients();
 }
 
 async function changeImageStatus() {
+  selectedIngredients.value.clear();
   query.page = 1;
   await loadIngredients();
+}
+
+function toggleIngredientSelection(row: AdminIngredientSummary, selected: string | number | boolean) {
+  if (selected) selectedIngredients.value.set(row.id, row.name);
+  else selectedIngredients.value.delete(row.id);
+}
+
+function searchIngredients() {
+  selectedIngredients.value.clear();
+  query.page = 1;
+  void loadIngredients();
 }
 
 function openPendingReview() {
@@ -608,32 +625,41 @@ async function exportFilteredIngredients() {
   if (exporting.value) return;
   exporting.value = true;
   try {
-    const items: AdminIngredientSummary[] = [];
-    const filters = {
-      categoryId: query.categoryId || undefined,
-      keyword: query.keyword.trim() || undefined,
-      status: query.status,
-      factStatus: query.factStatus,
-      imageStatus: query.imageStatus
-    };
-    let page = 1;
-    let hasNext = true;
-    while (hasNext) {
-      const result = await ingredientApi.listIngredients({
-        page,
-        pageSize: 100,
-        ...filters
-      });
-      items.push(...result.items);
-      hasNext = result.hasNext;
-      page += 1;
+    let exportData: Record<string, string>;
+    if (selectedIngredients.value.size > 0) {
+      exportData = Object.fromEntries(selectedIngredients.value);
+    } else {
+      const items: AdminIngredientSummary[] = [];
+      const filters = {
+        categoryId: query.categoryId || undefined,
+        keyword: query.keyword.trim() || undefined,
+        status: query.status,
+        factStatus: query.factStatus,
+        imageStatus: query.imageStatus
+      };
+      let page = 1;
+      let hasNext = true;
+      while (hasNext) {
+        const result = await ingredientApi.listIngredients({
+          page,
+          pageSize: 100,
+          ...filters
+        });
+        items.push(...result.items);
+        hasNext = result.hasNext;
+        page += 1;
+      }
+      if (!items.length) {
+        ElMessage.info("当前筛选没有可导出的食材");
+        return;
+      }
+      exportData = Object.fromEntries(items.map(item => [String(item.id), item.name]));
     }
-    if (!items.length) {
+    const count = Object.keys(exportData).length;
+    if (!count) {
       ElMessage.info("当前筛选没有可导出的食材");
       return;
     }
-
-    const exportData = Object.fromEntries(items.map(item => [String(item.id), item.name]));
     const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json;charset=utf-8" });
     const downloadUrl = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -641,7 +667,7 @@ async function exportFilteredIngredients() {
     link.download = `ingredients-${new Date().toISOString().replace(/[:.]/gu, "-")}.json`;
     link.click();
     window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 0);
-    ElMessage.success(`已导出 ${items.length} 条食材`);
+    ElMessage.success(`已导出 ${count} 条食材`);
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : "导出食材失败");
   } finally {
@@ -701,6 +727,9 @@ async function handleBatchImageFiles(event: Event) {
     if (!file.type.startsWith("image/")) {
       row.status = "FAILED";
       row.message = "文件不是图片";
+    } else if (file.size <= 0 || file.size > maxIngredientImageFileBytes) {
+      row.status = "FAILED";
+      row.message = "图片文件为空或超过 2 MB";
     } else if (row.ingredientId === null) {
       row.status = "FAILED";
       row.message = "文件名主体必须是食材数字 ID";
@@ -757,6 +786,9 @@ async function handleBatchImageFiles(event: Event) {
         const width = image.naturalWidth || image.width;
         const height = image.naturalHeight || image.height;
         if (width !== height) throw new Error("图片必须是 1:1 正方形");
+        if (width > maxIngredientImageSourceSize || height > maxIngredientImageSourceSize) {
+          throw new Error("原图边长不能超过 1125 像素");
+        }
         if (width < minIngredientImageSize || height < minIngredientImageSize) throw new Error("图片尺寸不能小于 300×300 像素");
         const outputSize = Math.min(width, maxIngredientImageSize);
         const processedFile = await processImageFile({
@@ -878,6 +910,10 @@ async function handleImageFileChange(event: Event) {
     ElMessage.error("请选择图片文件");
     return;
   }
+  if (file.size <= 0 || file.size > maxIngredientImageFileBytes) {
+    ElMessage.error("图片文件为空或超过 2 MB");
+    return;
+  }
   const sourceUrl = URL.createObjectURL(file);
   try {
     const image = await loadImage(sourceUrl);
@@ -886,6 +922,11 @@ async function handleImageFileChange(event: Event) {
     if (sourceWidth !== sourceHeight) {
       URL.revokeObjectURL(sourceUrl);
       ElMessage.error("食材图片必须是 1:1 正方形");
+      return;
+    }
+    if (sourceWidth > maxIngredientImageSourceSize || sourceHeight > maxIngredientImageSourceSize) {
+      URL.revokeObjectURL(sourceUrl);
+      ElMessage.error("原图边长不能超过 1125 像素");
       return;
     }
     if (sourceWidth < minIngredientImageSize || sourceHeight < minIngredientImageSize) {
@@ -1084,16 +1125,11 @@ watch(
         class="toolbar-search toolbar-search--wide"
         :placeholder="isAllView ? '在全部食材内筛选食材' : '在当前分类内筛选食材'"
         clearable
-        @clear="
-          query.page = 1;
-          loadIngredients();
-        "
-        @keyup.enter="
-          query.page = 1;
-          loadIngredients();
-        "
+        @clear="searchIngredients"
+        @keyup.enter="searchIngredients"
       />
       <el-button type="primary" :icon="Plus" @click="openCreateIngredient">新增系统食材</el-button>
+      <span class="ingredient-selection-count">已选 {{ selectedIngredients.size }} 种</span>
       <el-button :loading="exporting" :disabled="batchImageBusy" @click="exportFilteredIngredients">批量导出</el-button>
       <el-button :disabled="batchImageBusy || imageSaving" @click="chooseBatchImageFiles">批量上传图片</el-button>
     </div>
@@ -1140,6 +1176,13 @@ watch(
             <div class="ingredient-card__cover">
               <img v-if="row.imageUrl" :src="row.imageUrl" :alt="`${row.name} 图片`" class="ingredient-card__image" />
               <div v-else class="ingredient-card__empty">暂无主图</div>
+              <el-checkbox
+                class="ingredient-card__select"
+                :model-value="selectedIngredients.has(row.id)"
+                aria-label="选择食材"
+                @click.stop
+                @change="toggleIngredientSelection(row, $event)"
+              />
               <button
                 v-if="canSortIngredients()"
                 type="button"
@@ -1372,7 +1415,7 @@ watch(
       @closed="resetBatchImageDialog"
     >
       <div class="table-hint batch-image-summary">
-        原图文件大小和最大边长不限；必须为 1:1 且至少 300×300，超过 500×500 会缩小至 500×500，保存为 JPG（质量 1）。
+        原图不超过 2 MB，边长不超过 1125 像素；必须为 1:1 且至少 300×300，超过 500×500 会缩小至 500×500，保存为 JPG（质量 1）。
       </div>
       <div class="table-hint batch-image-summary">
         {{ batchImageBusy ? `处理中 ${batchImageFinishedCount}/${batchImageResults.length}` : `处理完成：成功 ${batchImageSuccessCount} 张，失败 ${batchImageFailedCount} 张` }}
@@ -1602,6 +1645,26 @@ watch(
   background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
   overflow: hidden;
   margin: 0 auto;
+}
+
+.ingredient-card__select {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin: 0;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.ingredient-selection-count {
+  color: #78716c;
+  font-size: 13px;
+  white-space: nowrap;
 }
 
 .ingredient-card__image {
