@@ -943,7 +943,7 @@ import { authApi } from "@/apis/auth";
 import { fridgeApi } from "@/apis/fridge";
 import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
-import { useInspirationReturnStore } from "@/stores/inspiration-return";
+import { useRecipeTabIntentStore } from "@/stores/recipe-tab-intent";
 import { createOperationId } from "@/utils/operation-id";
 import { getCookAssistantLoadingDuration, waitForCookAssistantLoading } from "../utils/cook-assistant-loading";
 import { formatMealSlot, isPastLocalDateTime, resolveMealSlotByTime, resolveMealSlotExpireMs, resolveMealSlotSuggestedTime } from "@/utils/meal-slot";
@@ -1065,7 +1065,6 @@ const pageStyle = usePageScrollStyle();
 const { themeVars, themeClasses } = useTheme();
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const sessionStore = useSessionStore();
-const inspirationReturnStore = useInspirationReturnStore();
 const { navBarTotalHeight } = useSystemInfo();
 const loading = ref(false);
 const submitting = ref(false);
@@ -2577,15 +2576,7 @@ function handleRecipeSheetAfterClose() {
 }
 
 function openInspirationSquare() {
-	const query = [
-		planItemId.value ? `planItemId=${encodeURIComponent(String(planItemId.value))}` : "",
-		planDate.value ? `planDate=${encodeURIComponent(planDate.value)}` : "",
-		eventId.value ? `eventId=${encodeURIComponent(String(eventId.value))}` : "",
-		entryFocus.value ? `focus=${encodeURIComponent(entryFocus.value)}` : ""
-	].filter(Boolean);
-	const targetUrl = query.length ? `/pages_meal/detail/index?${query.join("&")}` : "";
-	if (!targetUrl) return;
-	inspirationReturnStore.openFromMeal(targetUrl, eventId.value ? "event" : "plan");
+	useRecipeTabIntentStore().open("inspiration");
 	closeRecipeSheet();
 	void uniPlatform.navigation.switchTab("/pages/recipe/index");
 }
