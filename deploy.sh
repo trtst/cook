@@ -11,6 +11,7 @@ DATABASE_STATUS="not_checked"
 API_DEPLOYED=false
 ADMIN_DEPLOYED=false
 SITE_DEPLOYED=false
+WORKER_DEPLOYED=false
 NGINX_RESTARTED=false
 
 log() {
@@ -20,7 +21,7 @@ log() {
 usage() {
   cat <<'EOF'
 Usage:
-  ./deploy.sh              # 更新 api + admin + site
+  ./deploy.sh              # 更新 api + worker + admin + site
   ./deploy.sh full         # 同上
   ./deploy.sh api          # 只更新 api
   ./deploy.sh admin        # 只更新 admin
@@ -31,6 +32,7 @@ Notes:
   - 需在服务器项目根目录执行，或直接执行 /srv/cook/deploy.sh
   - 默认会执行 git pull、pnpm install
   - api 模式会在停止 cook-api 后执行迁移预检和迁移；迁移失败时服务保持停止，等待数据库恢复处理
+  - 完整发布要求 apps/worker/.env 配置生产 DATABASE_URL 和 ARTICLE_SCHEDULED_PUBLISH_WORKER_ENABLED=true；迁移成功后自动构建并通过 PM2 启动/重载 cook-worker
   - admin/site 模式会重新构建对应前端并重启 nginx
 EOF
 }
@@ -70,6 +72,7 @@ write_release_manifest() {
     "api": $API_DEPLOYED,
     "admin": $ADMIN_DEPLOYED,
     "site": $SITE_DEPLOYED,
+    "worker": $WORKER_DEPLOYED,
     "miniProgram": false,
     "nginxRestarted": $NGINX_RESTARTED
   },
@@ -90,6 +93,28 @@ run_git_pull() {
 run_install() {
   log "pnpm install"
   pnpm install
+}
+
+prepare_worker() {
+  local worker_env="$ROOT_DIR/apps/worker/.env"
+  if [[ ! -r "$worker_env" ]]; then
+    log "missing $worker_env; create it from apps/worker/.env.example and configure production values"
+    return 1
+  fi
+
+  if ! node --env-file="$worker_env" -e '
+    const enabled = (process.env.ARTICLE_SCHEDULED_PUBLISH_WORKER_ENABLED || "").toLowerCase();
+    if (!process.env.DATABASE_URL?.trim() || !["1", "true", "yes"].includes(enabled)) {
+      console.error("Worker .env must set DATABASE_URL and ARTICLE_SCHEDULED_PUBLISH_WORKER_ENABLED=true.");
+      process.exit(1);
+    }
+  '; then
+    log "invalid Worker environment; require Node.js with --env-file support, DATABASE_URL, and ARTICLE_SCHEDULED_PUBLISH_WORKER_ENABLED=true"
+    return 1
+  fi
+
+  log "build worker"
+  pnpm build:worker
 }
 
 deploy_api() {
@@ -137,6 +162,29 @@ deploy_site() {
   SITE_DEPLOYED=true
 }
 
+deploy_worker() {
+  log "start or reload cook-worker through PM2"
+  pm2 startOrReload "$ROOT_DIR/apps/worker/ecosystem.config.cjs" --env production
+  if ! pm2 jlist | node -e '
+    let output = "";
+    process.stdin.setEncoding("utf8");
+    process.stdin.on("data", chunk => { output += chunk; });
+    process.stdin.on("end", () => {
+      const apps = JSON.parse(output);
+      const worker = apps.find(app => app.name === "cook-worker");
+      if (!worker || worker.pm2_env?.status !== "online") {
+        console.error("PM2 process cook-worker is not online.");
+        process.exitCode = 1;
+      }
+    });
+  '; then
+    log "cook-worker did not reach online state; inspect pm2 logs cook-worker"
+    return 1
+  fi
+  pm2 save
+  WORKER_DEPLOYED=true
+}
+
 restart_nginx() {
   log "restart nginx"
   systemctl restart nginx
@@ -150,7 +198,9 @@ main() {
     full)
       run_git_pull
       run_install
+      prepare_worker
       deploy_api
+      deploy_worker
       deploy_admin
       deploy_site
       restart_nginx

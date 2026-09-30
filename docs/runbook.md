@@ -92,7 +92,7 @@ ASSET_PUBLIC_BASE_URL=https://static.example.com
 
 ### Outbox 资产清理人工处理
 
-`ASSET_CLEANUP` 仍由人工处理；专用 Worker 只消费已确认的 `MEAL_REMINDER_SEND`。因此出现 `ASSET_CLEANUP` 事件时，不能声称系统会自动清理，生产上线前必须由运维或开发按以下步骤人工处理。
+`ASSET_CLEANUP` 仍由人工处理；`WORKER_ENABLED` 控制的专用消费者只消费已确认的 `MEAL_REMINDER_SEND`。知识文章定时发布由独立 `ARTICLE_SCHEDULED_PUBLISH_WORKER_ENABLED` 轮询，不读取 Outbox。因此出现 `ASSET_CLEANUP` 事件时，不能声称系统会自动清理，生产上线前必须由运维或开发按以下步骤人工处理。
 
 查询待处理事件：
 

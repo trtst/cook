@@ -5,6 +5,7 @@ const TEMPLATE_ID = process.env.WECHAT_MEAL_REMINDER_TEMPLATE_ID?.trim() ?? "";
 const CLAIM_LIMIT = 1;
 const MAX_RETRIES = 5;
 const POLL_INTERVAL_MS = 10_000;
+const ERROR_RETRY_INTERVAL_MS = 5_000;
 const PROCESSING_LEASE_MINUTES = 15;
 const REMINDER_LEAD_MS = 2 * 60 * 60 * 1000;
 const REMINDER_SEND_LOCK = "meal-reminder-send";
@@ -56,6 +57,10 @@ function readConfig(): WorkerConfig {
     enabled: TRUE_VALUES.has((process.env.WORKER_ENABLED ?? "").toLowerCase()),
     env: process.env.NODE_ENV ?? "development"
   };
+}
+
+function articlePublishEnabled() {
+  return TRUE_VALUES.has((process.env.ARTICLE_SCHEDULED_PUBLISH_WORKER_ENABLED ?? "").toLowerCase());
 }
 
 function mealReferenceTime(planDate: Date | string, mealSlot: string) {
@@ -303,32 +308,108 @@ async function processReminder(pool: Pool, row: OutboxRow, appId: string) {
   }
 }
 
-async function runWorker() {
-  const config = readConfig();
-  if (!config.enabled) {
-    console.info(`[worker] disabled in ${config.env}; no async jobs were started.`);
-    return;
-  }
-  const databaseUrl = process.env.DATABASE_URL?.trim();
-  const appId = process.env.WECHAT_APP_ID?.trim();
-  const appSecret = process.env.WECHAT_APP_SECRET?.trim();
-  if (!databaseUrl || !appId || !appSecret || !TEMPLATE_ID) {
-    throw new Error("Meal reminder worker requires DATABASE_URL, WECHAT_APP_ID, WECHAT_APP_SECRET, and WECHAT_MEAL_REMINDER_TEMPLATE_ID.");
-  }
-  const pool = new Pool({ connectionString: databaseUrl, max: 4, connectionTimeoutMillis: 5_000, idleTimeoutMillis: 30_000 });
-  let stopping = false;
-  process.once("SIGINT", () => { stopping = true; });
-  process.once("SIGTERM", () => { stopping = true; });
+async function runMealReminderWorker(pool: Pool, appId: string, isStopping: () => boolean) {
   console.info("[worker] meal reminder Outbox consumer started.");
-  try {
-    while (!stopping) {
+  while (!isStopping()) {
+    try {
       const batch = await claimBatch(pool);
       if (batch.length) {
         for (const row of batch) await processReminder(pool, row, appId);
       } else {
         await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
       }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "unknown error";
+      console.error(`[worker] meal reminder iteration failed: ${message}`);
+      await new Promise(resolve => setTimeout(resolve, ERROR_RETRY_INTERVAL_MS));
     }
+  }
+}
+
+async function publishScheduledArticles(pool: Pool) {
+  // 文章定时发布独立于提醒 Outbox，按数据库时间领取到期草稿。
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const due = await client.query<{ id: number; title: string; scheduled_publish_at: Date; channel_code: string | null }>(
+      `SELECT content.id, content.title, content.scheduled_publish_at, channel.code AS channel_code
+         FROM site_contents content
+         LEFT JOIN site_content_channels channel ON channel.id = content.channel_id
+        WHERE content.type = 'ARTICLE' AND content.status = 'DRAFT'
+          AND content.scheduled_publish_at IS NOT NULL AND content.scheduled_publish_at <= NOW()
+        ORDER BY content.scheduled_publish_at, content.id
+        LIMIT 20 FOR UPDATE OF content SKIP LOCKED`
+    );
+
+    for (const article of due.rows) {
+      const publishable = article.channel_code === "KITCHEN" || article.channel_code === "COOK" || article.channel_code === "FOOD";
+      const updated = await client.query(
+        `UPDATE site_contents
+            SET status = $2::"SiteContentStatus", published_at = CASE WHEN $3 THEN COALESCE(published_at, NOW()) ELSE published_at END,
+                scheduled_publish_at = NULL, version = version + 1, updated_at = NOW()
+          WHERE id = $1 AND type = 'ARTICLE' AND status = 'DRAFT'
+            AND scheduled_publish_at IS NOT NULL AND scheduled_publish_at <= NOW()`,
+        [article.id, publishable ? "PUBLISHED" : "DRAFT", publishable]
+      );
+      if (updated.rowCount !== 1) continue;
+      await client.query(
+        `INSERT INTO audit_events (actor_type, action, object_type, object_id, payload)
+         VALUES ('SYSTEM', $2, 'SITE_CONTENT', $1, $3::jsonb)`,
+        [article.id, publishable ? "SITE_CONTENT_AUTO_PUBLISHED" : "SITE_CONTENT_SCHEDULE_FAILED", JSON.stringify({
+          title: article.title,
+          scheduledPublishAt: article.scheduled_publish_at.toISOString(),
+          reason: publishable ? null : "channel_no_longer_publishable"
+        })]
+      );
+      console.info(`[worker] scheduled article ${article.id} ${publishable ? "published" : "schedule cleared: unsupported channel"}.`);
+    }
+    await client.query("COMMIT");
+    return due.rows.length;
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function runScheduledArticlePublishWorker(pool: Pool, isStopping: () => boolean) {
+  console.info("[worker] scheduled article publisher started.");
+  while (!isStopping()) {
+    try {
+      const count = await publishScheduledArticles(pool);
+      if (count === 0) await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "unknown error";
+      console.error(`[worker] scheduled article iteration failed: ${message}`);
+      await new Promise(resolve => setTimeout(resolve, ERROR_RETRY_INTERVAL_MS));
+    }
+  }
+}
+
+async function runWorker() {
+  const config = readConfig();
+  const scheduledArticlesEnabled = articlePublishEnabled();
+  if (!config.enabled && !scheduledArticlesEnabled) {
+    console.info(`[worker] disabled in ${config.env}; no async jobs were started.`);
+    return;
+  }
+  const databaseUrl = process.env.DATABASE_URL?.trim();
+  if (!databaseUrl) throw new Error("Worker requires DATABASE_URL.");
+  const appId = process.env.WECHAT_APP_ID?.trim() ?? "";
+  const appSecret = process.env.WECHAT_APP_SECRET?.trim() ?? "";
+  if (config.enabled && (!appId || !appSecret || !TEMPLATE_ID)) {
+    throw new Error("Meal reminder worker requires DATABASE_URL, WECHAT_APP_ID, WECHAT_APP_SECRET, and WECHAT_MEAL_REMINDER_TEMPLATE_ID.");
+  }
+  const pool = new Pool({ connectionString: databaseUrl, max: 4, connectionTimeoutMillis: 5_000, idleTimeoutMillis: 30_000 });
+  let stopping = false;
+  process.once("SIGINT", () => { stopping = true; });
+  process.once("SIGTERM", () => { stopping = true; });
+  try {
+    const workers: Promise<void>[] = [];
+    if (config.enabled) workers.push(runMealReminderWorker(pool, appId, () => stopping));
+    if (scheduledArticlesEnabled) workers.push(runScheduledArticlePublishWorker(pool, () => stopping));
+    await Promise.all(workers);
   } finally {
     await pool.end();
   }

@@ -16,6 +16,7 @@ import {
   CreateAdminSiteContentDto,
   DeleteAdminSiteContentDto,
   ResolveSiteContentDto,
+  ScheduleAdminSiteContentDto,
   SiteContentArticleQueryDto,
   SiteOfficialMessageQueryDto,
   UpdateAdminSiteContentChannelDto,
@@ -146,6 +147,18 @@ export class AdminSiteContentController {
     @Body() body: UpdateAdminSiteContentStatusDto
   ) {
     return this.adminSiteContentService.setStatus(contentId, { ...body, operationId }, request.admin.adminId).then(result => ok(result));
+  }
+
+  @Post(":contentId/schedule")
+  @ApiIdempotencyKey()
+  @ApiOkModel(AdminSiteContentDetailModel, "后台预约或取消文章定时发布")
+  setSchedule(
+    @Req() request: RequestWithAdmin,
+    @Param("contentId", ParseIntPipe) contentId: number,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: ScheduleAdminSiteContentDto
+  ) {
+    return this.adminSiteContentService.setSchedule(contentId, { ...body, operationId }, request.admin.adminId).then(result => ok(result));
   }
 
   @Delete(":contentId")

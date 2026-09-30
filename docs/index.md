@@ -48,7 +48,7 @@
 17. `runbook.md`
    - 启动、调试、验证、三端联合开发流程、联调和交付说明。
 18. `apps/worker/README.md`
-   - Worker 仅消费已确认的饭局提醒 `MEAL_REMINDER_SEND`；其他异步任务保持禁用。
+   - `WORKER_ENABLED` 仅控制饭局提醒 `MEAL_REMINDER_SEND`；文章定时发布须单独启用 `ARTICLE_SCHEDULED_PUBLISH_WORKER_ENABLED`，其他异步任务保持禁用。
 19. `docs/cook/`
    - 需要追溯完整产品方案、Prisma Schema 或手写 SQL 时再阅读。
 20. `plans/business-development-todo.md`

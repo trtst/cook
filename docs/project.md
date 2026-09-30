@@ -68,7 +68,7 @@ V1 明确不包含：
 | 数据库 | PostgreSQL | 15+ |
 | ORM | Prisma | 固定 5.22.0 |
 | 缓存与队列 | Redis + BullMQ | 重试、调度和后台任务 |
-| 异步可靠交付 | PostgreSQL Outbox | V1 专用 Worker 仅消费已确认的 `MEAL_REMINDER_SEND`，其他事件不消费 |
+| 异步处理 | PostgreSQL Outbox + 专用轮询器 | Worker 的 `WORKER_ENABLED` 控制 `MEAL_REMINDER_SEND` 消费者；文章定时发布由独立 `ARTICLE_SCHEDULED_PUBLISH_WORKER_ENABLED` 控制，其他 Outbox 事件不消费 |
 | 对象存储 | 腾讯云 COS 或阿里云 OSS | 私有读，签名 URL |
 | 后台管理 | Vue 3 + Element Plus | 独立 Web 应用 |
 | API 契约 | OpenAPI 3.0 | 后端 decorator 自动生成 |
@@ -80,7 +80,7 @@ apps/
   client/          # uni-app 小程序
   admin/           # Vue 3 + Element Plus 后台
   api/             # NestJS API 服务
-  worker/          # 独立 Worker，仅消费已确认的 MEAL_REMINDER_SEND
+  worker/          # 独立 Worker；提醒 Outbox 与文章定时发布分别启用
 
 infra/
   docker-compose/  # 本地开发环境
@@ -190,7 +190,7 @@ V1 模块状态：
 | 模块 | 状态 | 说明 |
 | --- | --- | --- |
 | Auth / User / Request Boundary | Engineering Foundation | 可支持后续业务开发，具体页面流程仍按功能执行单验收 |
-| Idempotency / Audit / Outbox | Engineering Foundation | 幂等和审计可复用；Worker 仅消费已确认的 `MEAL_REMINDER_SEND` |
+| Idempotency / Audit / Outbox | Engineering Foundation | 幂等和审计可复用；Worker 只运行独立启用的提醒 Outbox 与文章定时发布循环 |
 | DiningGroup | Disabled | 前台与后台入口已下线；历史表与兼容字段暂保留，不再作为当前产品模块继续开发 |
 | Recipe / RecipeImport | In Development | 产品与页面规则见 `recipe.md` 和 `plans/recipe-execution.md`；候选实现需重新设计和验收 |
 | Ingredient / Unit | In Development | 统一库和个人项规则已确认；API、数据约束、审核与换算仍未设计 |
@@ -198,7 +198,7 @@ V1 模块状态：
 | Fridge / Shopping | In Development | 个人数据候选实现存在，缺口生成规则待业务确认 |
 | Share / Admin | In Development | 候选实现存在，需随对应业务纵切验收 |
 | Inspiration / Review | In Development | 仅系统内容和人工审核通过的用户推荐版本；不扩展为通用公共 UGC |
-| Worker / Outbox | Scoped | 只消费已确认的 `MEAL_REMINDER_SEND`；其他 Outbox 类型仍不消费 |
+| Worker / Outbox | Scoped | 只消费已确认的 `MEAL_REMINDER_SEND`；知识文章定时发布使用独立轮询；其他 Outbox 类型仍不消费 |
 | Entitlement / Membership / Storage | In Development | 收藏和草稿计量口径已确认；全量重算算法和真实计量仍待设计验收 |
 | Background Asset | Deferred | 接口保留空值和 `false`，不实现上传和资产管理 |
 | Payment | Deferred | 价格、周期和升级规则确认后再开发 |

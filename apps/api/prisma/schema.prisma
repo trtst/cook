@@ -608,6 +608,7 @@ model SiteContent {
   likeCount        Int               @default(0) @map("like_count")
   effectiveAt      DateTime?         @map("effective_at") @db.Timestamptz(3)
   publishedAt      DateTime?         @map("published_at") @db.Timestamptz(3)
+  scheduledPublishAt DateTime?       @map("scheduled_publish_at") @db.Timestamptz(3)
   sortOrder        Int               @default(0) @map("sort_order")
   version          Int               @default(1)
   updatedByAdminId Int?              @map("updated_by_admin_id")
@@ -621,6 +622,7 @@ model SiteContent {
   @@index([type, status, sortOrder, id])
   @@index([channelId, type, status, sortOrder, id])
   @@index([publishedAt, id])
+  @@index([type, status, scheduledPublishAt])
   @@map("site_contents")
 }
 

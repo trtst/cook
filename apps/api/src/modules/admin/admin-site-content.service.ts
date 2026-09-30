@@ -29,7 +29,8 @@ import type {
   UpdateAdminSiteContentChannelRequest,
   UpdateAdminSiteContentRequest,
   AdminSiteContentDeleteResult,
-  UpdateAdminSiteContentStatusRequest
+  UpdateAdminSiteContentStatusRequest,
+  ScheduleAdminSiteContentRequest
 } from "../../contracts/types";
 
 type ContentRow = Prisma.SiteContentGetPayload<{
@@ -361,8 +362,8 @@ export class AdminSiteContentService {
       if (!current) throw new NotFoundException("内容不存在");
       if (current.version !== body.expectedVersion) throw new ConflictException("内容已被更新，请刷新后重试");
 
-      const updated = await tx.siteContent.update({
-        where: { id: contentId },
+      const update = await tx.siteContent.updateMany({
+        where: { id: contentId, version: body.expectedVersion },
         data: {
           channelId: input.channelId,
           slug: input.slug,
@@ -380,10 +381,11 @@ export class AdminSiteContentService {
           updatedByAdminId: adminId,
           version: { increment: 1 }
         },
-        include: {
-          channel: true,
-          updatedByAdmin: true
-        }
+      });
+      if (update.count !== 1) throw new ConflictException("内容已被更新，请刷新后重试");
+      const updated = await tx.siteContent.findUniqueOrThrow({
+        where: { id: contentId },
+        include: { channel: true, updatedByAdmin: true }
       });
       const result = this.toContentDetail(updated);
       await completeAdminIdempotentOperation(tx, body.operationId, "admin-site-content:update", adminId, requestHash, result);
@@ -409,6 +411,11 @@ export class AdminSiteContentService {
       });
       if (!current) throw new NotFoundException("内容不存在");
       if (current.version !== body.expectedVersion) throw new ConflictException("内容已被更新，请刷新后重试");
+      if (current.type === "ARTICLE" && current.channel?.code !== officialMessageChannelCode) {
+        if (body.status === "PUBLISHED" && current.status === "UNLISTED") throw new BadRequestException("已下架文章请先保存为草稿，再发布");
+        if (body.status === "UNLISTED" && current.status !== "PUBLISHED") throw new BadRequestException("只有已发布文章可以下架");
+        if (body.status === "DRAFT" && current.status !== "UNLISTED" && current.status !== "DRAFT") throw new BadRequestException("只有已下架文章可以转为草稿");
+      }
       if (body.status === "PUBLISHED" && current.type === "ARTICLE") {
         if (!current.channel) throw new BadRequestException("文章发布前必须选择栏目");
         if (current.channel.code !== officialMessageChannelCode && !isPublicArticleChannelCode(current.channel.code)) {
@@ -416,21 +423,86 @@ export class AdminSiteContentService {
         }
       }
 
-      const updated = await tx.siteContent.update({
-        where: { id: contentId },
+      const statusUpdate = await tx.siteContent.updateMany({
+        where: { id: contentId, version: body.expectedVersion },
         data: {
           status: body.status,
           publishedAt: body.status === "PUBLISHED" ? current.publishedAt ?? new Date() : body.status === "DRAFT" ? null : current.publishedAt,
+          scheduledPublishAt: body.status === "PUBLISHED" || body.status === "UNLISTED" || body.status === "DRAFT" ? null : current.scheduledPublishAt,
           updatedByAdminId: adminId,
           version: { increment: 1 }
         },
-        include: {
-          channel: true,
-          updatedByAdmin: true
-        }
+      });
+      if (statusUpdate.count !== 1) throw new ConflictException("内容已被更新，请刷新后重试");
+      const updated = await tx.siteContent.findUniqueOrThrow({
+        where: { id: contentId },
+        include: { channel: true, updatedByAdmin: true }
       });
       const result = this.toContentDetail(updated);
+      const scheduleChanged = current.scheduledPublishAt?.getTime() !== updated.scheduledPublishAt?.getTime();
+      if (current.status !== updated.status || scheduleChanged) {
+        await tx.auditEvent.create({
+          data: {
+            actorType: "ADMIN",
+            actorAdminId: adminId,
+            action: "SITE_CONTENT_STATUS_CHANGED",
+            objectType: "SITE_CONTENT",
+            objectId: contentId,
+            payload: { title: current.title, fromStatus: current.status, toStatus: updated.status }
+          }
+        });
+      }
       await completeAdminIdempotentOperation(tx, body.operationId, "admin-site-content:status", adminId, requestHash, result);
+      return result;
+    });
+  }
+
+  async setSchedule(contentId: UUID, body: ScheduleAdminSiteContentRequest, adminId: UUID): Promise<AdminSiteContentDetail> {
+    await this.requireSuperAdmin(adminId);
+    // 预约只保留在草稿上，由独立 Worker 到期后再切换为已发布。
+    const scheduledPublishAt = body.scheduledPublishAt === null ? null : new Date(body.scheduledPublishAt);
+    const requestHash = toRequestHash({ contentId, scheduledPublishAt: scheduledPublishAt?.toISOString() ?? null, expectedVersion: body.expectedVersion });
+
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getAdminIdempotentResult<AdminSiteContentDetail>(tx, body.operationId, "admin-site-content:schedule", adminId, requestHash);
+      if (repeated) return repeated;
+      await startAdminIdempotentOperation(tx, body.operationId, "admin-site-content:schedule", adminId, requestHash);
+
+      const current = await tx.siteContent.findUnique({
+        where: { id: contentId },
+        include: { channel: true }
+      });
+      if (!current) throw new NotFoundException("内容不存在");
+      if (current.version !== body.expectedVersion) throw new ConflictException("内容已被更新，请刷新后重试");
+      if (current.type !== "ARTICLE") throw new BadRequestException("只有文章支持定时发布");
+      if (current.status !== "DRAFT") throw new BadRequestException("只有草稿可以定时发布");
+      if (scheduledPublishAt) {
+        if (scheduledPublishAt.getTime() <= Date.now()) throw new BadRequestException("定时发布时间必须晚于当前时间");
+        if (!current.channel || !isPublicArticleChannelCode(current.channel.code)) {
+          throw new BadRequestException("文章栏目不支持发布");
+        }
+      } else if (!current.scheduledPublishAt) {
+        throw new BadRequestException("文章当前没有定时发布");
+      }
+
+      const update = await tx.siteContent.updateMany({
+        where: { id: contentId, version: body.expectedVersion, type: "ARTICLE", status: "DRAFT" },
+        data: { scheduledPublishAt, updatedByAdminId: adminId, version: { increment: 1 } }
+      });
+      if (update.count !== 1) throw new ConflictException("内容已被更新，请刷新后重试");
+      const updated = await tx.siteContent.findUniqueOrThrow({ where: { id: contentId }, include: { channel: true, updatedByAdmin: true } });
+      const result = this.toContentDetail(updated);
+      await tx.auditEvent.create({
+        data: {
+          actorType: "ADMIN",
+          actorAdminId: adminId,
+          action: scheduledPublishAt ? "SITE_CONTENT_SCHEDULED" : "SITE_CONTENT_SCHEDULE_CANCELLED",
+          objectType: "SITE_CONTENT",
+          objectId: contentId,
+          payload: { title: current.title, scheduledPublishAt: scheduledPublishAt?.toISOString() ?? null }
+        }
+      });
+      await completeAdminIdempotentOperation(tx, body.operationId, "admin-site-content:schedule", adminId, requestHash, result);
       return result;
     });
   }
@@ -905,6 +977,7 @@ export class AdminSiteContentService {
       heroNote: row.heroNote,
       coverImageUrl: row.coverImageUrl,
       publishedAt: toIsoDate(row.publishedAt),
+      scheduledPublishAt: toIsoDate(row.scheduledPublishAt),
       effectiveAt: toIsoDate(row.effectiveAt),
       sortOrder: row.sortOrder,
       version: row.version,
