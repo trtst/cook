@@ -25,7 +25,9 @@ import {
   AdminUnitPayloadDto,
   AdminLoginDto,
     AdminRecipeContentDto,
+    AdminRecipeExportQueryDto,
     AdminRecipeQueryDto,
+    AdminRecipeImageBackfillDto,
   AdminRecipeWikiExportDto,
   AdminRecipeWikiQueryDto,
   AdminRecipeWikiRejectDto,
@@ -95,6 +97,8 @@ import {
     AdminPendingUnitRecommendationModel,
     AdminPendingRecipeModel,
     AdminRecipeDetailModel,
+    AdminRecipeImageExportItemModel,
+    AdminRecipeImageBackfillResultModel,
   AdminReviewIngredientFeedbackResultModel,
     AdminReviewPendingRecipeResultModel,
     AdminReviewPendingIngredientResultModel,
@@ -501,6 +505,28 @@ export class AdminController {
     return this.adminService
       .listRecipes(query.page, query.pageSize, query.keyword, query.status, query.categoryId, request.admin.adminId)
       .then(result => ok(result));
+  }
+
+  @Get("recipes/export")
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth("AdminBearerAuth")
+  @ApiOkPage(AdminRecipeImageExportItemModel, "分页导出当前筛选命中的系统菜谱图片资料")
+  exportRecipes(@Req() request: RequestWithAdmin, @Query() query: AdminRecipeExportQueryDto) {
+    return this.adminService.exportRecipes(query.page, query.pageSize, query.keyword, query.status, query.categoryId, request.admin.adminId).then(result => ok(result));
+  }
+
+  @Post("recipes/:recipeId/images/backfill")
+  @UseGuards(AdminAuthGuard, SuperAdminGuard)
+  @ApiBearerAuth("AdminBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(AdminRecipeImageBackfillResultModel, "批量回填一个系统菜谱的封面与步骤图片地址")
+  backfillRecipeImages(
+    @Req() request: RequestWithAdmin & AssetRequest,
+    @Param("recipeId", ParseIntPipe) recipeId: number,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: AdminRecipeImageBackfillDto
+  ) {
+    return this.adminService.backfillRecipeImages(request, recipeId, { ...body, operationId }, request.admin.adminId).then(result => ok(result));
   }
 
   @Get("recipe-wiki")

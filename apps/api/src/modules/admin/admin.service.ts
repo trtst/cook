@@ -20,6 +20,9 @@ import type {
     AdminPendingUnitRecommendationSummary,
     AdminPendingRecipeSummary,
   AdminRecipeDetail,
+  AdminRecipeImageBackfillRequest,
+  AdminRecipeImageBackfillResult,
+  AdminRecipeImageExportItem,
   AdminRecipeWiki,
   AdminRecipeWikiNutrition,
   AdminRecipeWikiTag,
@@ -5154,6 +5157,352 @@ export class AdminService {
       total,
       hasNext: skip + items.length < total
     };
+  }
+
+  async exportRecipes(
+    page: number,
+    pageSize: number,
+    keyword: string | undefined,
+    status: string | undefined,
+    categoryId: UUID | undefined,
+    adminId: UUID
+  ): Promise<PageResult<AdminRecipeImageExportItem & { recipeId: UUID }>> {
+    await this.requireSuperAdmin(adminId);
+    const normalizedPage = toPositiveInt(page, 1);
+    const normalizedPageSize = Math.min(toPositiveInt(pageSize, 100), 100);
+    const skip = (normalizedPage - 1) * normalizedPageSize;
+    const normalizedStatus = status?.trim();
+    if (normalizedStatus && !["ACTIVE", "RECYCLED", "BLOCKED", "DELETED"].includes(normalizedStatus)) {
+      throw new BadRequestException("系统菜谱状态参数错误");
+    }
+    const where: Prisma.RecipeWhereInput = {
+      isInspiration: true,
+      inspirationCategoryId: categoryId ? { equals: categoryId } : { not: null },
+      ...(keyword?.trim() ? { searchText: { contains: buildSearchKey(keyword) } } : {}),
+      ...(normalizedStatus ? { status: normalizedStatus as RecipeStatus } : {})
+    };
+    const [recipes, total] = await this.prisma.$transaction([
+      this.prisma.recipe.findMany({
+        where,
+        select: {
+          id: true,
+          currentVersionId: true,
+          currentVersion: {
+            select: {
+              name: true,
+              story: true,
+              tips: true,
+              keywordsJson: true,
+              stepsJson: true,
+              cookAssistant: { select: { status: true, generatedAt: true, snapshotJson: true } }
+            }
+          }
+        },
+        orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+        skip,
+        take: normalizedPageSize
+      }),
+      this.prisma.recipe.count({ where })
+    ]);
+    return {
+      items: recipes.map(recipe => {
+        const steps = fromJson<Array<{ imagePrompt?: string | null }>>(recipe.currentVersion.stepsJson);
+        const assistant = versionAssistantToSnapshot(recipe.currentVersion.cookAssistant);
+        return {
+          recipeId: recipe.id,
+          contentVersionId: recipe.currentVersionId,
+          title: recipe.currentVersion.name,
+          description: recipe.currentVersion.story ?? "",
+          keywords: fromJson<string[]>(recipe.currentVersion.keywordsJson),
+          tips: recipe.currentVersion.tips ?? "",
+          steps: steps.map((step, index) => ({ order: index + 1, imagePrompt: step.imagePrompt ?? null })),
+          wikiSteps: (assistant?.steps ?? []).map(step => ({ order: step.order, imagePrompt: step.imagePrompt ?? null }))
+        };
+      }),
+      page: normalizedPage,
+      pageSize: normalizedPageSize,
+      total,
+      hasNext: skip + recipes.length < total
+    };
+  }
+
+  async backfillRecipeImages(
+    request: { protocol?: string; get?: (name: string) => string | undefined },
+    recipeId: UUID,
+    body: AdminRecipeImageBackfillRequest,
+    adminId: UUID
+  ): Promise<AdminRecipeImageBackfillResult> {
+    await this.requireSuperAdmin(adminId);
+    const tempKeys = body.images.map(item => item.tempKey);
+    const publishedStorageKeys: string[] = [];
+    let removePublishedImages = false;
+    try {
+      const targets = body.images.map(item => {
+        const match = /^(\d+)_(\d+)(?:_step(_wiki)?(\d+))?\.jpg$/i.exec(item.fileName);
+        if (!match) throw new BadRequestException(`图片文件名格式错误：${item.fileName}`);
+        const contentVersionId = Number(match[1]);
+        const parsedRecipeId = Number(match[2]);
+        const order = match[4] ? Number(match[4]) : null;
+        if (!Number.isSafeInteger(contentVersionId) || !Number.isSafeInteger(parsedRecipeId) || (order !== null && (!Number.isSafeInteger(order) || order < 1))) {
+          throw new BadRequestException(`图片文件名中的 ID 或步骤序号无效：${item.fileName}`);
+        }
+        if (parsedRecipeId !== recipeId) throw new BadRequestException(`图片不属于当前菜谱：${item.fileName}`);
+        const target = order === null ? "COVER" as const : match[3] ? "WIKI_STEP" as const : "RECIPE_STEP" as const;
+        return { ...item, contentVersionId, target, order };
+      });
+      const targetKeys = targets.map(item => `${item.target}:${item.order ?? 0}`);
+      if (new Set(targetKeys).size !== targetKeys.length) throw new BadRequestException("同一图片位置不能重复上传");
+      if (new Set(targets.map(item => item.tempKey)).size !== targets.length) throw new BadRequestException("临时图片不能重复使用");
+      const sourceVersionId = targets[0]?.contentVersionId;
+      if (!sourceVersionId || targets.some(item => item.contentVersionId !== sourceVersionId)) {
+        throw new BadRequestException("同一批图片必须属于同一个菜谱内容版本");
+      }
+      const requestHash = JSON.stringify({ recipeId, images: targets.map(({ fileName, tempKey }) => ({ fileName, tempKey })) });
+      const cached = await this.prisma.$transaction(tx =>
+        getAdminIdempotentResult<AdminRecipeImageBackfillResult>(tx, body.operationId, "admin-recipe:image-backfill", adminId, requestHash)
+      );
+      if (cached) return cached;
+
+      const source = await this.prisma.recipe.findUnique({
+        where: { id: recipeId },
+        include: {
+          currentVersion: {
+            include: {
+              versionTags: true,
+              nutritionSnapshots: true,
+              completenessSnapshots: true,
+              cookAssistant: true,
+              cookAssistantUnlocks: true
+            }
+          }
+        }
+      });
+      if (!source || !source.isInspiration || !source.inspirationCategoryId || source.status !== "ACTIVE") {
+        throw new NotFoundException("正常系统菜谱不存在");
+      }
+      if (source.currentVersionId !== sourceVersionId) throw new ConflictException("菜谱正文版本已变化，请重新导出");
+
+      const content = versionToContent(source.currentVersion);
+      const sourceWiki = versionAssistantToSnapshot(source.currentVersion.cookAssistant);
+      for (const target of targets) {
+        if (target.target === "RECIPE_STEP" && (!target.order || target.order > content.steps.length)) {
+          throw new BadRequestException(`菜谱步骤不存在：${target.fileName}`);
+        }
+        if (target.target === "WIKI_STEP" && (!sourceWiki || !target.order || target.order > sourceWiki.steps.length)) {
+          throw new BadRequestException(`Wiki 步骤不存在：${target.fileName}`);
+        }
+      }
+
+        const published: Array<{ target: typeof targets[number]; imageUrl: string }> = [];
+        for (const target of targets) {
+          const result = await this.adminRecipeImageService.publishTempImage(
+            request,
+            target.target === "COVER" ? "COVER" : "STEP",
+            target.tempKey
+          );
+          publishedStorageKeys.push(result.storageKey);
+          published.push({ target, imageUrl: result.imageUrl });
+        }
+        const publishedByFile = new Map(published.map(item => [item.target.fileName, item.imageUrl]));
+        const result = await this.prisma.$transaction(async tx => {
+          const repeated = await getAdminIdempotentResult<AdminRecipeImageBackfillResult>(
+            tx,
+            body.operationId,
+            "admin-recipe:image-backfill",
+            adminId,
+            requestHash
+          );
+          if (repeated) return { result: repeated, repeated: true };
+          await startAdminIdempotentOperation(tx, body.operationId, "admin-recipe:image-backfill", adminId, requestHash);
+
+          const current = await tx.recipe.findUnique({
+            where: { id: recipeId },
+            include: {
+              currentVersion: {
+                include: {
+                  versionTags: true,
+                  nutritionSnapshots: true,
+                  completenessSnapshots: true,
+                  cookAssistant: true,
+                  cookAssistantUnlocks: true
+                }
+              }
+            }
+          });
+          if (!current || !current.isInspiration || !current.inspirationCategoryId || current.status !== "ACTIVE") {
+            throw new NotFoundException("正常系统菜谱不存在");
+          }
+          if (current.currentVersionId !== sourceVersionId) throw new ConflictException("菜谱正文版本已变化，请重新导出");
+
+          const updatedContent = versionToContent(current.currentVersion);
+          let coverImageUrl = current.coverImageUrl;
+          const wiki = versionAssistantToSnapshot(current.currentVersion.cookAssistant);
+          for (const target of targets) {
+            if (target.target === "RECIPE_STEP" && (!target.order || target.order > updatedContent.steps.length)) {
+              throw new BadRequestException(`菜谱步骤不存在：${target.fileName}`);
+            }
+            if (target.target === "WIKI_STEP" && (!wiki || !target.order || target.order > wiki.steps.length)) {
+              throw new ConflictException(`Wiki 步骤已变化，请重新导出：${target.fileName}`);
+            }
+          }
+          for (const target of targets) {
+            const imageUrl = publishedByFile.get(target.fileName);
+            if (!imageUrl) throw new BadRequestException(`图片上传未完成：${target.fileName}`);
+            if (target.target === "COVER") {
+              coverImageUrl = imageUrl;
+            } else if (target.target === "RECIPE_STEP" && target.order) {
+              updatedContent.steps[target.order - 1] = { ...updatedContent.steps[target.order - 1]!, imageUrl };
+            } else if (target.target === "WIKI_STEP" && target.order && wiki) {
+              wiki.steps[target.order - 1] = { ...wiki.steps[target.order - 1]!, imageUrl };
+            }
+          }
+
+          let nextContentVersionId = current.currentVersionId;
+          if (targets.some(item => item.target !== "COVER")) {
+            const nextVersion = await tx.recipeContentVersion.create({
+              data: this.buildAdminRecipeVersionCreateInput(updatedContent, coverImageUrl)
+            });
+            nextContentVersionId = nextVersion.id;
+            if (current.currentVersion.versionTags.length) {
+              await tx.recipeVersionTag.createMany({
+                data: current.currentVersion.versionTags.map(({ id: _id, recipeVersionId: _recipeVersionId, createdAt: _createdAt, updatedAt: _updatedAt, ...tag }) => ({
+                  ...tag,
+                  recipeVersionId: nextVersion.id
+                }))
+              });
+            }
+            const nutrition = current.currentVersion.nutritionSnapshots[0];
+            if (nutrition) {
+              const { id: _id, recipeVersionId: _recipeVersionId, createdAt: _createdAt, updatedAt: _updatedAt, ...snapshot } = nutrition;
+              await tx.recipeNutritionSnapshot.create({
+                data: {
+                  ...snapshot,
+                  recipeVersionId: nextVersion.id,
+                  perServingJson: snapshot.perServingJson ?? Prisma.DbNull,
+                  perRecipeJson: snapshot.perRecipeJson ?? Prisma.DbNull
+                }
+              });
+            }
+            if (current.currentVersion.completenessSnapshots.length) {
+              await tx.recipeCompletenessSnapshot.createMany({
+                data: current.currentVersion.completenessSnapshots.map(({ id: _id, recipeVersionId: _recipeVersionId, createdAt: _createdAt, updatedAt: _updatedAt, ...snapshot }) => ({
+                  ...snapshot,
+                  recipeVersionId: nextVersion.id,
+                  contentBlockingReasons: snapshot.contentBlockingReasons ?? Prisma.JsonNull,
+                  structuredDataBlockingReasons: snapshot.structuredDataBlockingReasons ?? Prisma.JsonNull,
+                  tagBlockingReasons: snapshot.tagBlockingReasons ?? Prisma.JsonNull,
+                  nutritionBlockingReasons: snapshot.nutritionBlockingReasons ?? Prisma.JsonNull,
+                  assistantBlockingReasons: snapshot.assistantBlockingReasons ?? Prisma.JsonNull,
+                  frontendBlockingReasons: snapshot.frontendBlockingReasons ?? Prisma.JsonNull,
+                  randomMenuBlockingReasons: snapshot.randomMenuBlockingReasons ?? Prisma.JsonNull
+                }))
+              });
+            }
+            const assistant = current.currentVersion.cookAssistant;
+            if (assistant) {
+              const updateImages = (value: unknown) => {
+                if (value == null) return null;
+                const snapshot = fromJson<{ steps: Array<{ order: number; imageUrl: string | null }> }>(value);
+                snapshot.steps = snapshot.steps.map(step => {
+                  const replacement = targets.find(item => item.target === "WIKI_STEP" && item.order === step.order);
+                  return replacement ? { ...step, imageUrl: publishedByFile.get(replacement.fileName) ?? step.imageUrl } : step;
+                });
+                return snapshot;
+              };
+              const candidate = updateImages(assistant.candidateJson);
+              const snapshot = updateImages(assistant.snapshotJson);
+              await tx.recipeCookAssistant.create({
+                data: {
+                  recipeVersionId: nextVersion.id,
+                  status: assistant.status,
+                  candidateJson: candidate === null ? Prisma.DbNull : toJson(candidate),
+                  snapshotJson: snapshot === null ? Prisma.DbNull : toJson(snapshot),
+                  generatedAt: assistant.generatedAt,
+                  lastAttemptAt: assistant.lastAttemptAt,
+                  attemptCount: assistant.attemptCount,
+                  lastError: assistant.lastError,
+                  source: assistant.source,
+                  isLocked: assistant.isLocked,
+                  updatedByAdminId: adminId
+                }
+              });
+            }
+            if (current.currentVersion.cookAssistantUnlocks.length) {
+              await tx.cookAssistantUnlock.createMany({
+                data: current.currentVersion.cookAssistantUnlocks.map(({ id: _id, recipeVersionId: _recipeVersionId, ...unlock }) => ({
+                  ...unlock,
+                  recipeVersionId: nextVersion.id
+                }))
+              });
+            }
+          }
+
+          const updatedRecipe = await tx.recipe.updateMany({
+            where: { id: recipeId, currentVersionId: sourceVersionId, version: current.version },
+            data: {
+              ...(nextContentVersionId !== current.currentVersionId ? { currentVersionId: nextContentVersionId } : {}),
+              coverImageUrl,
+              version: { increment: 1 }
+            }
+          });
+          if (updatedRecipe.count !== 1) throw new ConflictException("菜谱已被更新，请刷新后重试");
+          const response: AdminRecipeImageBackfillResult = {
+            recipeId,
+            contentVersionId: sourceVersionId,
+            nextContentVersionId,
+            updatedCount: targets.length,
+            items: targets.map(target => ({
+              fileName: target.fileName,
+              target: target.target,
+              order: target.order,
+              imageUrl: publishedByFile.get(target.fileName)!
+            }))
+          };
+          await tx.auditEvent.create({
+            data: {
+              actorType: "ADMIN",
+              actorAdminId: adminId,
+              action: "RECIPE_IMAGES_BACKFILLED",
+              objectType: "RECIPE",
+              objectId: recipeId,
+              payload: {
+                contentVersionId: sourceVersionId,
+                nextContentVersionId,
+                imageCount: targets.length
+              }
+            }
+          });
+          await completeAdminIdempotentOperation(tx, body.operationId, "admin-recipe:image-backfill", adminId, requestHash, response);
+          return { result: response, repeated: false };
+        });
+        if (result.repeated) removePublishedImages = true;
+        return result.result;
+    } catch (error) {
+      removePublishedImages = true;
+      throw error;
+    } finally {
+      const failedPublishedKeys = removePublishedImages
+        ? await this.adminRecipeImageService.removePublishedImages(publishedStorageKeys)
+        : [];
+      const failedTempKeys = await this.adminRecipeImageService.discardTempImages(tempKeys);
+      if (failedPublishedKeys.length || failedTempKeys.length) {
+        try {
+          await this.prisma.auditEvent.create({
+            data: {
+              actorType: "ADMIN",
+              actorAdminId: adminId,
+              action: "RECIPE_IMAGE_CLEANUP_FAILED",
+              objectType: "RECIPE",
+              objectId: recipeId,
+              payload: { storageKeys: failedPublishedKeys, tempKeys: failedTempKeys }
+            }
+          });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "unknown error";
+          console.error(`[admin] recipe image cleanup audit failed for recipe ${recipeId}: ${message}`);
+        }
+      }
+    }
   }
 
   async listRecipeWiki(
