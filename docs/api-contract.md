@@ -923,7 +923,7 @@ GET  /static/uploads/site-content-images/{fileName}
 
 `POST /admin/content/{contentId}/status` 只切换 `DRAFT / PUBLISHED / UNLISTED` 三种状态，且要求 `expectedVersion`。`DELETE /admin/content/{contentId}` 只允许删除 `ARTICLE`，要求 `Idempotency-Key + expectedVersion`；`PUBLISHED` 内容必须先切到 `UNLISTED` 或 `DRAFT` 后才能删除，官网固定页 `PAGE` 不支持删除。删除只移除内容记录及数据库级联的点赞关系，不删除富文本图片文件，因为正文图片当前没有独立引用表且可能被复用。内容摘要和详情固定返回 `type / status / channel / slug / path / title / summary / keywords / label / heroNote / coverImageUrl / publishedAt / effectiveAt / sortOrder / version / updatedBy / createdAt / updatedAt`；详情额外返回 `bodyHtml / bodyText`。
 
-`POST /admin/content/images` 是后台富文本图片上传入口，只允许 `SUPER_ADMIN` 调用，请求头必须带 `Idempotency-Key`，单图大小上限 `8 MB`，只接受 `JPG / PNG / WEBP`。服务端把文件写入统一静态资源存储，并返回 `imageUrl`；公开读取统一走 `GET /static/uploads/site-content-images/{fileName}`，当前只做静态资源读取，不建独立数据库表。后台图片素材库另走 `/admin/material-images`，用于可列表、可复制、可删除的运营素材，不复用这个富文本上传入口。
+`POST /admin/content/images` 是后台内容图片上传入口，只允许 `SUPER_ADMIN` 调用，请求头必须带 `Idempotency-Key`。内容编辑页先在浏览器校验图片为 `4:3`；比例不符时拒绝上传，宽度超过 `1875 px` 时等比例缩小，封面和正文图片都走该处理。所选原图不限制文件大小；处理后的文件以 `JPG` 上传，接口单图上限为 `8 MB`。服务端把文件写入统一静态资源存储，并返回 `imageUrl`；公开读取统一走 `GET /static/uploads/site-content-images/{fileName}`，当前只做静态资源读取，不建独立数据库表。后台图片素材库另走 `/admin/material-images`，用于可列表、可复制、可删除的运营素材，不复用这个富文本上传入口。
 
 `GET /site-contents/resolve` 是站点和官网的公开内容读取接口，只按 `path` 返回已发布内容。当前只返回 `PUBLISHED` 内容，固定响应 `id / type / slug / path / title / summary / label / heroNote / coverImageUrl / bodyHtml / bodyText / publishedAt / effectiveAt / updatedAt / channelCode / channelName`，不返回草稿和下架内容。
 
