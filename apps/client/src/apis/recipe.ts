@@ -1,5 +1,5 @@
 import { cfg } from "@/config";
-import { get, post, put, uploadFile, type IsoDateTime, type PageResult, type OperationId, type UUID } from "./http";
+import { downloadFile, get, post, put, uploadFile, type IsoDateTime, type PageResult, type OperationId, type UUID } from "./http";
 import { normalizeRecipeKeywords } from "./recipe-keywords";
 
 export type RecipeDifficulty = "BEGINNER" | "EASY" | "SKILLED" | "CHALLENGING";
@@ -753,6 +753,16 @@ function isUploadApiResponse<T>(value: unknown): value is UploadApiResponse<T> {
 }
 
 export const recipeApi = {
+	downloadDraftImage(draftId: UUID, imageUrl: string) {
+		const imagePath = new URL(imageUrl, cfg.domain).pathname;
+		const match = /(?:^|\/)uploads\/recipe-images\/\.tmp\/(\d+)\/([0-9a-f-]+\.(?:jpg|png|webp))$/i.exec(imagePath);
+		if (!match || Number(match[1]) !== draftId) throw new Error("草稿图片地址无效");
+		const url = `${cfg.domain}/static/uploads/recipe-images/.tmp/${draftId}/${match[2]}`;
+		return downloadFile({ url }).then(result => {
+			if (result.status !== 200 || !result.tempFilePath) throw new Error("草稿图片加载失败，请重试");
+			return result.tempFilePath;
+		});
+	},
 	listCategories() {
 		return get<RecipeCategorySummary[]>(`${cfg.domain}/api/recipe-categories`);
 	},

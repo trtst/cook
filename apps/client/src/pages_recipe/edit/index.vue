@@ -228,7 +228,7 @@
             <view class="panel__footer">
               <view class="ingredient-add ingredient-add--secondary" @click="addStepRow">
                 <text class="cookfont icon-add ingredient-add__icon" />
-                <text>再增加一步</text>
+                <text>{{ stepRows.length >= MAX_RECIPE_STEPS ? `最多 ${MAX_RECIPE_STEPS} 步` : "再增加一步" }}</text>
               </view>
             </view>
           </view>
@@ -827,6 +827,7 @@ const { navBarTotalHeight, systemInfo } = useSystemInfo();
 const TITLE_LIMIT = 30;
 const STORY_LIMIT = 150;
 const STEP_LIMIT = 200;
+const MAX_RECIPE_STEPS = 20;
 const SHEET_ANIMATION_MS = 260;
 const NAV_FADE_RANGE = 132;
 const RECIPE_EDIT_CACHE_KEY_NEW = "new";
@@ -1549,6 +1550,7 @@ async function loadPage() {
     if (!usedDraftSeed) {
       await maybeRestoreRecipeEditCache();
     }
+    if (draftId.value) await loadDraftImages();
   } catch (error) {
     errorText.value = error instanceof Error ? error.message : "页面加载失败";
   } finally {
@@ -1561,6 +1563,25 @@ function fillFromDraft(draft: RecipeDraftDetail) {
   draftVersion.value = draft.version;
   recipeId.value = draft.recipeId || recipeId.value;
   fillForm(draft.content);
+}
+
+// 草稿图片通过鉴权下载到本地临时路径，避免直接依赖不可公开访问的临时 URL。
+async function loadDraftImages() {
+  const tasks: Array<Promise<void>> = [];
+  if (coverUploadId.value && coverImageUrl.value) {
+    tasks.push(recipeApi.downloadDraftImage(draftId.value as UUID, coverImageUrl.value).then(path => {
+      if (coverLocalImagePath.value && coverLocalImagePath.value !== path) releaseImageFile(coverLocalImagePath.value);
+      coverLocalImagePath.value = path;
+    }));
+  }
+  for (const row of stepRows.value) {
+    if (!row.uploadId || !row.imageUrl) continue;
+    tasks.push(recipeApi.downloadDraftImage(draftId.value as UUID, row.imageUrl).then(path => {
+      if (row.localImagePath && row.localImagePath !== path) releaseImageFile(row.localImagePath);
+      patchStepRow(row.localId, { localImagePath: path });
+    }));
+  }
+  await Promise.all(tasks);
 }
 
 function fillFromRecipe(recipe: MyRecipeDetail) {
@@ -2248,6 +2269,10 @@ function finishIngredientDrag() {
 }
 
 function addStepRow() {
+  if (stepRows.value.length >= MAX_RECIPE_STEPS) {
+    void uniPlatform.feedback.toast({ title: `菜谱步骤最多 ${MAX_RECIPE_STEPS} 步`, icon: "none" });
+    return;
+  }
   stepRows.value = [...stepRows.value, createStepRow()];
 }
 
@@ -2558,7 +2583,10 @@ defineExpose({
 });
 
 function hasPendingLocalImages() {
-  return Boolean(coverLocalImagePath.value || stepRows.value.some(item => item.localImagePath));
+  return Boolean(
+    (coverLocalImagePath.value && !coverUploadId.value) ||
+      stepRows.value.some(item => item.localImagePath && !item.uploadId)
+  );
 }
 
 async function applyCropResult(result: ImageCropResult, target: CropTarget) {
@@ -2602,6 +2630,11 @@ async function applyCropResult(result: ImageCropResult, target: CropTarget) {
   }
 
   if (target.appendIfMissing) {
+    if (stepRows.value.length >= MAX_RECIPE_STEPS) {
+      releaseImageFile(result.croppedPath);
+      void uniPlatform.feedback.toast({ title: `菜谱步骤最多 ${MAX_RECIPE_STEPS} 步`, icon: "none" });
+      return;
+    }
     stepRows.value = [
       ...stepRows.value,
       createStepRow({
@@ -2614,15 +2647,25 @@ async function applyCropResult(result: ImageCropResult, target: CropTarget) {
   }
 }
 
+const maxRecipeSourceBytes = 5 * 1024 * 1024;
+
 async function selectCoverImage() {
   try {
     const [file] = await uniPlatform.media.chooseMedia({
       count: 1,
       mediaType: ["image"],
       sourceType: ["album", "camera"],
-      sizeType: ["compressed"]
+      sizeType: ["original"]
     });
     if (!file?.path) return;
+    if (file.size <= 0) {
+      await uniPlatform.feedback.toast({ title: "无法读取图片大小，请重新选择", icon: "none" });
+      return;
+    }
+    if (file.size > maxRecipeSourceBytes) {
+      await uniPlatform.feedback.toast({ title: "图片过大，请选择 5 MB 以内的图片", icon: "none" });
+      return;
+    }
     queueCrop({
       sourcePath: file.path,
       policy: imageCropPresets.recipeCover,
@@ -2650,9 +2693,17 @@ async function selectStepImage(localId: string) {
       count: 1,
       mediaType: ["image"],
       sourceType: ["album", "camera"],
-      sizeType: ["compressed"]
+      sizeType: ["original"]
     });
     if (!file?.path) return;
+    if (file.size <= 0) {
+      await uniPlatform.feedback.toast({ title: "无法读取图片大小，请重新选择", icon: "none" });
+      return;
+    }
+    if (file.size > maxRecipeSourceBytes) {
+      await uniPlatform.feedback.toast({ title: "图片过大，请选择 5 MB 以内的图片", icon: "none" });
+      return;
+    }
     queueCrop({
       sourcePath: file.path,
       policy: imageCropPresets.recipeStep,
@@ -2683,21 +2734,28 @@ async function handleStepImages() {
       count: 9,
       mediaType: ["image"],
       sourceType: ["album", "camera"],
-      sizeType: ["compressed"]
+      sizeType: ["original"]
     });
     if (!files.length) return;
+    const acceptedFiles = files.filter(file => file.size > 0 && file.size <= maxRecipeSourceBytes);
+    if (acceptedFiles.length !== files.length) {
+      await uniPlatform.feedback.toast({ title: "已跳过大小异常或超过 5 MB 的图片", icon: "none" });
+    }
+    const imageFiles = acceptedFiles.filter(file => file.path);
+    const remainingSteps = MAX_RECIPE_STEPS - stepRows.value.length;
+    if (imageFiles.length > remainingSteps) {
+      await uniPlatform.feedback.toast({ title: `最多添加 ${remainingSteps} 张步骤图（总步骤上限 ${MAX_RECIPE_STEPS} 步）`, icon: "none" });
+    }
     queueCrops(
-      files
-        .filter(file => file.path)
-        .map(file => ({
-          sourcePath: file.path,
-          policy: imageCropPresets.recipeStep,
-          target: {
-            kind: "step" as const,
-            localId: "",
-            appendIfMissing: true
-          }
-        }))
+      imageFiles.slice(0, remainingSteps).map(file => ({
+        sourcePath: file.path,
+        policy: imageCropPresets.recipeStep,
+        target: {
+          kind: "step" as const,
+          localId: "",
+          appendIfMissing: true
+        }
+      }))
     );
   } catch (error) {
     await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "选择步骤图失败", icon: "none" });
@@ -2707,7 +2765,7 @@ async function handleStepImages() {
 async function uploadPendingImages() {
   if (!draftId.value) return;
 
-  if (coverLocalImagePath.value) {
+  if (coverLocalImagePath.value && !coverUploadId.value) {
     const localCoverPath = coverLocalImagePath.value;
     const result = await recipeApi.uploadRecipeImage({
       operationId: createOperationId(),
@@ -2718,13 +2776,13 @@ async function uploadPendingImages() {
     });
     coverUploadId.value = result.upload.id;
     coverImageUrl.value = result.upload.imageUrl;
-    coverLocalImagePath.value = "";
+    coverLocalImagePath.value = await recipeApi.downloadDraftImage(draftId.value as UUID, result.upload.imageUrl);
     releaseImageFile(localCoverPath);
   }
 
   for (const row of stepRows.value) {
     const localImagePath = row.localImagePath;
-    if (!localImagePath) continue;
+    if (!localImagePath || row.uploadId) continue;
     const result = await recipeApi.uploadRecipeImage({
       operationId: createOperationId(),
       draftId: draftId.value,
@@ -2735,7 +2793,7 @@ async function uploadPendingImages() {
     patchStepRow(row.localId, {
       uploadId: result.upload.id,
       imageUrl: result.upload.imageUrl,
-      localImagePath: ""
+      localImagePath: await recipeApi.downloadDraftImage(draftId.value as UUID, result.upload.imageUrl)
     });
     releaseImageFile(localImagePath);
   }
