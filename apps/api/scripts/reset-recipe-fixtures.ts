@@ -176,7 +176,6 @@ async function main() {
     await tx.homeTopicItem.deleteMany({});
     await tx.recipeDraftScene.deleteMany({});
     await tx.recipeDraft.deleteMany({});
-    await tx.storageLedger.deleteMany({ where: { module: "RECIPE" } });
     const recipeShoppingItems = await tx.shoppingItem.findMany({
       where: { OR: [{ sourceRecipeId: { not: null } }, { sourceRecipeVersionId: { not: null } }] },
       select: { id: true }

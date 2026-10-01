@@ -5,10 +5,6 @@ loadLocalEnv();
 
 const prisma = new PrismaClient();
 
-function collectionRecordKey(collectionId: string) {
-  return `collection:${collectionId}`;
-}
-
 function hasApplyFlag() {
   return process.argv.includes("--apply");
 }
@@ -99,19 +95,8 @@ async function main() {
 
   const sourceRecipeIds = [...new Set(orphanCollections.map(item => item.sourceRecipeId))];
   const deleteCollectionIds = orphanCollections.map(item => item.id);
-  const ledgerFilters = orphanCollections.map(item => ({
-    userId: item.userId,
-    module: "RECIPE" as const,
-    recordKey: collectionRecordKey(item.id)
-  }));
 
   const result = await prisma.$transaction(async tx => {
-    const deletedLedger = await tx.storageLedger.deleteMany({
-      where: {
-        OR: ledgerFilters
-      }
-    });
-
     const deletedCollections = await tx.recipeCollection.deleteMany({
       where: {
         id: {
@@ -123,7 +108,6 @@ async function main() {
     await refreshCollectCount(tx, sourceRecipeIds);
 
     return {
-      deletedLedgerCount: deletedLedger.count,
       deletedCollectionCount: deletedCollections.count
     };
   });

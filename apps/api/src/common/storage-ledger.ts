@@ -1,61 +1,33 @@
 import type { Prisma, StorageLedgerModule } from "@prisma/client";
 
-const minRecordBytes = 1024;
-
-function byteLength(value: string) {
-  return Buffer.byteLength(value, "utf8");
+// 个人空间计量暂缓；保留调用边界，恢复计量时再统一启用。
+export function sizeOfJson(_value: unknown) {
+  return 0;
 }
 
-export function sizeOfJson(value: unknown) {
-  return Math.max(minRecordBytes, byteLength(JSON.stringify(value)));
+export function sizeOfText(_value: string | null | undefined) {
+  return 0;
 }
 
-export function sizeOfText(value: string | null | undefined) {
-  return Math.max(minRecordBytes, byteLength(value ?? ""));
-}
-
-export function sumImageBytes(images: Array<{ sizeBytes: number }>) {
-  return images.reduce((total, image) => total + Math.max(0, image.sizeBytes), 0);
+export function sumImageBytes(_images: Array<{ sizeBytes: number }>) {
+  return 0;
 }
 
 export function upsertStorageLedger(
-  tx: Prisma.TransactionClient,
-  userId: number,
-  module: StorageLedgerModule,
-  recordKey: string | number,
-  usedBytes: number
+  _tx: Prisma.TransactionClient,
+  _userId: number,
+  _module: StorageLedgerModule,
+  _recordKey: string | number,
+  _usedBytes: number
 ) {
-  const normalizedKey = String(recordKey);
-  return tx.storageLedger.upsert({
-    where: {
-      userId_module_recordKey: {
-        userId,
-        module,
-        recordKey: normalizedKey
-      }
-    },
-    update: { usedBytes },
-    create: {
-      userId,
-      module,
-      recordKey: normalizedKey,
-      usedBytes
-    }
-  });
+  return Promise.resolve(null);
 }
 
 export function removeStorageLedger(
-  tx: Prisma.TransactionClient,
-  userId: number,
-  module: StorageLedgerModule,
-  recordKey: string | number
+  _tx: Prisma.TransactionClient,
+  _userId: number,
+  _module: StorageLedgerModule,
+  _recordKey: string | number
 ) {
-  const normalizedKey = String(recordKey);
-  return tx.storageLedger.deleteMany({
-    where: {
-      userId,
-      module,
-      recordKey: normalizedKey
-    }
-  });
+  return Promise.resolve(null);
 }

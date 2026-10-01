@@ -813,16 +813,6 @@ export interface UpdateTasteProfileRequest {
 
 export type RelationshipState = "NORMAL" | "OVER_MEMBER_LIMIT";
 export type EntitlementTier = "FREE" | "PLUS" | "PRO" | "ULTRA";
-export type StorageModule =
-  | "RECIPE"
-  | "FRIDGE"
-  | "MEAL"
-  | "SHOPPING"
-  | "MEAL_GUEST"
-  | "TECHNICAL_SNAPSHOT"
-  | "RECYCLE_BIN"
-  | "PROFILE_ASSET";
-
 export interface EffectiveImagePolicy {
   quality: number;
   maxWidth: number;
@@ -838,25 +828,12 @@ export interface ResolvedPolicy {
   inviteLimit: number;
   joinLimit: number;
   memberLimit: number;
-  storageLimitBytes: number;
   recycleDays: number;
   variantLimitPerRoot: number;
   imagePolicy: EffectiveImagePolicy;
   ownedDiningGroupCount: number;
   joinedDiningGroupCount: number;
   state: RelationshipState;
-}
-
-export interface StorageUsageSummary {
-  state: "NORMAL" | "OVER_STORAGE_READONLY";
-  usedBytes: number;
-  limitBytes: number;
-  remainingBytes: number;
-  byModule: Array<{
-    module: StorageModule;
-    usedBytes: number;
-  }>;
-  calculatedAt: IsoDateTime;
 }
 
 export interface AdminDashboardSummary {
@@ -1113,7 +1090,6 @@ export interface AdminUserEntitlementResponse {
   user: Pick<UserProfile, "id" | "uid" | "nickname" | "avatarUrl" | "phone" | "status" | "cookNo" | "bio" | "gender" | "birthDate">;
   membership: UserMembership;
   display: Pick<UserDisplay, "canUseProfileBackground" | "canUseHomeBackground">;
-  storage: StorageUsageSummary;
   recipePolicy: Pick<ResolvedPolicy, "recipeLimit" | "recycleDays" | "variantLimitPerRoot">;
   invitePolicy: Pick<ResolvedPolicy, "inviteLimit" | "memberLimit">;
   imagePolicy: EffectiveImagePolicy;

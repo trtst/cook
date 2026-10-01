@@ -16,8 +16,7 @@ import type {
   RecipeSceneSummary,
   PublishRecipeDraftResponse,
   SaveCollectionRecipeResponse,
-  SaveRecipeDraftResponse,
-  StorageUsageSummary
+  SaveRecipeDraftResponse
 } from "../src/contracts/types";
 
 loadLocalEnv();
@@ -379,10 +378,6 @@ async function main() {
       headers: ownerAuth
     });
     assert(mineBeforeDelete.items.some(item => item.id === publishedRecipe.id), "published recipe should appear in my recipe list");
-
-    const storageUsage = await requestData<StorageUsageSummary>("/storage-usage", { headers: ownerAuth });
-    assert(storageUsage.usedBytes > 0, "storage ledger should record recipe usage");
-    assert(storageUsage.byModule.some(item => item.module === "RECIPE"), "storage usage should include RECIPE module");
 
     const collectOperationId = nextIdempotencyKey();
     const collectBody = JSON.stringify({

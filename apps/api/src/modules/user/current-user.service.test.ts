@@ -26,7 +26,7 @@ function buildService(now: Date, options: { cookNo?: string | null } = {}) {
     $transaction: async (callback: (tx: unknown) => Promise<unknown>) => callback(tx)
   };
   const entitlement = {
-    resolveForUser: async () => ({ tier: "FREE", validUntil: null, storageLimitBytes: 0 })
+    resolveForUser: async () => ({ tier: "FREE", validUntil: null })
   };
   class TestCurrentUserService extends CurrentUserService {
     protected currentDate() {

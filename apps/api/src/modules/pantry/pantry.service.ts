@@ -1718,15 +1718,6 @@ export class PantryService {
       ).map(item => item.id);
 
       if (itemIds.length) {
-        await tx.storageLedger.deleteMany({
-          where: {
-            userId: access.ownerUserId,
-            module: "SHOPPING",
-            recordKey: {
-              in: itemIds.map(itemId => String(itemId))
-            }
-          }
-        });
         await tx.shoppingItem.deleteMany({
           where: { listId }
         });
@@ -3366,19 +3357,8 @@ export class PantryService {
     return `${item.ingredientId ?? "none"}:${normalizeNameKey(item.name)}`;
   }
 
-  private async assertStorageWritable(tx: Prisma.TransactionClient, userId: UUID, expectedDeltaBytes: number) {
-    const entitlements = await this.entitlementService.resolveForUser(tx, userId);
-    const current = await tx.storageLedger.aggregate({
-      where: { userId },
-      _sum: { usedBytes: true }
-    });
-    const usedBytes = current._sum.usedBytes ?? 0;
-    if (usedBytes > entitlements.storageLimitBytes) {
-      throw new ForbiddenException("当前个人空间已超额，只允许清理和查看");
-    }
-    if (usedBytes + expectedDeltaBytes > entitlements.storageLimitBytes) {
-      throw new ForbiddenException("当前个人空间不足");
-    }
+  private async assertStorageWritable(_tx: Prisma.TransactionClient, _userId: UUID, _expectedDeltaBytes: number) {
+    return;
   }
 
   private buildShoppingListDetailItemMap(items: ShoppingDetailItemRow[], sourceMeta: ShoppingSourceMeta) {

@@ -27,6 +27,7 @@ http://127.0.0.1:3100/api
 
 | 日期 | 变更 |
 | --- | --- |
+| 2026-10-01 | `/storage-usage` 暂缓开放并固定返回业务 `code=503`；后台会员审计不再包含空间用量。 |
 | 2026-09-30 | 登录统一使用短信验证码或手机号密码；登录后通过带 Bearer token 的 `/api/auth/wechat/bind` 关联当前微信身份。 |
 | 2026-09-04 | 登录改为真实短信验证码、手机号密码和可轮换 refresh session；旧 `/api/auth/login`、`/api/auth/code-*`、`/api/auth/wechat-login` 已移除。 |
 | 2026-08-19 | 饭搭子功能已整体下线，客户端不再保留 `/api/dining-groups*`、`/api/dining-group-invites*` 和后台饭搭子审计字段。 |
@@ -510,27 +511,14 @@ interface CreateMealPlanRequestV2 {
 4. 计划页“添加计划”允许对当前选中日期 + 餐次发送 `menuItems = []`，先建一条空白计划；若该餐次已有计划，则应直接打开已有计划，不重复发空白新建。
 5. 随机页和详情页调整菜单时，仍必须提交至少一道菜，不允许用空数组清空已有菜单。
 
-## 3. 个人存储
+## 3. 个人空间统计（暂缓开放）
 
 ```text
 GET /api/storage-usage
 Auth: UserBearerAuth
 ```
 
-成功 `data`：
-
-```ts
-interface StorageUsageSummary {
-  state: "NORMAL" | "OVER_STORAGE_READONLY";
-  usedBytes: number;
-  limitBytes: number;
-  remainingBytes: number;
-  byModule: Array<{ module: string; usedBytes: number }>;
-  calculatedAt: IsoDateTime;
-}
-```
-
-该接口只负责个人逻辑存储账本。客户端不得从会员等级自行计算额度，也不得把 `byModule` 当成业务对象列表。
+路径暂时保留，固定返回业务 `code=503`、`message="个人空间统计暂未开放"`、`data=null`。客户端不得展示或自行计算用户/会员空间用量；图片上传的单次文件与压缩上限仅用于上传安全，不代表空间额度。
 
 ## 4. 后台审计
 
@@ -653,6 +641,6 @@ Idempotency-Key: 172251000004
 1. 小程序和后台分别通过本端 `apis/` 请求层调用接口，不跨应用导入类型。
 2. `401` 清理 session、用户资料和关系状态。
 3. 可重试写操作生成并复用 `Idempotency-Key`，成功后再清除。
-4. 会员事实只读 `/users/me.membership`；存储只读 `/storage-usage`。
+4. 会员事实只读 `/users/me.membership`；个人空间统计暂未开放，不读取账本或展示空间额度。
 5. 不使用旧字段兼容、多个字段 fallback 或本地拼装全局权益对象。
 6. 对随机页，客户端不得提前抽出 `manager / engine / adapter / center` 类通用层；先按页面局部 owner 和正式契约实现。

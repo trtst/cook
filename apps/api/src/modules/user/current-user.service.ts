@@ -1,11 +1,11 @@
 import { BadRequestException, ConflictException, Inject, Injectable, UnauthorizedException } from "@nestjs/common";
 import { Prisma, type User } from "@prisma/client";
 import { PrismaService } from "../../common/prisma.service";
-import type { MeResponse, StorageUsageSummary, UpdateCurrentUserRequest, UUID } from "../../contracts/types";
+import type { MeResponse, UpdateCurrentUserRequest, UUID } from "../../contracts/types";
 import { EntitlementService } from "../entitlement/entitlement.service";
 
 type CurrentUserRecord = Pick<User, "id" | "uid" | "nickname" | "avatarUrl" | "cookNo" | "bio" | "gender" | "birthDate" | "passwordHash" | "status">;
-type CurrentUserDb = Pick<Prisma.TransactionClient, "user" | "entitlementGrant" | "diningGroupMember" | "diningGroup" | "storageLedger">;
+type CurrentUserDb = Pick<Prisma.TransactionClient, "user" | "entitlementGrant" | "diningGroupMember" | "diningGroup">;
 
 @Injectable()
 export class CurrentUserService {
@@ -62,56 +62,6 @@ export class CurrentUserService {
       this.assertCookNoCanChange(currentUser, body);
       const patch = this.buildPatch(body);
       await this.updateUser(tx, userId, patch);
-    });
-  }
-
-  async getStorageUsage(userId: UUID): Promise<StorageUsageSummary> {
-    return this.prisma.$transaction(async tx => {
-      const user = await tx.user.findUnique({
-        where: { id: userId },
-        select: {
-          id: true,
-          uid: true,
-          nickname: true,
-          avatarUrl: true,
-          cookNo: true,
-          bio: true,
-          gender: true,
-          birthDate: true,
-          passwordHash: true,
-          status: true
-        }
-      });
-      this.assertActiveUser(user);
-
-      const [resolved, storageRows] = await Promise.all([
-        this.entitlementService.resolveForUser(tx, userId),
-        tx.storageLedger.findMany({
-          where: { userId },
-          select: {
-            module: true,
-            usedBytes: true
-          }
-        })
-      ]);
-
-      const byModuleMap = new Map<string, number>();
-      for (const row of storageRows) {
-        byModuleMap.set(row.module, (byModuleMap.get(row.module) ?? 0) + row.usedBytes);
-      }
-      const usedBytes = Array.from(byModuleMap.values()).reduce((total, value) => total + value, 0);
-
-      return {
-        state: usedBytes > resolved.storageLimitBytes ? "OVER_STORAGE_READONLY" : "NORMAL",
-        usedBytes,
-        limitBytes: resolved.storageLimitBytes,
-        remainingBytes: Math.max(0, resolved.storageLimitBytes - usedBytes),
-        byModule: Array.from(byModuleMap.entries()).map(([module, moduleUsedBytes]) => ({
-          module: module as StorageUsageSummary["byModule"][number]["module"],
-          usedBytes: moduleUsedBytes
-        })),
-        calculatedAt: new Date().toISOString()
-      };
     });
   }
 

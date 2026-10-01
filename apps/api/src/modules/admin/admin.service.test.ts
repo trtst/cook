@@ -154,9 +154,6 @@ test("admin user entitlement summary includes profile fields", async () => {
     user: {
       findUnique: async () => userRow
     },
-    storageLedger: {
-      findMany: async () => []
-    }
   };
   const prisma = {
     $transaction: async <T>(callback: (transaction: typeof tx) => Promise<T>) => callback(tx)
@@ -165,7 +162,6 @@ test("admin user entitlement summary includes profile fields", async () => {
     resolveForUser: async () => ({
       tier: "FREE",
       validUntil: null,
-      storageLimitBytes: 1024,
       recipeLimit: 20,
       recycleDays: 7,
       variantLimitPerRoot: 2,

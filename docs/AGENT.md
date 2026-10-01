@@ -111,8 +111,8 @@ V1 does not implement receipt scanning, OCR, AI, fridge-item photos, owner trans
 
 1. Current collaboration is event-scoped or per-list; there is no dining-group data space in the live product.
 2. All entitlements are user-scoped Free/Plus/Pro/Ultra; there is no dining-group grant.
-3. Numeric defaults, image parameters, storage accounting, variants, recycle bin, personalization, and downgrade behavior come only from `configuration.md` and server policy resolution.
-4. Over-storage users retain viewing, permanent cleanup, export, renewal, and user-owned safety actions.
+3. Numeric defaults, image parameters, variants, recycle bin, personalization, and downgrade behavior come only from `configuration.md` and server policy resolution. Apply storage accounting only when enabled by `configuration.md`; personal and membership storage statistics are currently paused.
+4. When storage accounting is enabled, over-storage users retain viewing, permanent cleanup, export, renewal, and user-owned safety actions. While paused, do not read, update, or clear storage ledgers, calculate image occupancy, or enforce storage-based read-only behavior.
 5. Allergies and strict restrictions are user-owned, always free, and never exposed to unrelated participants.
 6. Fridge and shopping are always user-owned; membership never grants read or write access.
 7. Variant limits are resolved only from the acting user's current personal tier; variants cannot create more variants.

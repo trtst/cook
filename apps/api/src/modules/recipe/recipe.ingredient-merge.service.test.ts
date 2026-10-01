@@ -151,10 +151,9 @@ test("personal ingredient auto-merge leaves fixed recipe content versions unchan
   assert.equal(updatedFixedVersion, false);
 });
 
-test("personal ingredient auto-merge locks drafts before reading and preserves image storage accounting", async () => {
+test("personal ingredient auto-merge locks drafts before reading without calculating space usage", async () => {
   const events: string[] = [];
   const updateBytes: number[] = [];
-  const ledgerBytes: number[] = [];
   const tx = {
     $queryRaw: async () => {
       events.push("lock");
@@ -178,15 +177,6 @@ test("personal ingredient auto-merge locks drafts before reading and preserves i
     ingredient: {
       findMany: async () => [{ id: 10000001, aliases: [], mergedTo: null }]
     },
-    uploadAsset: {
-      aggregate: async () => ({ _sum: { sizeBytes: 5000 } })
-    },
-    storageLedger: {
-      upsert: async ({ update }: { update: { usedBytes: number } }) => {
-        ledgerBytes.push(update.usedBytes);
-        return {};
-      }
-    }
   };
   const service = new RecipeService(
     {} as never,
@@ -200,13 +190,11 @@ test("personal ingredient auto-merge locks drafts before reading and preserves i
   await (service as any).syncDraftIngredientReferences(tx, 7, 10000030, 10000001);
 
   assert.deepEqual(events, ["lock", "read"]);
-  assert.equal(updateBytes[0], 6024);
-  assert.deepEqual(ledgerBytes, [6024]);
+  assert.equal(updateBytes[0], 0);
 });
 
 test("personal ingredient auto-merge keeps an edit draft on its published-recipe delta basis", async () => {
   const updateBytes: number[] = [];
-  const ledgerBytes: number[] = [];
   const tx = {
     $queryRaw: async () => [],
     recipeDraft: {
@@ -246,12 +234,6 @@ test("personal ingredient auto-merge keeps an edit draft on its published-recipe
     ingredient: {
       findMany: async () => [{ id: 10000001, aliases: [], mergedTo: null }]
     },
-    storageLedger: {
-      upsert: async ({ update }: { update: { usedBytes: number } }) => {
-        ledgerBytes.push(update.usedBytes);
-        return {};
-      }
-    }
   };
   const service = new RecipeService(
     {} as never,
@@ -265,5 +247,4 @@ test("personal ingredient auto-merge keeps an edit draft on its published-recipe
   await (service as any).syncDraftIngredientReferences(tx, 7, 10000030, 10000001);
 
   assert.deepEqual(updateBytes, [0]);
-  assert.deepEqual(ledgerBytes, [0]);
 });

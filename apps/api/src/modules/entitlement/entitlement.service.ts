@@ -47,7 +47,6 @@ export class EntitlementService {
       inviteLimit: policy.inviteLimit[tier],
       joinLimit: policy.joinLimit[tier],
       memberLimit: policy.memberLimit[tier],
-      storageLimitBytes: policy.storageLimitBytes[tier],
       recycleDays: policy.recycleDays[tier],
       variantLimitPerRoot: policy.variantLimit[tier],
       imagePolicy: policy.image[tier],

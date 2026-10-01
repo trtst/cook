@@ -42,7 +42,7 @@
 | User | PUT | `/users/me/password` | 修改当前用户登录密码 |
 | User | GET | `/users/me/taste-profile` | 当前用户口味与安全资料 |
 | User | PUT | `/users/me/taste-profile` | 更新当前用户口味与安全资料 |
-| Storage | GET | `/storage-usage` | 个人逻辑空间模块明细 |
+| Storage | GET | `/storage-usage` | 暂缓开放，固定返回业务 `code=503` |
 | AdminAuth | POST | `/admin/auth/login` | 管理员登录 |
 | AdminDashboard | GET | `/admin/dashboard/summary` | 后台首页摘要统计 |
 | AdminMaterial | GET | `/admin/material-images` | 后台图片素材分页列表 |
@@ -81,7 +81,7 @@
 | AdminUser | PUT | `/admin/users/{userId}` | 更新用户昵称或手机号 |
 | AdminUser | POST | `/admin/users/{userId}/status` | 启用或禁用用户 |
 | AdminUser | POST | `/admin/users/{userId}/reset-password` | 重置用户密码 |
-| AdminEntitlement | GET | `/admin/user-entitlements` | SUPER_ADMIN 查询用户会员、空间和分域策略摘要 |
+| AdminEntitlement | GET | `/admin/user-entitlements` | SUPER_ADMIN 查询用户会员与分域策略摘要，不含空间用量 |
 | Inspiration | GET | `/inspiration-categories` | 匿名灵感分类列表 |
 | Inspiration | GET | `/inspiration-recipes` | 匿名灵感菜谱分页 |
 | Inspiration | GET | `/inspiration-recipes/{recipeId}` | 匿名灵感菜谱详情 |

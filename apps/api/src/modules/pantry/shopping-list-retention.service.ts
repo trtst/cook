@@ -63,25 +63,6 @@ export class ShoppingListRetentionService implements OnApplicationBootstrap, OnM
       const listIds = expiredLists.map(list => list.id);
       if (!listIds.length) return 0;
 
-      const items = await tx.shoppingItem.findMany({
-        where: { listId: { in: listIds } },
-        select: { id: true, userId: true }
-      });
-      const itemIdsByUser = new Map<number, string[]>();
-      for (const item of items) {
-        const userItemIds = itemIdsByUser.get(item.userId) ?? [];
-        userItemIds.push(String(item.id));
-        itemIdsByUser.set(item.userId, userItemIds);
-      }
-
-      if (itemIdsByUser.size) {
-        await tx.storageLedger.deleteMany({
-          where: {
-            module: "SHOPPING",
-            OR: [...itemIdsByUser].map(([userId, recordKeys]) => ({ userId, recordKey: { in: recordKeys } }))
-          }
-        });
-      }
       await tx.shoppingItem.deleteMany({ where: { listId: { in: listIds } } });
       const result = await tx.shoppingList.deleteMany({
         where: { id: { in: listIds }, status: "VOIDED", voidedAt: { lte: cutoff } }

@@ -1,5 +1,4 @@
 const mb = 1024 * 1024;
-const gb = 1024 * mb;
 
 /** 当前已冻结的服务端策略目录；扩大权限前必须更新契约并经过配置审计。 */
 export const policy = {
@@ -39,12 +38,6 @@ export const policy = {
     PLUS: 120,
     PRO: 200,
     ULTRA: 350
-  },
-  storageLimitBytes: {
-    FREE: 100 * mb,
-    PLUS: 300 * mb,
-    PRO: 500 * mb,
-    ULTRA: 2 * gb
   },
   recycleDays: {
     FREE: 0,
