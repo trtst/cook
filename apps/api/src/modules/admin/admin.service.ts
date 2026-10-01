@@ -96,7 +96,6 @@ import type {
   ReorderItem,
   ResetAdminUserPasswordRequest,
   SetAdminUserStatusRequest,
-  StorageUsageSummary,
   UnitSummary,
   UpdateAdminUnitRequest,
   UpdateAdminInspirationCategoryRequest,
@@ -1154,33 +1153,7 @@ export class AdminService {
       });
       if (!user) throw new NotFoundException("用户不存在");
 
-      const [resolved, storageRows] = await Promise.all([
-        this.entitlementService.resolveForUser(tx, userId),
-        tx.storageLedger.findMany({
-          where: { userId },
-          select: {
-            module: true,
-            usedBytes: true
-          }
-        })
-      ]);
-
-      const byModuleMap = new Map<string, number>();
-      for (const row of storageRows) {
-        byModuleMap.set(row.module, (byModuleMap.get(row.module) ?? 0) + row.usedBytes);
-      }
-      const usedBytes = Array.from(byModuleMap.values()).reduce((total, value) => total + value, 0);
-      const storage: StorageUsageSummary = {
-        state: usedBytes > resolved.storageLimitBytes ? "OVER_STORAGE_READONLY" : "NORMAL",
-        usedBytes,
-        limitBytes: resolved.storageLimitBytes,
-        remainingBytes: Math.max(0, resolved.storageLimitBytes - usedBytes),
-        byModule: Array.from(byModuleMap.entries()).map(([module, moduleUsedBytes]) => ({
-          module: module as AdminUserEntitlementResponse["storage"]["byModule"][number]["module"],
-          usedBytes: moduleUsedBytes
-        })),
-        calculatedAt: toIsoDate(new Date())
-      };
+      const resolved = await this.entitlementService.resolveForUser(tx, userId);
 
       return {
         user: {
@@ -1203,7 +1176,6 @@ export class AdminService {
           canUseProfileBackground: false,
           canUseHomeBackground: false
         },
-        storage,
         recipePolicy: {
           recipeLimit: resolved.recipeLimit,
           recycleDays: resolved.recycleDays,
@@ -4569,19 +4541,7 @@ export class AdminService {
       await completeAdminIdempotentOperation(tx, operationId, "admin-recipe-import:delete-job", adminId, requestHash, result);
       return { result, tempKeys: Array.from(tempKeys) };
     });
-    const failedTempKeys = await this.adminRecipeImageService.discardTempImages(tempKeys);
-    if (failedTempKeys.length > 0) {
-      await this.prisma.auditEvent.create({
-        data: {
-          actorType: "ADMIN",
-          actorAdminId: adminId,
-          action: "RECIPE_IMAGE_CLEANUP_FAILED",
-          objectType: "RECIPE_IMPORT_JOB",
-          objectId: jobId,
-          payload: { tempKeys: failedTempKeys }
-        }
-      });
-    }
+    await this.discardAdminRecipeTempImagesWithAudit(tempKeys, adminId, "RECIPE_IMPORT_JOB", jobId, "import-job-delete");
     return result;
   }
 
@@ -4739,19 +4699,7 @@ export class AdminService {
       return { nextItemId: updated.id, staleTempKeys };
     });
 
-    const failedTempKeys = await this.adminRecipeImageService.discardTempImages(staleTempKeys);
-    if (failedTempKeys.length > 0) {
-      await this.prisma.auditEvent.create({
-        data: {
-          actorType: "ADMIN",
-          actorAdminId: adminId,
-          action: "RECIPE_IMAGE_CLEANUP_FAILED",
-          objectType: "RECIPE_IMPORT_ITEM",
-          objectId: itemId,
-          payload: { tempKeys: failedTempKeys }
-        }
-      });
-    }
+    await this.discardAdminRecipeTempImagesWithAudit(staleTempKeys, adminId, "RECIPE_IMPORT_ITEM", itemId, "import-item-update");
 
     const nextItem = await this.prisma.recipeImportItem.findFirst({
       where: { id: nextItemId, job: { sourceType: "JSON" } }
@@ -4806,8 +4754,10 @@ export class AdminService {
         return nextState;
       });
 
+      const recipeId = await this.reserveRecipeId(this.prisma);
       const stagedImages = await this.stageRecipeImportImages(
         request,
+        recipeId,
         preflightRawBody,
         preflightRecipeBody,
         publishedStorageKeys,
@@ -4902,6 +4852,7 @@ export class AdminService {
         if (!inspirationOwner) throw new ConflictException("公共内容用户不存在");
         const recipe = await tx.recipe.create({
           data: {
+            id: recipeId,
             ownerId: inspirationOwnerId,
             ownerNicknameSnapshot: toOwnerNicknameSnapshot(inspirationOwner.nickname),
             isInspiration: true,
@@ -4960,7 +4911,7 @@ export class AdminService {
 
       publicationCommitted = !publication.repeated;
       if (publication.repeated) {
-        await this.adminRecipeImageService.removePublishedImages(publishedStorageKeys);
+        await this.removeAdminRecipeImagesWithAudit(publishedStorageKeys, adminId, "RECIPE_IMPORT_ITEM", itemId, "import-idempotency-replay");
       }
       const nextItem = await this.prisma.recipeImportItem.findFirst({
         where: { id: publication.id, job: { sourceType: "JSON" } }
@@ -4971,28 +4922,17 @@ export class AdminService {
       return this.buildRecipeImportItemDetail(nextItem);
     } catch (error) {
       if (!publicationCommitted) {
-        await this.adminRecipeImageService.removePublishedImages(publishedStorageKeys);
+        await this.removeAdminRecipeImagesWithAudit(publishedStorageKeys, adminId, "RECIPE_IMPORT_ITEM", itemId, "import-publish-rollback");
       }
       throw error;
     } finally {
-      const failedTempKeys = (await this.adminRecipeImageService.discardTempImages(tempImageKeys)) ?? [];
-      if (failedTempKeys.length > 0) {
-        await this.prisma.auditEvent.create({
-          data: {
-            actorType: "ADMIN",
-            actorAdminId: adminId,
-            action: "RECIPE_IMAGE_CLEANUP_FAILED",
-            objectType: "RECIPE_IMPORT_ITEM",
-            objectId: itemId,
-            payload: { tempKeys: failedTempKeys }
-          }
-        });
-      }
+      await this.discardAdminRecipeTempImagesWithAudit(tempImageKeys, adminId, "RECIPE_IMPORT_ITEM", itemId, "import-temp-cleanup");
     }
   }
 
   private async stageRecipeImportImages(
     request: { protocol?: string; get?: (name: string) => string | undefined },
+    recipeId: UUID,
     rawBody: RecipeImportRawBody,
     recipeBody: RecipeImportRecipeBody,
     publishedStorageKeys: string[],
@@ -5016,7 +4956,7 @@ export class AdminService {
       }
       remoteImageCount += 1;
       const published = (async () => {
-        const result = await this.adminRecipeImageService.publishRemoteImage(request, scene, normalizedUrl);
+        const result = await this.adminRecipeImageService.publishRemoteImage(request, recipeId, scene, normalizedUrl);
         const sizeBytes = Number(result.sizeBytes) || 0;
         remoteImageBytes += sizeBytes;
         if (remoteImageBytes > maxImportRemoteImageBytes) {
@@ -5035,7 +4975,7 @@ export class AdminService {
 
     let coverImageUrl: string | null = null;
     if (recipeBody.coverImageTempKey) {
-      const published = await this.adminRecipeImageService.publishTempImage(request, "COVER", recipeBody.coverImageTempKey);
+      const published = await this.adminRecipeImageService.publishTempImage(request, recipeId, "COVER", recipeBody.coverImageTempKey);
       tempImageKeys.push(recipeBody.coverImageTempKey);
       publishedStorageKeys.push(published.storageKey);
       coverImageUrl = published.imageUrl;
@@ -5043,7 +4983,7 @@ export class AdminService {
       const image = imageMap.get(recipeBody.coverImageKey);
       if (!image) throw new BadRequestException("封面图片不存在");
       const buffer = await readImageBuffer(rawBody.assetFolder, image.fileName);
-      const published = await this.adminRecipeImageService.publishImageBuffer(request, "COVER", buffer);
+      const published = await this.adminRecipeImageService.publishImageBuffer(request, recipeId, "COVER", buffer);
       publishedStorageKeys.push(published.storageKey);
       coverImageUrl = published.imageUrl;
     } else if (recipeBody.coverImageUrl) {
@@ -5055,7 +4995,7 @@ export class AdminService {
     const stepImageUrls: Array<string | null> = [];
     for (const step of recipeBody.steps) {
       if (step.imageTempKey) {
-        const published = await this.adminRecipeImageService.publishTempImage(request, "STEP", step.imageTempKey);
+        const published = await this.adminRecipeImageService.publishTempImage(request, recipeId, "STEP", step.imageTempKey);
         tempImageKeys.push(step.imageTempKey);
         publishedStorageKeys.push(published.storageKey);
         stepImageUrls.push(published.imageUrl);
@@ -5074,7 +5014,7 @@ export class AdminService {
       const image = imageMap.get(step.imageKey);
       if (!image) throw new BadRequestException("步骤图片不存在");
       const buffer = await readImageBuffer(rawBody.assetFolder, image.fileName);
-      const published = await this.adminRecipeImageService.publishImageBuffer(request, "STEP", buffer);
+      const published = await this.adminRecipeImageService.publishImageBuffer(request, recipeId, "STEP", buffer);
       publishedStorageKeys.push(published.storageKey);
       stepImageUrls.push(published.imageUrl);
     }
@@ -5082,7 +5022,7 @@ export class AdminService {
     const assistantSteps: NonNullable<RecipeImportRecipeBody["assistantSteps"]> = [];
     for (const assistantStep of recipeBody.assistantSteps ?? []) {
       if (assistantStep.imageTempKey) {
-        const published = await this.adminRecipeImageService.publishTempImage(request, "STEP", assistantStep.imageTempKey);
+        const published = await this.adminRecipeImageService.publishTempImage(request, recipeId, "STEP", assistantStep.imageTempKey);
         tempImageKeys.push(assistantStep.imageTempKey);
         publishedStorageKeys.push(published.storageKey);
         assistantSteps.push({ ...assistantStep, imageTempKey: null, imageUrl: published.imageUrl });
@@ -5297,6 +5237,7 @@ export class AdminService {
         for (const target of targets) {
           const result = await this.adminRecipeImageService.publishTempImage(
             request,
+            recipeId,
             target.target === "COVER" ? "COVER" : "STEP",
             target.tempKey
           );
@@ -5890,6 +5831,7 @@ export class AdminService {
 
     const publishedStorageKeys: string[] = [];
     const consumedTempKeys = new Set<string>();
+    let cleanupRecipeId: UUID | null = null;
     try {
       const result = await this.prisma.$transaction(async tx => {
         const repeated = await getAdminIdempotentResult<AdminRecipeDetail>(tx, body.operationId, "admin-recipe:create", adminId, requestHash);
@@ -5897,8 +5839,11 @@ export class AdminService {
         await startAdminIdempotentOperation(tx, body.operationId, "admin-recipe:create", adminId, requestHash);
 
         const inspirationCategory = await this.requireInspirationCategory(tx, body.inspirationCategoryId);
+        const recipeId = await this.reserveRecipeId(tx);
+        cleanupRecipeId = recipeId;
         const imageState = await this.buildAdminRecipeImageState(
           request,
+          recipeId,
           body.coverImageUrl,
           body.coverImageTempKey,
           body.content,
@@ -5931,6 +5876,7 @@ export class AdminService {
         if (!inspirationOwner) throw new ConflictException("公共内容用户不存在");
         const created = await tx.recipe.create({
           data: {
+            id: recipeId,
             ownerId: inspirationOwnerId,
             ownerNicknameSnapshot: toOwnerNicknameSnapshot(inspirationOwner.nickname),
             isInspiration: true,
@@ -5971,10 +5917,10 @@ export class AdminService {
       });
       return result;
     } catch (error) {
-      await this.adminRecipeImageService.removePublishedImages(publishedStorageKeys);
+      await this.removeAdminRecipeImagesWithAudit(publishedStorageKeys, adminId, "RECIPE", cleanupRecipeId, "create-rollback");
       throw error;
     } finally {
-      await this.adminRecipeImageService.discardTempImages(consumedTempKeys);
+      await this.discardAdminRecipeTempImagesWithAudit(consumedTempKeys, adminId, "RECIPE", cleanupRecipeId, "create-temp-cleanup");
     }
   }
 
@@ -6401,6 +6347,7 @@ export class AdminService {
         const inspirationCategory = await this.requireInspirationCategory(tx, body.inspirationCategoryId);
         const imageState = await this.buildAdminRecipeImageState(
           request,
+          recipeId,
           body.coverImageUrl,
           body.coverImageTempKey,
           body.content,
@@ -6460,10 +6407,10 @@ export class AdminService {
       });
       return result;
     } catch (error) {
-      await this.adminRecipeImageService.removePublishedImages(publishedStorageKeys);
+      await this.removeAdminRecipeImagesWithAudit(publishedStorageKeys, adminId, "RECIPE", recipeId, "update-rollback");
       throw error;
     } finally {
-      await this.adminRecipeImageService.discardTempImages(consumedTempKeys);
+      await this.discardAdminRecipeTempImagesWithAudit(consumedTempKeys, adminId, "RECIPE", recipeId, "update-temp-cleanup");
     }
   }
 
@@ -6672,19 +6619,7 @@ export class AdminService {
       await completeAdminIdempotentOperation(tx, operationId, "admin-recipe:delete", adminId, requestHash, result);
       return { result, storageKeys };
     });
-    const failedStorageKeys = await this.adminRecipeImageService.removePublishedImages(deletion.storageKeys);
-    if (failedStorageKeys.length > 0) {
-      await this.prisma.auditEvent.create({
-        data: {
-          actorType: "ADMIN",
-          actorAdminId: adminId,
-          action: "RECIPE_IMAGE_CLEANUP_FAILED",
-          objectType: "RECIPE",
-          objectId: recipeId,
-          payload: { storageKeys: failedStorageKeys }
-        }
-      });
-    }
+    await this.removeAdminRecipeImagesWithAudit(deletion.storageKeys, adminId, "RECIPE", recipeId, "recipe-delete");
     return deletion.result;
   }
 
@@ -6712,6 +6647,52 @@ export class AdminService {
     collect(recipe.currentVersion.imagesJson);
     collect(recipe.currentVersion.cookAssistant?.snapshotJson);
     return Array.from(new Set(urls.map(url => this.adminRecipeImageService.publishedStorageKeyFromUrl(url)).filter((key): key is string => Boolean(key))));
+  }
+
+  private async removeAdminRecipeImagesWithAudit(
+    storageKeys: Iterable<string>,
+    adminId: UUID,
+    objectType: string,
+    objectId: UUID | null,
+    phase: string
+  ) {
+    const failedStorageKeys = await this.adminRecipeImageService.removePublishedImages(storageKeys);
+    await this.auditAdminRecipeImageCleanupFailure(adminId, objectType, objectId, { storageKeys: failedStorageKeys, phase });
+  }
+
+  private async discardAdminRecipeTempImagesWithAudit(
+    tempKeys: Iterable<string>,
+    adminId: UUID,
+    objectType: string,
+    objectId: UUID | null,
+    phase: string
+  ) {
+    const failedTempKeys = await this.adminRecipeImageService.discardTempImages(tempKeys);
+    await this.auditAdminRecipeImageCleanupFailure(adminId, objectType, objectId, { tempKeys: failedTempKeys, phase });
+  }
+
+  private async auditAdminRecipeImageCleanupFailure(
+    adminId: UUID,
+    objectType: string,
+    objectId: UUID | null,
+    payload: { storageKeys?: string[]; tempKeys?: string[]; phase: string }
+  ) {
+    if (!payload.storageKeys?.length && !payload.tempKeys?.length) return;
+    try {
+      await this.prisma.auditEvent.create({
+        data: {
+          actorType: "ADMIN",
+          actorAdminId: adminId,
+          action: "RECIPE_IMAGE_CLEANUP_FAILED",
+          objectType,
+          objectId,
+          payload
+        }
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "unknown error";
+      console.error(`[admin] recipe image cleanup audit failed for ${objectType} ${objectId}, payload=${JSON.stringify(payload)}: ${message}`);
+    }
   }
 
   async resolveRecipeReport(reportId: UUID, adminId: UUID, operationId: OperationId, resolutionNote?: string | null) {
@@ -7701,6 +7682,7 @@ export class AdminService {
 
   private async buildAdminRecipeImageState(
     request: { protocol?: string; get?: (name: string) => string | undefined },
+    recipeId: UUID,
     coverImageUrl: string | null,
     coverImageTempKey: string | null,
     content: AdminRecipeContentInput,
@@ -7721,6 +7703,7 @@ export class AdminService {
 
     const nextCoverImageUrl = await this.resolveAdminRecipeImageUrl(
       request,
+      recipeId,
       "COVER",
       normalizeImageUrl(coverImageUrl),
       coverImageTempKey,
@@ -7734,6 +7717,7 @@ export class AdminService {
     for (const step of content.steps) {
       const nextStepImageUrl = await this.resolveAdminRecipeImageUrl(
         request,
+        recipeId,
         "STEP",
         normalizeImageUrl(step.imageUrl),
         step.imageTempKey,
@@ -7753,6 +7737,7 @@ export class AdminService {
 
   private async resolveAdminRecipeImageUrl(
     request: { protocol?: string; get?: (name: string) => string | undefined },
+    recipeId: UUID,
     scene: "COVER" | "STEP",
     imageUrl: string | null,
     imageTempKey: string | null,
@@ -7763,7 +7748,7 @@ export class AdminService {
   ) {
     const normalizedTempKey = imageTempKey?.trim() || null;
     if (normalizedTempKey) {
-      const published = await this.adminRecipeImageService.publishTempImage(request, scene, normalizedTempKey);
+      const published = await this.adminRecipeImageService.publishTempImage(request, recipeId, scene, normalizedTempKey);
       publishedStorageKeys.push(published.storageKey);
       consumedTempKeys.add(normalizedTempKey);
       return published.imageUrl;
@@ -7846,6 +7831,15 @@ export class AdminService {
       select: { id: true }
     });
     if (!user) throw new NotFoundException("用户不存在");
+  }
+
+  private async reserveRecipeId(tx: Prisma.TransactionClient | PrismaService = this.prisma): Promise<UUID> {
+    const rows = await tx.$queryRaw<Array<{ id: bigint | number }>>`SELECT nextval(pg_get_serial_sequence('recipes', 'id')) AS id`;
+    const recipeId = Number(rows[0]?.id);
+    if (!Number.isSafeInteger(recipeId) || recipeId <= 0) {
+      throw new ConflictException("无法创建菜谱，请稍后重试");
+    }
+    return recipeId;
   }
 
   private async requireSuperAdmin(adminId: UUID) {

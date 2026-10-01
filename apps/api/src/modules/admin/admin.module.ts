@@ -10,7 +10,7 @@ import { AdminMaterialImageController, AdminMaterialImagePublicController } from
 import { AdminMaterialImageService } from "./admin-material-image.service";
 import { AdminDashboardController } from "./admin-dashboard.controller";
 import { AdminDashboardService } from "./admin-dashboard.service";
-import { AdminRecipeImageController, AdminRecipeImagePublicController } from "./admin-recipe-image.controller";
+import { AdminRecipeImageController } from "./admin-recipe-image.controller";
 import { AdminRecipeImageService } from "./admin-recipe-image.service";
 import {
   AdminSiteContentController,
@@ -43,8 +43,7 @@ import { SiteContentImageService } from "./site-content-image.service";
     SiteContentArticleController,
     SiteOfficialMessageController,
     SiteContentImagePublicController,
-    AdminRecipeImageController,
-    AdminRecipeImagePublicController
+    AdminRecipeImageController
   ],
   providers: [
     AdminService,

@@ -128,7 +128,7 @@ test("admin cannot delete a referenced system ingredient", async () => {
     },
     ingredientRecommendation: { count: async () => 0 },
     ingredientFeedback: { count: async () => 0 },
-    fridgeItem: { count: async () => 1 },
+    fridgeTrace: { count: async () => 1 },
     shoppingItem: { count: async () => 0 },
     ingredientNutrientMapping: { count: async () => 0 },
     ingredientUnitNutrientConversion: { count: async () => 0 }
@@ -170,7 +170,7 @@ test("admin deletes an unused pending imported ingredient with nutrition data", 
     },
     ingredientRecommendation: { count: async () => 0 },
     ingredientFeedback: { count: async () => 0 },
-    fridgeItem: { count: async () => 0 },
+    fridgeTrace: { count: async () => 0 },
     shoppingItem: { count: async () => 0 },
     ingredientNutrientMapping: { count: async () => 1 },
     ingredientUnitNutrientConversion: { count: async () => 1 },
@@ -368,6 +368,7 @@ test("admin physically deletes a blocked inspiration recipe", async () => {
     recipeCollection: { count: async () => 0 },
     homeTopicItem: { count: async () => 0 },
     mealPlanDish: { count: async () => 0 },
+    diningEventParticipantBringRecipe: { count: async () => 0 },
     diningEventParticipant: { count: async () => 0 },
     diningEventWishItem: { count: async () => 0 },
     diningEventMenuItem: { count: async () => 0 },
@@ -385,6 +386,7 @@ test("admin physically deletes a blocked inspiration recipe", async () => {
       auditEvent: {
         create: async ({ data }: { data: { action?: string; payload?: unknown } }) => {
           cleanupAudits.push(data);
+          throw new Error("audit storage unavailable");
         }
       },
       $transaction: async <T>(callback: (transaction: typeof tx) => Promise<T>) => callback(tx)
@@ -420,7 +422,7 @@ test("admin physically deletes a blocked inspiration recipe", async () => {
       action: "RECIPE_IMAGE_CLEANUP_FAILED",
       objectType: "RECIPE",
       objectId: recipe.id,
-      payload: { storageKeys: ["uploads/admin-recipe-images/step.jpg"] }
+      payload: { storageKeys: ["uploads/admin-recipe-images/step.jpg"], phase: "recipe-delete" }
     }
   ]);
 });
@@ -441,9 +443,22 @@ test("admin deletes a recipe import job without deleting published recipes", asy
         deletedId = where.id;
       }
     },
+    recipeImportItem: {
+      findMany: async () => []
+    },
     auditEvent: { create: async () => undefined }
   };
-  const service = createAdminService(tx);
+  const service = new AdminService(
+    {
+      adminAccount: { findUnique: async () => ({ status: "ACTIVE", roles: ["SUPER_ADMIN"] }) },
+      $transaction: async <T>(callback: (transaction: typeof tx) => Promise<T>) => callback(tx)
+    } as never,
+    {} as never,
+    {} as never,
+    { discardTempImages: async () => [] } as never,
+    {} as never,
+    {} as never
+  );
 
   const result = await (service as unknown as {
     deleteRecipeImportJob(jobId: number, operationId: string, adminId: number): Promise<{ jobId: number }>;

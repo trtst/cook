@@ -1,6 +1,6 @@
 import { BadRequestException, Body, Controller, Get, Inject, Param, Post, Req, Res, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
-import { ApiBearerAuth, ApiConsumes, ApiExcludeController, ApiOkResponse, ApiProduces, ApiTags } from "@nestjs/swagger";
+import { ApiBearerAuth, ApiConsumes, ApiOkResponse, ApiProduces, ApiTags } from "@nestjs/swagger";
 import type { Writable } from "node:stream";
 import { ok } from "../../common/api-response";
 import { AdminAuthGuard } from "../../common/admin-auth.guard";
@@ -57,21 +57,6 @@ export class AdminRecipeImageController {
     response.setHeader("Content-Type", asset.contentType);
     response.setHeader("Content-Length", asset.stat.size);
     response.setHeader("Cache-Control", "private, no-store");
-    asset.stream.pipe(response);
-  }
-}
-
-@ApiExcludeController()
-@Controller("static/uploads/admin-recipe-images")
-export class AdminRecipeImagePublicController {
-  constructor(@Inject(AdminRecipeImageService) private readonly adminRecipeImageService: AdminRecipeImageService) {}
-
-  @Get(":fileName")
-  async getPublicImage(@Param("fileName") fileName: string, @Res() response: ResponseLike) {
-    const asset = await this.adminRecipeImageService.getPublicImageAsset(fileName);
-    response.setHeader("Content-Type", asset.contentType);
-    response.setHeader("Content-Length", asset.stat.size);
-    response.setHeader("Cache-Control", "public, max-age=300");
     asset.stream.pipe(response);
   }
 }

@@ -1160,7 +1160,7 @@ export class AdminController {
   @Post("ingredients/:ingredientId/image")
   @UseGuards(AdminAuthGuard)
   @ApiBearerAuth("AdminBearerAuth")
-  @UseInterceptors(FileInterceptor("file", { limits: { fileSize: 2 * 1024 * 1024 } }))
+  @UseInterceptors(FileInterceptor("file", { limits: { fileSize: 6 * 1024 * 1024 } }))
   @ApiConsumes("multipart/form-data")
   @ApiIdempotencyKey()
   @ApiOkModel(AdminIngredientModel, "上传或替换系统食材图片")

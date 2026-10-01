@@ -508,7 +508,7 @@ export class MealController {
   @Post("dining-events/:eventId/cover")
   @UseGuards(UserAuthGuard)
   @ApiBearerAuth("UserBearerAuth")
-  @UseInterceptors(FileInterceptor("file", { limits: { fileSize: 10 * 1024 * 1024 } }))
+  @UseInterceptors(FileInterceptor("file", { limits: { fileSize: 5 * 1024 * 1024 } }))
   @ApiConsumes("multipart/form-data")
   @ApiIdempotencyKey()
   @ApiOkModel(DiningEventModel, "上传或替换饭局封面图")

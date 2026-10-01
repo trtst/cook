@@ -473,13 +473,13 @@ export class RecipeController {
   @ApiIdempotencyKey()
   @ApiOkModel(PublishRecipeDraftResultModel, "发布一个草稿到我的菜谱")
   publishRecipeDraft(
-    @Req() request: RequestWithUser,
+    @Req() request: RequestWithUser & { protocol?: string; get?: (name: string) => string | undefined },
     @Param("draftId", ParseIntPipe) draftId: number,
     @ReadIdempotencyKey() operationId: string,
     @Body() body: PublishRecipeDraftDto
   ) {
     return this.recipeService
-      .publishRecipeDraft(request.user.userId, draftId, operationId, body.expectedVersion)
+      .publishRecipeDraft(request, request.user.userId, draftId, operationId, body.expectedVersion)
       .then(result => ok(result));
   }
 

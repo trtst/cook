@@ -22,7 +22,7 @@ export class UploadController {
   @Post("uploads/images")
   @UseGuards(UserAuthGuard)
   @ApiBearerAuth("UserBearerAuth")
-  @UseInterceptors(FileInterceptor("file", { limits: { fileSize: 10 * 1024 * 1024 } }))
+  @UseInterceptors(FileInterceptor("file", { limits: { fileSize: 5 * 1024 * 1024 } }))
   @ApiConsumes("multipart/form-data")
   @ApiIdempotencyKey()
   @ApiOkModel(UploadImageResultModel, "上传或替换草稿里的菜谱图片")
@@ -46,9 +46,28 @@ export class UploadController {
 export class UploadPublicController {
   constructor(@Inject(UploadService) private readonly uploadService: UploadService) {}
 
-  @Get("recipe-images/:fileName")
-  async getRecipeImage(@Param("fileName") fileName: string, @Res() response: ResponseLike) {
-    const asset = await this.uploadService.getRecipeImageAsset(fileName);
+  @Get("recipe-images/.tmp/:draftId/:fileName")
+  @UseGuards(UserAuthGuard)
+  async getDraftRecipeImage(
+    @Param("draftId", ParseIntPipe) draftId: number,
+    @Param("fileName") fileName: string,
+    @Req() request: RequestWithUser,
+    @Res() response: ResponseLike
+  ) {
+    const asset = await this.uploadService.getDraftRecipeImageAsset(request.user.userId, draftId, fileName);
+    response.setHeader("Content-Type", asset.contentType);
+    response.setHeader("Content-Length", asset.stat.size);
+    response.setHeader("Cache-Control", "private, no-store");
+    asset.stream.pipe(response);
+  }
+
+  @Get("recipe-images/:recipeId/:fileName")
+  async getRecipeImage(
+    @Param("recipeId", ParseIntPipe) recipeId: number,
+    @Param("fileName") fileName: string,
+    @Res() response: ResponseLike
+  ) {
+    const asset = await this.uploadService.getRecipeImageAsset(recipeId, fileName);
     response.setHeader("Content-Type", asset.contentType);
     response.setHeader("Content-Length", asset.stat.size);
     response.setHeader("Cache-Control", "public, max-age=300");

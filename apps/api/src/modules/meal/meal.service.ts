@@ -791,10 +791,6 @@ function buildMealCookAssistantSnapshot(plan: MealPlanRow, menuItems: PlanMenuIt
   };
 }
 
-function diningEventCoverRecordKey(eventId: UUID) {
-  return `dining-event-cover:${eventId}`;
-}
-
 function isMealPlanMenuLocked(plan: Pick<MealPlanRow, "menuLockedAt">) {
   return Boolean(plan.menuLockedAt);
 }
@@ -1871,10 +1867,23 @@ export class MealService {
   ) {
     let previousStorageKey: string | null = null;
     let uploadedStorageKey: string | null = null;
+    const requestHash = hashText(`${eventId}:${expectedVersion}:${Math.max(0, file.size ?? 0)}`);
+    const repeated = await this.prisma.$transaction(tx =>
+      getIdempotentResult<DiningEventSummary>(tx, operationId, "dining-event:cover", userId, null, requestHash)
+    );
+    if (repeated) return repeated;
+
+    const event = await this.prisma.diningEvent.findFirst({
+      where: { id: eventId, userId },
+      select: { version: true }
+    });
+    if (!event) throw new NotFoundException("饭局不存在");
+    if (event.version !== expectedVersion) throw new ConflictException("饭局已被更新，请刷新后重试");
+
+    const compressedImage = await this.uploadService.prepareDiningEventCover(file);
 
     try {
       const result = await this.prisma.$transaction(async tx => {
-        const requestHash = hashText(`${eventId}:${expectedVersion}:${Math.max(0, file.size ?? 0)}`);
         const repeated = await getIdempotentResult<DiningEventSummary>(tx, operationId, "dining-event:cover", userId, null, requestHash);
         if (repeated) return repeated;
         await startIdempotentOperation(tx, operationId, "dining-event:cover", userId, null, requestHash);
@@ -1897,8 +1906,7 @@ export class MealService {
         }
 
         previousStorageKey = current.coverStorageKey ?? null;
-        await this.assertStorageWritable(tx, userId, Math.max(0, file.size ?? 0));
-        const stored = await this.uploadService.storeDiningEventCover(file, eventId);
+        const stored = await this.uploadService.storeDiningEventCover(compressedImage, eventId);
         uploadedStorageKey = stored.storageKey;
 
         await tx.diningEvent.update({
@@ -1909,7 +1917,6 @@ export class MealService {
             version: { increment: 1 }
           }
         });
-        await upsertStorageLedger(tx, userId, "MEAL", diningEventCoverRecordKey(eventId), stored.sizeBytes);
         const next = await this.getDiningEvent(userId, eventId, tx, request);
         await completeIdempotentOperation(tx, operationId, "dining-event:cover", userId, null, requestHash, next);
         return next;
@@ -2921,7 +2928,6 @@ export class MealService {
       const planItemId = current.mealPlanItemId;
       await this.mealReminderService.clearTarget(tx, { diningEventId: current.id });
       if (planItemId) await this.mealReminderService.clearTarget(tx, { mealPlanItemId: planItemId });
-      const participantIds = current.participants.map(item => item.id);
       const shoppingWhere = {
         userId,
         status: { not: "BOUGHT" as const },
@@ -2938,13 +2944,6 @@ export class MealService {
       const shoppingItemIds = shoppingItems.map(item => item.id);
 
       if (shoppingItemIds.length) {
-        await tx.storageLedger.deleteMany({
-          where: {
-            userId,
-            module: "SHOPPING",
-            recordKey: { in: shoppingItemIds.map(id => String(id)) }
-          }
-        });
         await tx.shoppingItem.deleteMany({ where: { id: { in: shoppingItemIds } } });
         if (shoppingListIds.length) {
           await tx.shoppingList.updateMany({
@@ -2972,18 +2971,6 @@ export class MealService {
           ]
         }
       });
-      await tx.storageLedger.deleteMany({
-        where: {
-          userId,
-          OR: [
-            { module: "MEAL", recordKey: String(current.id) },
-            ...(planItemId ? [{ module: "MEAL" as const, recordKey: String(planItemId) }] : []),
-            ...(participantIds.length ? [{ module: "MEAL_GUEST" as const, recordKey: { in: participantIds.map(id => String(id)) } }] : []),
-            ...(current.coverStorageKey ? [{ module: "MEAL" as const, recordKey: diningEventCoverRecordKey(current.id) }] : [])
-          ]
-        }
-      });
-
       const cleanupEvent = current.coverStorageKey
         ? await tx.outboxEvent.create({
             data: {
@@ -3176,31 +3163,15 @@ export class MealService {
               )
             : null;
         let miniCodeStorageKey = prepared.event.memoryMiniCodeStorageKey;
-        let miniCodeBytes = 0;
         if (!miniCodeStorageKey) {
           const stableMemoryToken = createDiningMemoryShareToken(prepared.event.id);
           const miniCode = await this.wechatMiniCodeService.createMemoryShareCode(stableMemoryToken);
           miniCodeStorageKey = this.uploadService.buildDiningMemoryMiniCodeStorageKey(hashText(stableMemoryToken), miniCode.contentType);
           createdStorageKeys.push(miniCodeStorageKey);
           await this.uploadService.storeDiningMemoryMiniCode(hashText(stableMemoryToken), miniCode.buffer, miniCode.contentType);
-          miniCodeBytes = miniCode.buffer.length;
         }
 
         return await this.prisma.$transaction(async tx => {
-          const snapshotPayload = {
-            title: prepared.event.title,
-            planDate: prepared.event.mealPlanItem?.planDate.toISOString().slice(0, 10) ?? null,
-            mealSlot: prepared.event.mealPlanItem?.mealSlot ?? null,
-            menuItems: prepared.menuItemsSnapshot,
-            participants: prepared.participantsSnapshot,
-            caption: normalizedCaption,
-            coverImageUrl: coverSnapshot ? this.uploadService.buildDiningMemoryAssetUrl(request, coverSnapshot.storageKey) : null,
-            sharedAt: new Date().toISOString(),
-            snapshotVersion: prepared.snapshotVersion
-          };
-          const snapshotBytes = sizeOfJson(snapshotPayload) + (coverSnapshot?.sizeBytes ?? 0) + miniCodeBytes;
-          await this.assertStorageWritable(tx, userId, snapshotBytes);
-
           if (!prepared.event.memoryMiniCodeStorageKey) {
             await tx.diningEvent.update({
               where: { id: prepared.event.id },
@@ -3227,8 +3198,6 @@ export class MealService {
               shareTokenHash: prepared.shareTokenHash
             }
           });
-
-          await upsertStorageLedger(tx, userId, "TECHNICAL_SNAPSHOT", snapshot.id, snapshotBytes);
 
           if (prepared.event.diningGroupId) {
             await this.writeActivity(tx, {
@@ -5171,15 +5140,7 @@ export class MealService {
     });
   }
 
-  private async assertStorageWritable(tx: Prisma.TransactionClient, userId: UUID, expectedDeltaBytes: number) {
-    const entitlements = await this.entitlementService.resolveForUser(tx, userId);
-    const current = await tx.storageLedger.aggregate({
-      where: { userId },
-      _sum: { usedBytes: true }
-    });
-    const usedBytes = current._sum.usedBytes ?? 0;
-    if (usedBytes > entitlements.storageLimitBytes || usedBytes + expectedDeltaBytes > entitlements.storageLimitBytes) {
-      throw new ForbiddenException("当前个人空间不足");
-    }
+  private async assertStorageWritable(_tx: Prisma.TransactionClient, _userId: UUID, _expectedDeltaBytes: number) {
+    return;
   }
 }

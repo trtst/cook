@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { BadRequestException, Inject, Injectable, NotFoundException, UnauthorizedException } from "@nestjs/common";
 import type { Prisma, UploadAsset, UploadAssetScene, UploadAssetStatus } from "@prisma/client";
 import { assetKey, AssetStorageService } from "../../common/asset-storage.service";
+import { compressUploadedImage, type CompressedImage } from "../../common/image-compression";
 import { completeIdempotentOperation, getIdempotentResult, startIdempotentOperation } from "../../common/idempotency";
 import { PrismaService } from "../../common/prisma.service";
 import type { IsoDateTime, OperationId, UploadImageResponse, UploadImageSummary, UUID } from "../../contracts/types";
@@ -26,7 +27,10 @@ type ImageMeta = {
   sourceHash: string;
 };
 
-const maxImageBytes = 10 * 1024 * 1024;
+const maxRecipeImageBytes = 5 * 1024 * 1024;
+const maxAvatarImageBytes = 2 * 1024 * 1024;
+const recipeCoverRatio = 4 / 3;
+const recipeCoverRatioTolerance = 0.02;
 const tempTtlMs = 24 * 60 * 60 * 1000;
 
 function getContentTypeExtension(contentType: string) {
@@ -42,7 +46,7 @@ function contentTypeOfFileName(fileName: string) {
 }
 
 function publicIdFromFileName(value: string) {
-  const match = /^([0-9a-f-]+)(?:\.(?:jpg|png|webp))?$/i.exec(value);
+  const match = /^([0-9a-f-]+)\.(?:jpg|png|webp)$/i.exec(value);
   if (!match) {
     throw new NotFoundException("图片不存在");
   }
@@ -134,12 +138,12 @@ function readWebpSize(buffer: Buffer) {
   return null;
 }
 
-function detectImageMeta(file: FileUpload): ImageMeta {
+function detectImageMeta(file: FileUpload, maxImageBytes: number): ImageMeta {
   if (!file.buffer || typeof file.size !== "number") {
     throw new BadRequestException("请上传图片");
   }
   if (file.size <= 0 || file.size > maxImageBytes) {
-    throw new BadRequestException("图片大小不能超过 10 MB");
+    throw new BadRequestException(`图片大小不能超过 ${Math.round(maxImageBytes / (1024 * 1024))} MB`);
   }
 
   const png = readPngSize(file.buffer);
@@ -208,8 +212,16 @@ export class UploadService {
     file?: FileUpload
   ) {
     if (!file) throw new BadRequestException("请上传图片");
-    const imageMeta = detectImageMeta(file);
-    const requestHash = `${userId}:${imageMeta.sourceHash}`;
+    const account = await this.prisma.user.findUnique({ where: { id: userId }, select: { id: true, status: true } });
+    if (!account || account.status !== "ACTIVE") throw new UnauthorizedException("未登录或 token 失效");
+    const sourceMeta = detectImageMeta(file, maxAvatarImageBytes);
+    const image = await compressUploadedImage(file.buffer as Buffer, {
+      maxInputBytes: maxAvatarImageBytes,
+      maxOutputBytes: 150 * 1024,
+      inputSizeMessage: "头像图片不能超过 2 MB",
+      outputSizeMessage: "头像图片无法压缩到 150 KB 以内，请更换图片"
+    });
+    const requestHash = `${userId}:${sourceMeta.sourceHash}`;
 
     return await this.prisma.$transaction(async tx => {
         const repeated = await getIdempotentResult<{ avatarUrl: string }>(tx, operationId, "upload:user-avatar", userId, null, requestHash);
@@ -226,15 +238,15 @@ export class UploadService {
           throw new UnauthorizedException("未登录或 token 失效");
         }
 
-        const fileName = `${randomUUID()}.${imageMeta.extension}`;
+        const fileName = `${randomUUID()}.${image.extension}`;
         const storageKey = this.buildAvatarStorageKey(current.uid, fileName);
-        await this.assetStorage.writeObject(storageKey, file.buffer as Buffer, imageMeta.contentType);
+        await this.assetStorage.writeObject(storageKey, image.buffer, image.contentType);
         const now = new Date();
         const avatarUrl = this.buildProfileAvatarUrl(request, current.uid, fileName, now);
         await tx.user.update({
           where: { id: userId },
           data: { avatarUrl },
-          select: { id: true }
+        select: { id: true }
         });
         const result = { avatarUrl };
         await completeIdempotentOperation(tx, operationId, "upload:user-avatar", userId, null, requestHash, result);
@@ -251,8 +263,19 @@ export class UploadService {
     slotKey: string,
     file: FileUpload
   ): Promise<UploadImageResponse> {
-    const imageMeta = detectImageMeta(file);
-    const requestHash = `${draftId}:${scene}:${slotKey}:${imageMeta.sourceHash}`;
+    const draft = await this.prisma.recipeDraft.findFirst({ where: { id: draftId, userId }, select: { id: true } });
+    if (!draft) throw new NotFoundException("草稿不存在");
+    const sourceMeta = detectImageMeta(file, maxRecipeImageBytes);
+    const image = await compressUploadedImage(file.buffer as Buffer, {
+      maxInputBytes: maxRecipeImageBytes,
+      maxOutputBytes: 500 * 1024,
+      inputSizeMessage: "菜谱图片不能超过 5 MB",
+      outputSizeMessage: "菜谱图片无法压缩到 500 KB 以内，请更换图片"
+    });
+    if (scene === "RECIPE_COVER" && Math.abs(image.width / image.height - recipeCoverRatio) > recipeCoverRatioTolerance) {
+      throw new BadRequestException("菜谱封面图必须为 4:3");
+    }
+    const requestHash = `${draftId}:${scene}:${slotKey}:${sourceMeta.sourceHash}`;
 
     return await this.prisma.$transaction(async tx => {
         const repeated = await getIdempotentResult<UploadImageResponse>(tx, operationId, "upload:recipe-image", userId, null, requestHash);
@@ -277,7 +300,7 @@ export class UploadService {
           }
         });
 
-        if (existing && existing.sourceHash === imageMeta.sourceHash && existing.status === "TEMP") {
+        if (existing && existing.sourceHash === sourceMeta.sourceHash && existing.status === "TEMP") {
           const result = {
             upload: this.toUploadSummary(request, existing)
           } satisfies UploadImageResponse;
@@ -286,8 +309,8 @@ export class UploadService {
         }
 
         const publicId = existing?.publicId ?? randomUUID();
-        const storageKey = this.buildRecipeImageStorageKey(publicId, imageMeta.contentType);
-        await this.assetStorage.writeObject(storageKey, file.buffer as Buffer, imageMeta.contentType);
+        const storageKey = this.buildDraftRecipeImageStorageKey(draftId, publicId, image.contentType);
+        await this.assetStorage.writeObject(storageKey, image.buffer, image.contentType);
 
         const expiresAt = new Date(Date.now() + tempTtlMs);
         const persisted = existing
@@ -298,11 +321,11 @@ export class UploadService {
                 scene,
                 slotKey,
                 storageKey,
-                contentType: imageMeta.contentType,
-                sizeBytes: file.size as number,
-                width: imageMeta.width,
-                height: imageMeta.height,
-                sourceHash: imageMeta.sourceHash,
+                contentType: image.contentType,
+                sizeBytes: image.buffer.length,
+                width: image.width,
+                height: image.height,
+                sourceHash: sourceMeta.sourceHash,
                 status: "TEMP",
                 expiresAt,
                 recipeVersionId: null
@@ -317,11 +340,11 @@ export class UploadService {
                 scene,
                 slotKey,
                 storageKey,
-                contentType: imageMeta.contentType,
-                sizeBytes: file.size as number,
-                width: imageMeta.width,
-                height: imageMeta.height,
-                sourceHash: imageMeta.sourceHash,
+                contentType: image.contentType,
+                sizeBytes: image.buffer.length,
+                width: image.width,
+                height: image.height,
+                sourceHash: sourceMeta.sourceHash,
                 status: "TEMP",
                 expiresAt
               }
@@ -335,23 +358,31 @@ export class UploadService {
       });
   }
 
-  async getRecipeImageAsset(fileName: string) {
+  async getDraftRecipeImageAsset(userId: UUID, draftId: UUID, fileName: string) {
     const publicId = publicIdFromFileName(fileName);
+    const draft = await this.prisma.recipeDraft.findFirst({ where: { id: draftId, userId }, select: { id: true } });
+    if (!draft) throw new NotFoundException("图片不存在");
     const asset = await this.prisma.uploadAsset.findFirst({
-      where: {
-        publicId,
-        status: { not: "DELETED" },
-        type: "RECIPE"
-      }
+      where: { userId, draftId, publicId, status: "TEMP", type: "RECIPE" },
+      select: { storageKey: true, contentType: true }
     });
-    if (!asset) {
-      throw new NotFoundException("图片不存在");
-    }
-
+    if (!asset) throw new NotFoundException("图片不存在");
     const stored = await this.assetStorage.readObject(asset.storageKey, asset.contentType).catch(() => null);
     if (!stored) {
       throw new NotFoundException("图片不存在");
     }
+    return {
+      contentType: stored.contentType,
+      stream: stored.stream,
+      stat: { size: stored.size }
+    };
+  }
+
+  async getRecipeImageAsset(recipeId: UUID, fileName: string) {
+    const publicId = publicIdFromFileName(fileName);
+    const expectedStorageKey = this.buildRecipeImageStorageKey(recipeId, publicId, contentTypeOfFileName(fileName));
+    const stored = await this.assetStorage.readObject(expectedStorageKey, contentTypeOfFileName(fileName)).catch(() => null);
+    if (!stored) throw new NotFoundException("图片不存在");
     return {
       contentType: stored.contentType,
       stream: stored.stream,
@@ -374,15 +405,23 @@ export class UploadService {
     };
   }
 
-  async storeDiningEventCover(file: FileUpload, eventId: UUID) {
-    const imageMeta = detectImageMeta(file);
-    const storageKey = this.buildDiningEventCoverStorageKey(eventId, imageMeta.extension);
+  async prepareDiningEventCover(file: FileUpload): Promise<CompressedImage> {
+    detectImageMeta(file, 5 * 1024 * 1024);
+    return compressUploadedImage(file.buffer as Buffer, {
+      maxInputBytes: 5 * 1024 * 1024,
+      maxOutputBytes: 500 * 1024,
+      inputSizeMessage: "饭局封面图片不能超过 5 MB",
+      outputSizeMessage: "饭局封面图片无法压缩到 500 KB 以内，请更换图片"
+    });
+  }
 
-    await this.assetStorage.writeObject(storageKey, file.buffer as Buffer, imageMeta.contentType);
+  async storeDiningEventCover(image: CompressedImage, eventId: UUID) {
+    const storageKey = this.buildDiningEventCoverStorageKey(eventId, image.extension);
+
+    await this.assetStorage.writeObject(storageKey, image.buffer, image.contentType);
     return {
       storageKey,
-      contentType: imageMeta.contentType,
-      sizeBytes: file.size as number
+      contentType: image.contentType
     };
   }
 
@@ -396,7 +435,7 @@ export class UploadService {
     const source = await this.assetStorage.readObject(sourceStorageKey, contentType);
     source.stream.destroy();
     await this.assetStorage.copyObject(sourceStorageKey, storageKey);
-    return { storageKey, contentType, sizeBytes: source.size };
+    return { storageKey, contentType };
   }
 
   async storeDiningMemoryMiniCode(shareTokenHash: string, buffer: Buffer, contentType: "image/png" | "image/jpeg") {
@@ -501,12 +540,10 @@ export class UploadService {
     });
     const byId = new Map(items.map(item => [item.id, item]));
     const bySlot = new Map(items.map(item => [`${item.scene}:${item.slotKey}`, item]));
-    const bytes = items.reduce((sum, item) => sum + item.sizeBytes, 0);
     return {
       items,
       byId,
       bySlot,
-      bytes,
       buildUrl: (item: UploadAsset) => this.buildRecipeImageUrl(request, item.storageKey, item.updatedAt)
     };
   }
@@ -601,6 +638,108 @@ export class UploadService {
     return nextMap;
   }
 
+  async copyDraftUploads(
+    userId: UUID,
+    draftId: UUID,
+    recipeId: UUID,
+    uploadIds: UUID[],
+    promotedStorageKeys: string[],
+    temporaryStorageKeys: string[]
+  ) {
+    const keys = new Map<UUID, {
+      sourceStorageKey: string;
+      sourcePublicId: string;
+      sourceUpdatedAt: Date;
+      sourceHash: string;
+      targetPublicId: string;
+      targetStorageKey: string;
+    }>();
+    if (!uploadIds.length) return keys;
+    const items = await this.prisma.uploadAsset.findMany({
+      where: { id: { in: uploadIds }, userId, draftId, status: "TEMP", type: "RECIPE" }
+    });
+    if (items.length !== uploadIds.length) {
+      throw new BadRequestException("草稿图片状态已变更，请重新保存后再试");
+    }
+    for (const item of items) {
+      const targetPublicId = randomUUID();
+      const targetStorageKey = this.buildRecipeImageStorageKey(recipeId, targetPublicId, item.contentType);
+      promotedStorageKeys.push(targetStorageKey);
+      temporaryStorageKeys.push(item.storageKey);
+      await this.assetStorage.copyObject(item.storageKey, targetStorageKey);
+      keys.set(item.id, {
+        sourceStorageKey: item.storageKey,
+        sourcePublicId: item.publicId,
+        sourceUpdatedAt: item.updatedAt,
+        sourceHash: item.sourceHash,
+        targetPublicId,
+        targetStorageKey
+      });
+    }
+    return keys;
+  }
+
+  async promoteDraftUploads(
+    tx: RecipeDb,
+    request: RequestLike,
+    userId: UUID,
+    draftId: UUID,
+    recipeId: UUID,
+    uploadIds: UUID[],
+    preparedStorageKeys: Map<UUID, {
+      sourceStorageKey: string;
+      sourcePublicId: string;
+      sourceUpdatedAt: Date;
+      sourceHash: string;
+      targetPublicId: string;
+      targetStorageKey: string;
+    }>
+  ) {
+    if (!uploadIds.length) return new Map<UUID, string>();
+    const items = await tx.uploadAsset.findMany({
+      where: {
+        id: { in: uploadIds },
+        userId,
+        draftId,
+        status: "TEMP",
+        type: "RECIPE"
+      }
+    });
+    if (items.length !== uploadIds.length) {
+      throw new BadRequestException("草稿图片状态已变更，请重新保存后再试");
+    }
+
+    const urls = new Map<UUID, string>();
+    for (const item of items) {
+      const prepared = preparedStorageKeys.get(item.id);
+      if (
+        !prepared ||
+        prepared.sourceStorageKey !== item.storageKey ||
+        prepared.sourcePublicId !== item.publicId ||
+        prepared.sourceUpdatedAt.getTime() !== item.updatedAt.getTime() ||
+        prepared.sourceHash !== item.sourceHash
+      ) {
+        throw new BadRequestException("草稿图片状态已变更，请重新保存后再试");
+      }
+      const updated = await tx.uploadAsset.update({
+        where: { id: item.id },
+        data: { publicId: prepared.targetPublicId, storageKey: prepared.targetStorageKey }
+      });
+      urls.set(item.id, this.buildRecipeImageUrl(request, prepared.targetStorageKey, updated.updatedAt));
+    }
+    return urls;
+  }
+
+  private buildDraftRecipeImageStorageKey(draftId: UUID, publicId: string, contentType: string) {
+    const extension = getContentTypeExtension(contentType);
+    return assetKey("uploads", "recipe-images", ".tmp", draftId, `${publicId}.${extension}`);
+  }
+
+  private buildRecipeImageStorageKey(recipeId: UUID, publicId: string, contentType: string) {
+    const extension = getContentTypeExtension(contentType);
+    return assetKey("uploads", "recipe-images", recipeId, `${publicId}.${extension}`);
+  }
+
   async removeStorageFiles(storageKeys: Iterable<string>) {
     const uniqueKeys = Array.from(new Set(Array.from(storageKeys).filter(Boolean)));
     if (!uniqueKeys.length) return [];
@@ -629,7 +768,6 @@ export class UploadService {
     return {
       byId: new Map(items.map(item => [item.id, item])),
       bySlot: new Map(items.map(item => [`${item.scene}:${item.slotKey}`, item])),
-      bytes: items.reduce((sum, item) => sum + item.sizeBytes, 0),
       buildUrl: (item: UploadAsset) => this.buildRecipeImageUrl(request, item.storageKey, item.updatedAt)
     };
   }
@@ -649,11 +787,6 @@ export class UploadService {
       createdAt: toIsoDate(asset.createdAt),
       expiresAt: asset.expiresAt ? toIsoDate(asset.expiresAt) : null
     };
-  }
-
-  private buildRecipeImageStorageKey(publicId: string, contentType: string) {
-    const extension = getContentTypeExtension(contentType);
-    return assetKey("uploads", "recipe-images", `${publicId}.${extension}`);
   }
 
   private buildDiningEventCoverStorageKey(eventId: UUID, extension: string) {

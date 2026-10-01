@@ -275,7 +275,7 @@ test("cancelling an unaccepted dining event deletes it and its linked plan", asy
     userId: 9,
     mealPlanItemId: 501,
     status: "CONFIRMED",
-    scheduledAt: new Date("2026-10-01T12:00:00.000Z"),
+    scheduledAt: new Date("2099-10-01T12:00:00.000Z"),
     completedAt: null,
     version: 3,
     participants: [{ userId: 10, status: "INVITED" }]
@@ -565,7 +565,7 @@ test("dining memory share creates the event code once and reuses it for later sn
     buildDiningMemoryCoverStorageKey: () => "uploads/dining-event-memory-covers/82/1.webp",
     copyDiningEventCoverToMemory: async () => {
       externalCalls.push({ name: "copyCover", inTransaction });
-      return { storageKey: "uploads/dining-event-memory-covers/82/1.webp", contentType: "image/webp", sizeBytes: 2048 };
+      return { storageKey: "uploads/dining-event-memory-covers/82/1.webp", contentType: "image/webp" };
     },
     buildDiningMemoryMiniCodeStorageKey: () => "uploads/dining-event-memory-codes/hash.jpg",
     storeDiningMemoryMiniCode: async () => {
@@ -583,7 +583,7 @@ test("dining memory share creates the event code once and reuses it for later sn
   };
   const service = new MealService(
     prisma as never,
-    { resolveForUser: async () => ({ storageLimitBytes: 10 * 1024 * 1024 }) } as never,
+    { resolveForUser: async () => ({}) } as never,
     uploadService as never,
     {} as never,
     wechatMiniCodeService as never,

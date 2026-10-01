@@ -218,7 +218,6 @@ type VersionImageState = {
 };
 
 const activeRecipeStatuses: RecipeStatus[] = ["ACTIVE", "RECYCLED", "BLOCKED"];
-const recipeImageUrlPattern = /\/(?:static\/)?uploads\/recipe-images\/([^/?#]+)/i;
 const recipeViewHistoryLimit = 100;
 const recipeViewHistoryPageSize = 20;
 
@@ -283,17 +282,6 @@ function draftRecordKey(draftId: UUID) {
 
 function collectionRecordKey(collectionId: UUID) {
   return `collection:${collectionId}`;
-}
-
-function extractRecipeImagePublicId(imageUrl: string | null | undefined) {
-  if (!imageUrl) return null;
-  const match = imageUrl.match(recipeImageUrlPattern);
-  if (!match?.[1]) return null;
-  try {
-    return decodeURIComponent(match[1]).replace(/\.(?:jpg|png|webp)$/i, "");
-  } catch {
-    return match[1].replace(/\.(?:jpg|png|webp)$/i, "");
-  }
 }
 
 function readBearerToken(authorization?: string) {
@@ -1185,11 +1173,10 @@ export class RecipeService {
       if (recipe) {
         await this.assertRecipeRecommendationMutable(tx, recipe.id);
       }
-      const uploadIds = this.collectDraftUploadIds(normalized);
       const usedBytes = recipe
         ? await this.calculateEditDraftBytes(tx, recipe, normalized)
-        : draftSizeBytes(normalized) + (await this.getUploadBytes(tx, uploadIds));
-      await this.assertDraftCreateAllowed(tx, userId, recipe ? 0 : 1, usedBytes);
+        : draftSizeBytes(normalized);
+      await this.assertDraftCreateAllowed(tx, userId, recipe ? 0 : 1);
 
       const draft = await tx.recipeDraft.create({
         data: {
@@ -1263,9 +1250,7 @@ export class RecipeService {
       const recipe = draft.recipeId ? await this.requireOwnedPublishedRecipe(tx, userId, draft.recipeId) : null;
       const nextBytes = recipe
         ? await this.calculateEditDraftBytes(tx, recipe, normalized)
-        : draftSizeBytes(normalized) + (await this.getUploadBytes(tx, keepUploadIds));
-      const deltaBytes = nextBytes - draft.contentSizeBytes;
-      await this.assertStorageDelta(tx, userId, deltaBytes);
+        : draftSizeBytes(normalized);
 
       await tx.recipeDraftScene.deleteMany({ where: { draftId } });
       if (draftRelations.sceneIds.length > 0) {
@@ -1301,7 +1286,7 @@ export class RecipeService {
         staleStorageKeys
       };
     });
-    await this.uploadService.removeStorageFiles(staleStorageKeys ?? []);
+    await this.removeRecipeImageStorageWithAudit(staleStorageKeys ?? [], userId, "RECIPE_DRAFT", draftId, "draft-update");
     return result;
   }
 
@@ -1332,15 +1317,107 @@ export class RecipeService {
         deletedStorageKeys
       };
     });
-    await this.uploadService.removeStorageFiles(deletedStorageKeys ?? []);
+    await this.removeRecipeImageStorageWithAudit(deletedStorageKeys ?? [], userId, "RECIPE_DRAFT", draftId, "draft-delete");
     return result;
   }
 
-  async publishRecipeDraft(userId: UUID, draftId: UUID, operationId: OperationId, expectedVersion: number): Promise<PublishRecipeDraftResponse> {
+  private async reserveRecipeId(tx: RecipeDb) {
+    const rows = await tx.$queryRaw<Array<{ id: bigint | number }>>`SELECT nextval(pg_get_serial_sequence('recipes', 'id')) AS id`;
+    const recipeId = Number(rows[0]?.id);
+    if (!Number.isSafeInteger(recipeId) || recipeId <= 0) {
+      throw new ConflictException("无法创建菜谱，请稍后重试");
+    }
+    return recipeId;
+  }
+
+  private async removeRecipeImageStorageWithAudit(
+    storageKeys: Iterable<string>,
+    userId: UUID,
+    objectType: string,
+    objectId: UUID,
+    phase: string
+  ) {
+    const failedStorageKeys = await this.uploadService.removeStorageFiles(storageKeys);
+    if (!failedStorageKeys.length) return;
+    try {
+      await this.prisma.auditEvent.create({
+        data: {
+          actorType: "USER",
+          actorUserId: userId,
+          action: "RECIPE_IMAGE_CLEANUP_FAILED",
+          objectType,
+          objectId,
+          payload: { storageKeys: failedStorageKeys, phase }
+        }
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "unknown error";
+      console.error(`[recipe] image cleanup audit failed for ${objectType} ${objectId}, keys=${failedStorageKeys.join(",")}: ${message}`);
+    }
+  }
+
+  private withPublishedImageUrls(content: RecipeDraftContentInput, imageUrls: Map<UUID, string>): RecipeDraftContentInput {
+    return {
+      ...content,
+      coverImageUrl: content.coverUploadId ? imageUrls.get(content.coverUploadId) ?? content.coverImageUrl : content.coverImageUrl,
+      steps: content.steps.map(step => ({
+        ...step,
+        imageUrl: step.uploadId ? imageUrls.get(step.uploadId) ?? step.imageUrl : step.imageUrl
+      }))
+    };
+  }
+
+  async publishRecipeDraft(
+    request: RequestLike,
+    userId: UUID,
+    draftId: UUID,
+    operationId: OperationId,
+    expectedVersion: number
+  ): Promise<PublishRecipeDraftResponse> {
     const requestHash = `${draftId}:${expectedVersion}`;
-    const { result, deletedStorageKeys } = await this.prisma.$transaction(async tx => {
+    const promotedStorageKeys: string[] = [];
+    const temporaryStorageKeys: string[] = [];
+    let cleanupRecipeId: UUID | null = null;
+    let publication: { result: PublishRecipeDraftResponse; deletedStorageKeys: string[] | undefined };
+    let preparedStorageKeys = new Map<UUID, {
+      sourceStorageKey: string;
+      sourcePublicId: string;
+      sourceUpdatedAt: Date;
+      sourceHash: string;
+      targetPublicId: string;
+      targetStorageKey: string;
+    }>();
+    let repeatedDuringPublication = false;
+    try {
+      const repeated = await this.prisma.$transaction(tx =>
+        getIdempotentResult<PublishRecipeDraftResponse>(tx, operationId, "recipe-draft:publish", userId, null, requestHash)
+      );
+      if (repeated) return repeated;
+
+      const draftSnapshot = await this.prisma.recipeDraft.findFirst({
+        where: { id: draftId, userId },
+        select: { recipeId: true, version: true, contentJson: true }
+      });
+      if (!draftSnapshot) throw new NotFoundException("草稿不存在");
+      if (draftSnapshot.version !== expectedVersion) throw new ConflictException("草稿已被更新，请刷新后重试");
+      const snapshotContent = cleanDraftContent(fromJson<RecipeDraftContentInput>(draftSnapshot.contentJson));
+      this.assertPublishContent(snapshotContent);
+      const uploadIds = Array.from(this.collectDraftUploadIds(snapshotContent));
+      const recipeId = draftSnapshot.recipeId ?? await this.prisma.$transaction(tx => this.reserveRecipeId(tx));
+      cleanupRecipeId = recipeId;
+      preparedStorageKeys = await this.uploadService.copyDraftUploads(
+        userId,
+        draftId,
+        recipeId,
+        uploadIds,
+        promotedStorageKeys,
+        temporaryStorageKeys
+      );
+
+      publication = await this.prisma.$transaction(async tx => {
       const repeated = await getIdempotentResult<PublishRecipeDraftResponse>(tx, operationId, "recipe-draft:publish", userId, null, requestHash);
       if (repeated) {
+        repeatedDuringPublication = true;
         return {
           result: repeated,
           deletedStorageKeys: [] as string[]
@@ -1355,25 +1432,31 @@ export class RecipeService {
       this.assertPublishContent(content);
       const uploadIds = this.collectDraftUploadIds(content);
       await this.uploadService.assertDraftUploadOwnership(tx, userId, draftId, Array.from(uploadIds));
+      const imageUrls = await this.uploadService.promoteDraftUploads(
+        tx,
+        request,
+        userId,
+        draftId,
+        recipeId,
+        Array.from(uploadIds),
+        preparedStorageKeys
+      );
+      const publishedDraftContent = this.withPublishedImageUrls(content, imageUrls);
       const category = await this.requireOwnedCategory(tx, userId, content.categoryId as UUID);
       const inspirationCategory = content.inspirationCategoryId
         ? await this.requireInspirationCategory(tx, content.inspirationCategoryId)
         : null;
-      const recipeContent = await this.buildPublishedContent(tx, userId, content);
+      const recipeContent = await this.buildPublishedContent(tx, userId, publishedDraftContent);
       const ingredientAliasMap = await this.loadIngredientAliasMap(
         tx,
         recipeContent.ingredients.map(item => item.ingredientId)
       );
-      const nextRecipeBytes = contentSizeBytes(recipeContent) + (await this.getUploadBytes(tx, uploadIds));
-      const currentDraftBytes = draft.contentSizeBytes;
-      const versionImages = this.buildVersionImageState(content);
+      const versionImages = this.buildVersionImageState(publishedDraftContent);
 
       let recipe: RecipeRow;
       if (draft.recipeId) {
         const currentRecipe = await this.requireOwnedPublishedRecipe(tx, userId, draft.recipeId);
         await this.assertRecipeRecommendationMutable(tx, currentRecipe.id);
-        const currentRecipeBytes = await this.getRecipeBytes(tx, currentRecipe);
-        await this.assertStorageDelta(tx, userId, nextRecipeBytes - currentRecipeBytes - currentDraftBytes);
         const version = await tx.recipeContentVersion.create({
           data: this.buildVersionCreateInput(userId, recipeContent, versionImages, ingredientAliasMap)
         });
@@ -1402,14 +1485,13 @@ export class RecipeService {
             currentVersionId: version.id,
             title: recipeContent.name,
             searchText: buildRecipeSearchText(recipeContent, ingredientAliasMap),
-            coverImageUrl: content.coverImageUrl ?? null,
+            coverImageUrl: publishedDraftContent.coverImageUrl ?? null,
             version: { increment: 1 }
           }
         });
-        await upsertStorageLedger(tx, userId, "RECIPE", recipeRecordKey(currentRecipe.id), nextRecipeBytes);
+        await upsertStorageLedger(tx, userId, "RECIPE", recipeRecordKey(currentRecipe.id), 0);
         recipe = await this.loadOwnedRecipe(tx, userId, currentRecipe.id);
       } else {
-        await this.assertStorageDelta(tx, userId, nextRecipeBytes - currentDraftBytes);
         const version = await tx.recipeContentVersion.create({
           data: this.buildVersionCreateInput(userId, recipeContent, versionImages, ingredientAliasMap)
         });
@@ -1426,6 +1508,7 @@ export class RecipeService {
         const ownerNicknameSnapshot = await this.getOwnerNicknameSnapshot(tx, userId);
         const created = await tx.recipe.create({
           data: {
+            id: recipeId,
             ownerId: userId,
             ownerNicknameSnapshot,
             categoryId: category.id,
@@ -1435,7 +1518,7 @@ export class RecipeService {
             originCoverImageUrl: origin.originCoverImageUrl,
             title: recipeContent.name,
             searchText: buildRecipeSearchText(recipeContent, ingredientAliasMap),
-            coverImageUrl: content.coverImageUrl ?? null,
+            coverImageUrl: publishedDraftContent.coverImageUrl ?? null,
             sortOrder
           }
         });
@@ -1447,7 +1530,7 @@ export class RecipeService {
             }))
           });
         }
-        await upsertStorageLedger(tx, userId, "RECIPE", recipeRecordKey(created.id), nextRecipeBytes);
+        await upsertStorageLedger(tx, userId, "RECIPE", recipeRecordKey(created.id), 0);
         recipe = await this.loadOwnedRecipe(tx, userId, created.id);
       }
 
@@ -1462,9 +1545,19 @@ export class RecipeService {
         result,
         deletedStorageKeys
       };
-    });
-    await this.uploadService.removeStorageFiles(deletedStorageKeys ?? []);
-    return result;
+      });
+    } catch (error) {
+      await this.removeRecipeImageStorageWithAudit(promotedStorageKeys, userId, "RECIPE", cleanupRecipeId ?? draftId, "publish-rollback");
+      throw error;
+    }
+    if (repeatedDuringPublication) {
+      await this.removeRecipeImageStorageWithAudit(promotedStorageKeys, userId, "RECIPE", cleanupRecipeId ?? draftId, "publish-idempotency-replay");
+    }
+    await this.removeRecipeImageStorageWithAudit([
+      ...(publication.deletedStorageKeys ?? []),
+      ...temporaryStorageKeys
+    ], userId, "RECIPE", cleanupRecipeId ?? draftId, "publish-source-cleanup");
+    return publication.result;
   }
 
   async listMyRecipes(
@@ -1816,9 +1909,7 @@ export class RecipeService {
         return result;
       }
 
-      const recipeBytes = await this.getRecipeBytes(tx, sourceRecipe);
       await this.assertRecipeQuota(tx, userId, 1);
-      await this.assertStorageDelta(tx, userId, recipeBytes);
       const sortOrder = category ? await this.nextRecipeSortOrder(tx, userId, category.id) : 0;
       const ownerNicknameSnapshot = await this.getOwnerNicknameSnapshot(tx, userId);
       const created = await tx.recipe.create({
@@ -1836,7 +1927,7 @@ export class RecipeService {
           sortOrder
         }
       });
-      await upsertStorageLedger(tx, userId, "RECIPE", recipeRecordKey(created.id), recipeBytes);
+      await upsertStorageLedger(tx, userId, "RECIPE", recipeRecordKey(created.id), 0);
       const recipe = await this.loadOwnedRecipe(tx, userId, created.id);
       const result = {
         recipe: await this.toMyRecipeDetail(tx, userId, recipe)
@@ -2176,8 +2267,6 @@ export class RecipeService {
 
       if (!existing) {
         await this.assertRecipeQuota(tx, userId, 1);
-        await this.assertStorageDelta(tx, userId, sourceRecipe.currentVersion.contentSizeBytes);
-
         try {
           existing = await tx.recipeCollection.create({
             data: {
@@ -3216,6 +3305,7 @@ export class RecipeService {
     if (!content.difficulty) throw new BadRequestException("请选择难度");
     if (!content.duration) throw new BadRequestException("请选择时长");
     if (content.ingredients.length === 0) throw new BadRequestException("至少需要一个食材");
+    if (content.steps.length > 20) throw new BadRequestException("菜谱步骤最多 20 步");
     if (!content.steps.some(item => item.text.trim() || item.uploadId || item.imageUrl)) {
       throw new BadRequestException("至少需要一个制作步骤");
     }
@@ -3365,58 +3455,10 @@ export class RecipeService {
     };
   }
 
-  private async getUploadBytes(tx: RecipeDb, uploadIds: Iterable<UUID>) {
-    const ids = Array.from(new Set(uploadIds));
-    if (!ids.length) return 0;
-    const result = await tx.uploadAsset.aggregate({
-      where: {
-        id: { in: ids },
-        status: { not: "DELETED" }
-      },
-      _sum: {
-        sizeBytes: true
-      }
-    });
-    return result._sum.sizeBytes ?? 0;
-  }
-
-  private async getRecipeBytes(tx: RecipeDb, recipe: RecipeRow) {
-    const content = versionToContent(recipe.currentVersion);
-    const publicIds = this.collectRecipeImagePublicIds(recipe.coverImageUrl, content);
-    if (!publicIds.length) {
-      return recipe.currentVersion.contentSizeBytes;
-    }
-    const result = await tx.uploadAsset.aggregate({
-      where: {
-        publicId: { in: publicIds },
-        status: { not: "DELETED" }
-      },
-      _sum: {
-        sizeBytes: true
-      }
-    });
-    return recipe.currentVersion.contentSizeBytes + (result._sum.sizeBytes ?? 0);
-  }
-
   private async calculateEditDraftBytes(tx: RecipeDb, recipe: RecipeRow, content: RecipeDraftContentInput) {
-    const currentBytes = await this.getRecipeBytes(tx, recipe);
-    const nextBytes = draftSizeBytes(content) + (await this.getUploadBytes(tx, this.collectDraftUploadIds(content)));
-    return Math.max(0, nextBytes - currentBytes);
-  }
-
-  private collectRecipeImagePublicIds(coverImageUrl: string | null, content: RecipeContentSnapshot) {
-    const publicIds = new Set<string>();
-    const coverPublicId = extractRecipeImagePublicId(coverImageUrl);
-    if (coverPublicId) {
-      publicIds.add(coverPublicId);
-    }
-    for (const step of content.steps) {
-      const publicId = extractRecipeImagePublicId(step.imageUrl);
-      if (publicId) {
-        publicIds.add(publicId);
-      }
-    }
-    return Array.from(publicIds);
+    void tx;
+    void recipe;
+    return draftSizeBytes(content);
   }
 
   private readOriginContent(content: RecipeDraftContentInput) {
@@ -3517,9 +3559,8 @@ export class RecipeService {
     return JSON.stringify(leftContent) === JSON.stringify(rightContent) && leftCoverImageUrl === rightCoverImageUrl;
   }
 
-  private async assertDraftCreateAllowed(tx: RecipeDb, userId: UUID, extraRecipeCount: number, expectedBytes: number) {
+  private async assertDraftCreateAllowed(tx: RecipeDb, userId: UUID, extraRecipeCount: number) {
     await this.assertRecipeQuota(tx, userId, extraRecipeCount);
-    await this.assertStorageDelta(tx, userId, expectedBytes);
   }
 
   private async assertRecipeQuota(tx: RecipeDb, userId: UUID, extraRecipeCount: number) {
@@ -3546,19 +3587,6 @@ export class RecipeService {
     ]);
     if (recipeCount + draftCount + collectionCount + extraRecipeCount > entitlements.recipeLimit) {
       throw new ForbiddenException("菜谱数量已达上限");
-    }
-  }
-
-  private async assertStorageDelta(tx: RecipeDb, userId: UUID, deltaBytes: number) {
-    if (deltaBytes <= 0) return;
-    const entitlements = await this.entitlementService.resolveForUser(tx, userId);
-    const current = await tx.storageLedger.aggregate({
-      where: { userId },
-      _sum: { usedBytes: true }
-    });
-    const usedBytes = current._sum.usedBytes ?? 0;
-    if (usedBytes + deltaBytes > entitlements.storageLimitBytes) {
-      throw new ForbiddenException("存储空间不足");
     }
   }
 
@@ -3768,7 +3796,7 @@ export class RecipeService {
             await this.requireOwnedPublishedRecipe(tx, userId, draft.recipeId),
             next.content
           )
-        : draftSizeBytes(next.content) + (await this.getUploadBytes(tx, this.collectDraftUploadIds(next.content)));
+        : draftSizeBytes(next.content);
       await tx.recipeDraft.update({
         where: { id: draft.id },
         data: {

@@ -3,7 +3,7 @@ import test from "node:test";
 import { UploadService } from "./upload.service";
 
 const png1x1 = Buffer.from(
-  "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000a49444154789c636000000200015ff3d1b50000000049454e44ae426082",
+  "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000970485953000003e8000003e801b57b526b0000000d49444154789c63f8cfc0f01f00050001ff89993d1d0000000049454e44ae426082",
   "hex"
 );
 
@@ -27,6 +27,9 @@ test("user avatar upload stores public path under uid instead of internal user i
     }
   };
   const prisma = {
+    user: {
+      findUnique: async () => ({ id: currentUser.id, status: currentUser.status })
+    },
     $transaction: async (callback: (nextTx: unknown) => Promise<unknown>) => callback(tx)
   };
   const assetStorage = {
@@ -43,9 +46,9 @@ test("user avatar upload stores public path under uid instead of internal user i
     size: png1x1.length
   });
 
-  assert.match(writtenKeys[0], /^uploads\/profile-avatars\/52738164\/[0-9a-f-]+\.png$/);
+  assert.match(writtenKeys[0], /^uploads\/profile-avatars\/52738164\/[0-9a-f-]+\.webp$/);
   assert.doesNotMatch(writtenKeys[0], /profile-avatars\/273\//);
-  assert.match(result.avatarUrl, /^\/static\/uploads\/profile-avatars\/52738164\/[0-9a-f-]+\.png\?v=/);
+  assert.match(result.avatarUrl, /^\/static\/uploads\/profile-avatars\/52738164\/[0-9a-f-]+\.webp\?v=/);
   assert.doesNotMatch(result.avatarUrl, /profile-avatars\/273\//);
 });
 
@@ -82,6 +85,9 @@ test("recipe image upload returns the public object key with image extension", a
     }
   };
   const prisma = {
+    recipeDraft: {
+      findFirst: async () => ({ id: 31 })
+    },
     $transaction: async (callback: (nextTx: unknown) => Promise<unknown>) => callback(tx)
   };
   const assetStorage = {
@@ -93,28 +99,193 @@ test("recipe image upload returns the public object key with image extension", a
   };
   const service = new UploadService(prisma as never, assetStorage as never);
 
-  const result = await service.uploadRecipeImage({}, 9, "10087", 31, "RECIPE_COVER", "cover", {
+  const result = await service.uploadRecipeImage({}, 9, "10087", 31, "RECIPE_STEP", "step-1", {
     buffer: png1x1,
     size: png1x1.length
   });
 
-  assert.match(writtenKeys[0], /^uploads\/recipe-images\/[0-9a-f-]+\.png$/);
-  assert.match(result.upload.imageUrl, /^\/static\/uploads\/recipe-images\/[0-9a-f-]+\.png\?v=/);
+  assert.match(writtenKeys[0], /^uploads\/recipe-images\/\.tmp\/31\/[0-9a-f-]+\.webp$/);
+  assert.match(result.upload.imageUrl, /^\/static\/uploads\/recipe-images\/\.tmp\/31\/[0-9a-f-]+\.webp\?v=/);
 });
 
-test("recipe image public read accepts the file name with extension", async () => {
-  const storedKey = "uploads/recipe-images/11111111-1111-4111-8111-111111111111.png";
+test("draft recipe image reads require an owned temporary upload before storage access", async () => {
+  const fileName = "a1b2c3d4-e5f6-4789-aaaa-bbccddeeff00.png";
+  let readKey = "";
   const prisma = {
+    recipeDraft: {
+      findFirst: async ({ where }: { where: { id: number; userId: number } }) => {
+        assert.deepEqual(where, { id: 31, userId: 17 });
+        return { id: 31 };
+      }
+    },
     uploadAsset: {
-      findFirst: async ({ where }: { where: { publicId: string } }) => {
-        assert.equal(where.publicId, "11111111-1111-4111-8111-111111111111");
+      findFirst: async ({ where }: { where: Record<string, unknown> }) => {
+        assert.deepEqual(where, {
+          userId: 17,
+          draftId: 31,
+          publicId: "a1b2c3d4-e5f6-4789-aaaa-bbccddeeff00",
+          status: "TEMP",
+          type: "RECIPE"
+        });
         return {
-          storageKey: storedKey,
+          storageKey: "uploads/recipe-images/.tmp/31/a1b2c3d4-e5f6-4789-aaaa-bbccddeeff00.png",
           contentType: "image/png"
         };
       }
     }
   };
+  const assetStorage = {
+    readObject: async (storageKey: string, contentType: string) => {
+      readKey = storageKey;
+      assert.equal(contentType, "image/png");
+      return { contentType, size: png1x1.length, stream: {} };
+    }
+  };
+  const service = new UploadService(prisma as never, assetStorage as never);
+
+  const asset = await service.getDraftRecipeImageAsset(17, 31, fileName);
+
+  assert.equal(asset.contentType, "image/png");
+  assert.equal(readKey, "uploads/recipe-images/.tmp/31/a1b2c3d4-e5f6-4789-aaaa-bbccddeeff00.png");
+});
+
+test("draft recipe image reads do not access storage for an unowned upload", async () => {
+  let readAttempted = false;
+  const prisma = {
+    recipeDraft: { findFirst: async () => ({ id: 31 }) },
+    uploadAsset: { findFirst: async () => null }
+  };
+  const assetStorage = {
+    readObject: async () => {
+      readAttempted = true;
+      return { contentType: "image/png", size: png1x1.length, stream: {} };
+    }
+  };
+  const service = new UploadService(prisma as never, assetStorage as never);
+
+  await assert.rejects(
+    () => service.getDraftRecipeImageAsset(17, 31, "a1b2c3d4-e5f6-4789-aaaa-bbccddeeff00.png"),
+    /图片不存在/
+  );
+  assert.equal(readAttempted, false);
+});
+
+test("draft upload storage copies are prepared before the publication transaction", async () => {
+  const upload = {
+    id: 51,
+    userId: 17,
+    draftId: 31,
+    publicId: "a1b2c3d4-e5f6-4789-aaaa-bbccddeeff00",
+    storageKey: "uploads/recipe-images/.tmp/31/a1b2c3d4-e5f6-4789-aaaa-bbccddeeff00.png",
+    contentType: "image/png",
+    status: "TEMP",
+    type: "RECIPE",
+    updatedAt: new Date("2026-10-01T12:00:00.000Z"),
+    sourceHash: "a".repeat(64)
+  };
+  const copied: Array<{ source: string; target: string }> = [];
+  const prisma = {
+    uploadAsset: {
+      findMany: async ({ where }: { where: Record<string, unknown> }) => {
+        assert.deepEqual(where, { id: { in: [51] }, userId: 17, draftId: 31, status: "TEMP", type: "RECIPE" });
+        return [upload];
+      }
+    }
+  };
+  const assetStorage = {
+    copyObject: async (source: string, target: string) => copied.push({ source, target })
+  };
+  const service = new UploadService(prisma as never, assetStorage as never);
+  const promotedKeys: string[] = [];
+  const temporaryKeys: string[] = [];
+
+  const prepared = await service.copyDraftUploads(17, 31, 91, [51], promotedKeys, temporaryKeys);
+
+  assert.deepEqual(copied, [{
+    source: upload.storageKey,
+    target: `uploads/recipe-images/91/${prepared.get(51)?.targetPublicId}.png`
+  }]);
+  assert.deepEqual(promotedKeys, [prepared.get(51)?.targetStorageKey]);
+  assert.deepEqual(temporaryKeys, [upload.storageKey]);
+  assert.match(prepared.get(51)?.targetPublicId ?? "", /^[0-9a-f-]{36}$/i);
+  assert.notEqual(prepared.get(51)?.targetPublicId, upload.publicId);
+  assert.equal(prepared.get(51)?.sourceUpdatedAt, upload.updatedAt);
+  assert.equal(prepared.get(51)?.sourceHash, upload.sourceHash);
+});
+
+test("draft upload promotion in a transaction updates only the database reference", async () => {
+  let copyAttempted = false;
+  const upload = {
+    ...{
+      id: 51,
+      publicId: "a1b2c3d4-e5f6-4789-aaaa-bbccddeeff00",
+      storageKey: "uploads/recipe-images/.tmp/31/a1b2c3d4-e5f6-4789-aaaa-bbccddeeff00.png",
+      updatedAt: new Date("2026-10-01T12:00:00.000Z"),
+      sourceHash: "a".repeat(64)
+    }
+  };
+  const tx = {
+    uploadAsset: {
+      findMany: async () => [upload],
+      update: async ({ data }: { data: { publicId: string; storageKey: string } }) => ({ ...upload, ...data, updatedAt: new Date("2026-10-01T12:01:00.000Z") })
+    }
+  };
+  const assetStorage = {
+    copyObject: async () => {
+      copyAttempted = true;
+    },
+    publicUrl: (_request: unknown, storageKey: string) => `/static/${storageKey}`
+  };
+  const service = new UploadService({} as never, assetStorage as never);
+
+  const urls = await service.promoteDraftUploads(tx as never, {}, 17, 31, 91, [51], new Map([[51, {
+    sourceStorageKey: upload.storageKey,
+    sourcePublicId: upload.publicId,
+    sourceUpdatedAt: upload.updatedAt,
+    sourceHash: upload.sourceHash,
+    targetPublicId: "bbbbbbbb-cccc-4ddd-8eee-ffffffffffff",
+    targetStorageKey: "uploads/recipe-images/91/bbbbbbbb-cccc-4ddd-8eee-ffffffffffff.png"
+  }]]));
+
+  assert.equal(copyAttempted, false);
+  assert.equal(urls.get(51), "/static/uploads/recipe-images/91/bbbbbbbb-cccc-4ddd-8eee-ffffffffffff.png");
+});
+
+test("draft upload promotion rejects an image replaced after external copy", async () => {
+  let updateAttempted = false;
+  const originalUpdatedAt = new Date("2026-10-01T12:00:00.000Z");
+  const upload = {
+    id: 51,
+    publicId: "a1b2c3d4-e5f6-4789-aaaa-bbccddeeff00",
+    storageKey: "uploads/recipe-images/.tmp/31/a1b2c3d4-e5f6-4789-aaaa-bbccddeeff00.png",
+    updatedAt: new Date("2026-10-01T12:02:00.000Z"),
+    sourceHash: "b".repeat(64)
+  };
+  const tx = {
+    uploadAsset: {
+      findMany: async () => [upload],
+      update: async () => {
+        updateAttempted = true;
+        return upload;
+      }
+    }
+  };
+  const service = new UploadService({} as never, { publicUrl: () => "" } as never);
+
+  await assert.rejects(() => service.promoteDraftUploads(tx as never, {}, 17, 31, 91, [51], new Map([[51, {
+    sourceStorageKey: upload.storageKey,
+    sourcePublicId: "a1b2c3d4-e5f6-4789-aaaa-bbccddeeff00",
+    sourceUpdatedAt: originalUpdatedAt,
+    sourceHash: "a".repeat(64),
+    targetPublicId: "bbbbbbbb-cccc-4ddd-8eee-ffffffffffff",
+    targetStorageKey: "uploads/recipe-images/91/bbbbbbbb-cccc-4ddd-8eee-ffffffffffff.png"
+  }]])), /草稿图片状态已变更/);
+  assert.equal(updateAttempted, false);
+});
+
+test("recipe image public read uses recipe ID and file name", async () => {
+  const fileName = "11111111-1111-4111-8111-111111111111.png";
+  const storedKey = `uploads/recipe-images/10000031/${fileName}`;
   const assetStorage = {
     readObject: async (storageKey: string, contentType: string) => {
       assert.equal(storageKey, storedKey);
@@ -126,9 +297,9 @@ test("recipe image public read accepts the file name with extension", async () =
       };
     }
   };
-  const service = new UploadService(prisma as never, assetStorage as never);
+  const service = new UploadService({} as never, assetStorage as never);
 
-  const asset = await service.getRecipeImageAsset("11111111-1111-4111-8111-111111111111.png");
+  const asset = await service.getRecipeImageAsset(10000031, fileName);
 
   assert.equal(asset.contentType, "image/png");
   assert.equal(asset.stat.size, png1x1.length);
@@ -157,8 +328,7 @@ test("memory share cover is copied to a snapshot-owned immutable key", async () 
   }]);
   assert.deepEqual(result, {
     storageKey: "uploads/dining-event-memory-covers/82/3.webp",
-    contentType: "image/webp",
-    sizeBytes: 4321
+    contentType: "image/webp"
   });
   assert.equal(streamDestroyed, true);
   assert.equal(service.buildDiningMemoryAssetUrl({}, result.storageKey), "/static/uploads/dining-event-memory-covers/82/3.webp");

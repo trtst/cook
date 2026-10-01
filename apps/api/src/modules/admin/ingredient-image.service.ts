@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { BadRequestException, Inject, Injectable, NotFoundException } from "@nestjs/common";
 import { assetKey, AssetStorageService } from "../../common/asset-storage.service";
+import { compressUploadedImage } from "../../common/image-compression";
 import type { UUID } from "../../contracts/types";
 
 type RequestLike = {
@@ -10,8 +11,8 @@ type RequestLike = {
 
 // 服务端与后台保持同一图片尺寸契约，访问地址固定返回 300×300。
 const minImageSize = 300;
-const maxImageSize = 500;
-const maxImageBytes = 2 * 1024 * 1024;
+const maxImageSize = 1125;
+const maxImageBytes = 6 * 1024 * 1024;
 const jpegStart = 0xd8;
 const jpegEnd = 0xd9;
 const jpegStartOfFrame = new Set([0xc0, 0xc1, 0xc2, 0xc3, 0xc5, 0xc6, 0xc7, 0xc9, 0xca, 0xcb, 0xcd, 0xce, 0xcf]);
@@ -71,7 +72,7 @@ export class IngredientImageService {
       throw new BadRequestException("请上传食材图片");
     }
     if (file.size <= 0 || file.size > maxImageBytes) {
-      throw new BadRequestException("图片大小不能超过 2 MB");
+      throw new BadRequestException("后台上传的食材图片不能超过 6 MB");
     }
 
     const size = readJpegSize(file.buffer);
@@ -85,11 +86,22 @@ export class IngredientImageService {
       throw new BadRequestException("食材图片尺寸不能小于 300×300 像素");
     }
     if (size.width > maxImageSize || size.height > maxImageSize) {
-      throw new BadRequestException("食材图片最长边不能超过 500 像素");
+      throw new BadRequestException("食材图片最长边不能超过 1125 像素");
+    }
+
+    const image = await compressUploadedImage(file.buffer, {
+      maxInputBytes: maxImageBytes,
+      maxOutputBytes: 250 * 1024,
+      maxDimension: 500,
+      inputSizeMessage: "后台上传的食材图片不能超过 6 MB",
+      outputSizeMessage: "食材图片无法压缩到 250 KB 以内，请更换图片"
+    });
+    if (image.width !== image.height) {
+      throw new BadRequestException("食材图片必须是 1:1 正方形");
     }
 
     const tempPath = this.getTempPath(ingredientId);
-    await this.assetStorage.writeObject(tempPath, file.buffer, "image/jpeg");
+    await this.assetStorage.writeObject(tempPath, image.buffer, image.contentType);
     return tempPath;
   }
 

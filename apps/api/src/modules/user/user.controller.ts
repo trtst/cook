@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Inject, Post, Put, Query, Req, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
 import { ApiBearerAuth, ApiConsumes, ApiTags } from "@nestjs/swagger";
 import { FileInterceptor } from "@nestjs/platform-express";
-import { ok } from "../../common/api-response";
+import { fail, ok } from "../../common/api-response";
 import type { RequestWithContext, RequestWithUser } from "../../common/auth-context";
 import { ApiIdempotencyKey, ReadIdempotencyKey } from "../../common/idempotency-key";
 import { UserAuthGuard } from "../../common/user-auth.guard";
@@ -32,7 +32,6 @@ import {
   NotificationSettingsModel,
   StartPhoneChangeResultModel,
   CookAssistantUsageResponseModel,
-  StorageUsageModel,
   TasteProfileModel,
   UploadCurrentAvatarResponseModel
 } from "../../contracts/openapi";
@@ -82,7 +81,7 @@ export class UserController {
   }
 
   @Post("me/avatar")
-  @UseInterceptors(FileInterceptor("file", { limits: { fileSize: 10 * 1024 * 1024 } }))
+  @UseInterceptors(FileInterceptor("file", { limits: { fileSize: 2 * 1024 * 1024 } }))
   @ApiConsumes("multipart/form-data")
   @ApiIdempotencyKey()
   @ApiOkModel(UploadCurrentAvatarResponseModel, "上传并更新当前用户头像")
@@ -243,11 +242,9 @@ export class UserController {
 @UseGuards(UserAuthGuard)
 @ApiBearerAuth("UserBearerAuth")
 export class StorageUsageController {
-  constructor(@Inject(CurrentUserService) private readonly currentUserService: CurrentUserService) {}
-
   @Get()
-  @ApiOkModel(StorageUsageModel, "当前用户的逻辑空间模块明细")
-  getCurrent(@Req() request: RequestWithUser) {
-    return this.currentUserService.getStorageUsage(request.user.userId).then(result => ok(result));
+  @ApiOkNull("个人空间统计暂未开放，返回业务 code=503")
+  getCurrent() {
+    return fail(503, "个人空间统计暂未开放");
   }
 }
