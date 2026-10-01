@@ -505,21 +505,6 @@ export class UserSummaryModel {
   @ApiProperty(nullableString) avatarUrl!: string | null;
 }
 
-export class StorageModuleUsageModel {
-  @ApiProperty({ enum: ["RECIPE", "FRIDGE", "MEAL", "SHOPPING", "MEAL_GUEST", "TECHNICAL_SNAPSHOT", "RECYCLE_BIN", "PROFILE_ASSET"] })
-  module!: string;
-  @ApiProperty({ type: Number, minimum: 0 }) usedBytes!: number;
-}
-
-export class StorageUsageModel {
-  @ApiProperty({ type: String, enum: ["NORMAL", "OVER_STORAGE_READONLY"] }) state!: string;
-  @ApiProperty({ type: Number, minimum: 0 }) usedBytes!: number;
-  @ApiProperty({ type: Number, minimum: 0 }) limitBytes!: number;
-  @ApiProperty({ type: Number, minimum: 0 }) remainingBytes!: number;
-  @ApiProperty({ type: [StorageModuleUsageModel] }) byModule!: StorageModuleUsageModel[];
-  @ApiProperty(dateTime) calculatedAt!: string;
-}
-
 export class ImagePolicyModel {
   @ApiProperty({ type: Number, minimum: 0 }) quality!: number;
   @ApiProperty({ type: Number, minimum: 0 }) maxWidth!: number;
@@ -561,7 +546,6 @@ export class AdminUserEntitlementModel {
   @ApiProperty({ type: AdminEntitlementUserModel }) user!: AdminEntitlementUserModel;
   @ApiProperty({ type: UserMembershipModel }) membership!: UserMembershipModel;
   @ApiProperty({ type: AdminDisplayCapabilityModel }) display!: AdminDisplayCapabilityModel;
-  @ApiProperty({ type: StorageUsageModel }) storage!: StorageUsageModel;
   @ApiProperty({ type: RecipePolicyModel }) recipePolicy!: RecipePolicyModel;
   @ApiProperty({ type: InvitePolicyModel }) invitePolicy!: InvitePolicyModel;
   @ApiProperty({ type: ImagePolicyModel }) imagePolicy!: ImagePolicyModel;
@@ -1158,7 +1142,7 @@ export class RecipeDraftContentModel {
   @ApiProperty({ type: String, nullable: true, enum: ["WITHIN_15", "BETWEEN_15_30", "BETWEEN_30_60", "OVER_60"] }) duration!: string | null;
   @ApiProperty(nullableString) tips!: string | null;
   @ApiProperty({ type: [RecipeDraftIngredientModel] }) ingredients!: RecipeDraftIngredientModel[];
-  @ApiProperty({ type: [RecipeDraftStepModel] }) steps!: RecipeDraftStepModel[];
+  @ApiProperty({ type: [RecipeDraftStepModel], maxItems: 20 }) steps!: RecipeDraftStepModel[];
 }
 
 export class UploadImageModel {

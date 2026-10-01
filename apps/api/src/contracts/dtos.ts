@@ -1859,9 +1859,9 @@ export class RecipeDraftContentDto {
   @Type(() => RecipeDraftIngredientDto)
   ingredients!: RecipeDraftIngredientDto[];
 
-  @ApiProperty({ type: [RecipeDraftStepDto] })
+  @ApiProperty({ type: [RecipeDraftStepDto], maxItems: 20 })
   @IsArray()
-  @ArrayMaxSize(100)
+  @ArrayMaxSize(20)
   @ValidateNested({ each: true })
   @Type(() => RecipeDraftStepDto)
   steps!: RecipeDraftStepDto[];
@@ -4299,8 +4299,12 @@ export class CreateAdminSiteContentDto extends OperationDto {
   @MaxLength(80)
   title!: string;
 
-  @ApiProperty({ maxLength: 240 })
+  @ApiProperty({
+    maxLength: 240,
+    description: "仅官网固定页 privacy / terms 可提交空字符串；其他内容仍需填写摘要"
+  })
   @Transform(({ value }) => trimString(value))
+  @ValidateIf((object, value) => !(object.type === "PAGE" && (object.slug === "privacy" || object.slug === "terms") && value === ""))
   @IsString()
   @MinLength(1)
   @MaxLength(240)
