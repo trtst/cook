@@ -302,6 +302,13 @@ export function get<T>(url: string, query?: RequestOptions["query"], options: Om
 	});
 }
 
+export function getResult<T>(url: string, query?: RequestOptions["query"], options: Omit<RequestOptions, "query" | "body"> = {}) {
+	return requestResultByMethod<T>("GET", url, {
+		...options,
+		query
+	});
+}
+
 /**
  * POST 统一把第二个参数视为请求体，避免业务层重复书写 `method: "POST"`。
  */

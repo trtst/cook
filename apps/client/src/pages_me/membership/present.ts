@@ -7,7 +7,6 @@ export interface TierPolicyCard {
   title: string;
   summary: string;
   recipeLimit: string;
-  storageLimit: string;
   displayPolicy: string;
   recyclePolicy: string;
   adPolicy: string;
@@ -38,7 +37,6 @@ export const tierPolicyCards: TierPolicyCard[] = [
     title: "Free",
     summary: "保留基础做饭闭环与基础广告位。",
     recipeLimit: "50 道菜谱",
-    storageLimit: "100 MB",
     displayPolicy: "默认样式与基础页面壳子",
     recyclePolicy: "删除后直接永久删除",
     adPolicy: "展示普通被动广告位，可主动看激励广告",
@@ -49,7 +47,6 @@ export const tierPolicyCards: TierPolicyCard[] = [
     title: "Plus",
     summary: "扩展个人容量与基础展示权益，减少高打扰广告位。",
     recipeLimit: "120 道菜谱",
-    storageLimit: "300 MB",
     displayPolicy: "开放我的页背景图与基础主题皮肤",
     recyclePolicy: "回收站保留 3 天",
     adPolicy: "减少高打扰被动广告位，激励广告仍可主动触发",
@@ -60,7 +57,6 @@ export const tierPolicyCards: TierPolicyCard[] = [
     title: "Pro",
     summary: "当前主推正式会员，开放完整个人展示权益。",
     recipeLimit: "200 道菜谱",
-    storageLimit: "500 MB",
     displayPolicy: "开放首页背景图与完整个人展示",
     recyclePolicy: "回收站保留 5 天",
     adPolicy: "默认不展示被动广告位，激励广告仅在用户主动领取额外次数时出现",
@@ -71,7 +67,6 @@ export const tierPolicyCards: TierPolicyCard[] = [
     title: "Ultra",
     summary: "保留更高档位能力，当前不作为首发销售入口。",
     recipeLimit: "350 道菜谱",
-    storageLimit: "2 GB",
     displayPolicy: "开放全部展示资源与更高容量",
     recyclePolicy: "回收站保留 7 天",
     adPolicy: "默认不展示被动广告位",

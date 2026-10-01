@@ -12,7 +12,6 @@
       </view>
 
       <view v-else-if="detail" class="legal-content">
-        <text class="legal-content__title">{{ detail.title }}</text>
         <text v-if="effectiveDate" class="legal-content__date">生效日期：{{ effectiveDate }}</text>
         <ArticleBody :html="detail.bodyHtml" />
       </view>
@@ -67,7 +66,14 @@ async function loadDocument() {
   loading.value = true;
   errorState.value = "";
   try {
-    detail.value = await siteContentApi.getPublishedPage(props.path);
+    const result = await siteContentApi.getPublishedPage(props.path);
+    if (!result.ok) {
+      detail.value = null;
+      errorState.value = result.code === 404 ? "unpublished" : "failed";
+      return;
+    }
+
+    detail.value = result.data;
   } catch (error) {
     detail.value = null;
     errorState.value = isNotPublishedError(error) ? "unpublished" : "failed";
@@ -95,15 +101,6 @@ function retryDocument() {
 
 .legal-content {
   padding: 8rpx 0 48rpx;
-}
-
-.legal-content__title {
-  display: block;
-  margin-bottom: 18rpx;
-  color: var(--color-text);
-  font-size: 44rpx;
-  font-weight: var(--font-weight-bold);
-  line-height: 1.4;
 }
 
 .legal-content__date {

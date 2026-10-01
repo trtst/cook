@@ -47,6 +47,7 @@ import { useImageCropFlow } from "../composables/useImageCropFlow";
 import { imageCropPresets, type ImageCropResult } from "../utils/image-crop";
 
 type ProfileFieldType = "nickname" | "cookNo" | "bio" | "gender" | "birthDate";
+const maxAvatarSourceBytes = 2 * 1024 * 1024;
 
 const pageStyle = usePageScrollStyle();
 const { themeVars, themeClasses } = useTheme();
@@ -110,9 +111,17 @@ async function selectAvatar() {
       count: 1,
       mediaType: ["image"],
       sourceType: ["album", "camera"],
-      sizeType: ["compressed"]
+      sizeType: ["original"]
     });
     if (!file?.path) return;
+    if (file.size <= 0) {
+      await uniPlatform.feedback.toast({ title: "无法读取图片大小，请重新选择", icon: "none" });
+      return;
+    }
+    if (file.size > maxAvatarSourceBytes) {
+      await uniPlatform.feedback.toast({ title: "图片过大，请选择 2 MB 以内的图片", icon: "none" });
+      return;
+    }
     queueCrop({
       sourcePath: file.path,
       policy: imageCropPresets.profileAvatar,

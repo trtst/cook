@@ -3042,10 +3042,18 @@ async function handleCoverAction() {
     const files = await uniPlatform.media.chooseImage({
       count: 1,
       sourceType: ["album", "camera"],
-      sizeType: ["compressed"]
+      sizeType: ["original"]
     });
     const filePath = files[0]?.path?.trim();
     if (!filePath) return;
+    if (files[0] && files[0].size <= 0) {
+      await uniPlatform.feedback.toast({ title: "无法读取图片大小，请重新选择", icon: "none" });
+      return;
+    }
+    if (files[0] && files[0].size > 5 * 1024 * 1024) {
+      await uniPlatform.feedback.toast({ title: "图片过大，请选择 5 MB 以内的图片", icon: "none" });
+      return;
+    }
 
     uploadingCover.value = true;
     const next = await mealApi.uploadDiningEventCover(eventDetail.value.id, {

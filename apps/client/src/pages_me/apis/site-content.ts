@@ -1,4 +1,4 @@
-import { get } from "@/apis/http";
+import { getResult, type ApiResult } from "@/apis/http";
 import { cfg } from "@/config";
 
 export interface SiteContentDetail {
@@ -31,10 +31,16 @@ function normalizeBodyHtml(value: string) {
 }
 
 export const siteContentApi = {
-  getPublishedPage(path: string) {
-    return get<SiteContentDetail>(baseUrl, { path }, { auth: false }).then(detail => ({
-      ...detail,
-      bodyHtml: normalizeBodyHtml(detail.bodyHtml)
-    }));
+  async getPublishedPage(path: string): Promise<ApiResult<SiteContentDetail>> {
+    const result = await getResult<SiteContentDetail>(baseUrl, { path }, { auth: false });
+    if (!result.ok) return result;
+
+    return {
+      ok: true,
+      data: {
+        ...result.data,
+        bodyHtml: normalizeBodyHtml(result.data.bodyHtml)
+      }
+    };
   }
 };
