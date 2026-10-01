@@ -232,6 +232,9 @@ async function uploadRecipeImages(event: Event) {
       for (const item of items) {
         imageProgress.value = `正在上传 ${item.file.name}（${completedGroups + 1}/${groups.size} 道菜谱）`;
         try {
+          if (item.file.size > 10 * 1024 * 1024) {
+            throw new Error("图片过大，请选择 10 MB 以内的图片");
+          }
           const uploaded = await recipeApi.uploadImage(item.target === "COVER" ? "COVER" : "STEP", item.file, createOperationId());
           staged.push({ fileName: item.file.name, tempKey: uploaded.image.tempKey, target: item });
         } catch (error) {

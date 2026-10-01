@@ -23,10 +23,10 @@ type IngredientImageFilter = "ALL" | "MISSING";
 type IngredientProteinType = NonNullable<AdminIngredientSummary["proteinType"]>;
 
 const cropFrameSize = 240;
-// 食材图保存为 300～500 像素 JPG；单张和批量上传原图均不超过 2 MB、边长不超过 1125 像素。
+// 食材图保存为 300～500 像素 JPG；后台单张和批量上传原图不超过 6 MB、边长不超过 1125 像素。
 const minIngredientImageSize = 300;
 const maxIngredientImageSize = 500;
-const maxIngredientImageFileBytes = 2 * 1024 * 1024;
+const maxIngredientImageFileBytes = 6 * 1024 * 1024;
 const maxIngredientImageSourceSize = 1125;
 const batchImageResultPageSize = 50;
 const imageQuality = 0.8;
@@ -729,7 +729,7 @@ async function handleBatchImageFiles(event: Event) {
       row.message = "文件不是图片";
     } else if (file.size <= 0 || file.size > maxIngredientImageFileBytes) {
       row.status = "FAILED";
-      row.message = "图片文件为空或超过 2 MB";
+      row.message = "图片文件为空或超过 6 MB";
     } else if (row.ingredientId === null) {
       row.status = "FAILED";
       row.message = "文件名主体必须是食材数字 ID";
@@ -911,7 +911,7 @@ async function handleImageFileChange(event: Event) {
     return;
   }
   if (file.size <= 0 || file.size > maxIngredientImageFileBytes) {
-    ElMessage.error("图片文件为空或超过 2 MB");
+    ElMessage.error("图片文件为空或超过 6 MB");
     return;
   }
   const sourceUrl = URL.createObjectURL(file);

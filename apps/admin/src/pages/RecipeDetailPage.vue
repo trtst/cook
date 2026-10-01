@@ -29,6 +29,7 @@ type Difficulty = AdminRecipeContentInput["difficulty"];
 type Duration = AdminRecipeContentInput["duration"];
 type FuzzyText = "适量";
 type CropScene = "COVER" | "STEP";
+const maxRecipeImageUploadBytes = 10 * 1024 * 1024;
 
 interface EditIngredientRow {
   ingredientId: UUID | "";
@@ -83,8 +84,6 @@ interface IngredientOptionItem {
 
 const coverFrameWidth = 320;
 const coverFrameHeight = 240;
-const exportCoverWidth = 1200;
-const exportCoverHeight = 900;
 
 const fuzzyOptions: FuzzyText[] = ["适量"];
 
@@ -383,8 +382,8 @@ const cropState = reactive({
   sourceHeight: 0,
   frameWidth: coverFrameWidth,
   frameHeight: coverFrameHeight,
-  outputWidth: exportCoverWidth,
-  outputHeight: exportCoverHeight,
+  outputWidth: 1,
+  outputHeight: 1,
   scale: 1,
   minScale: 1,
   x: 0,
@@ -848,8 +847,8 @@ function resetCropState() {
   cropState.sourceHeight = 0;
   cropState.frameWidth = coverFrameWidth;
   cropState.frameHeight = coverFrameHeight;
-  cropState.outputWidth = exportCoverWidth;
-  cropState.outputHeight = exportCoverHeight;
+  cropState.outputWidth = 1;
+  cropState.outputHeight = 1;
   cropState.scale = 1;
   cropState.minScale = 1;
   cropState.x = 0;
@@ -880,8 +879,6 @@ function applyCropScene(scene: CropScene, width: number, height: number) {
   if (scene === "COVER") {
     cropState.frameWidth = coverFrameWidth;
     cropState.frameHeight = coverFrameHeight;
-    cropState.outputWidth = exportCoverWidth;
-    cropState.outputHeight = exportCoverHeight;
     return;
   }
 
@@ -889,14 +886,10 @@ function applyCropScene(scene: CropScene, width: number, height: number) {
   const ratio = width / height;
   if (ratio >= 1) {
     cropState.frameWidth = maxFrame;
-    cropState.frameHeight = Math.max(120, Math.round(maxFrame / ratio));
-    cropState.outputWidth = 1200;
-    cropState.outputHeight = Math.max(1, Math.round(1200 / ratio));
+    cropState.frameHeight = maxFrame / ratio;
   } else {
     cropState.frameHeight = maxFrame;
-    cropState.frameWidth = Math.max(120, Math.round(maxFrame * ratio));
-    cropState.outputHeight = 1200;
-    cropState.outputWidth = Math.max(1, Math.round(1200 * ratio));
+    cropState.frameWidth = maxFrame * ratio;
   }
 }
 
@@ -921,6 +914,10 @@ async function handleImageFileChange(event: Event) {
   if (!file) return;
   if (!file.type.startsWith("image/")) {
     ElMessage.error("请选择图片文件");
+    return;
+  }
+  if (file.size > maxRecipeImageUploadBytes) {
+    ElMessage.error("图片过大，请选择 10 MB 以内的图片");
     return;
   }
 
@@ -982,6 +979,8 @@ function updateCropScale(nextScale: number) {
 
 async function renderCropFile() {
   const image = await loadImage(cropState.sourceUrl);
+  cropState.outputWidth = Math.max(1, Math.round(cropState.frameWidth / cropState.scale));
+  cropState.outputHeight = Math.max(1, Math.round(cropState.frameHeight / cropState.scale));
   const canvas = document.createElement("canvas");
   canvas.width = cropState.outputWidth;
   canvas.height = cropState.outputHeight;

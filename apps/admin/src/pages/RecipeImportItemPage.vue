@@ -31,6 +31,7 @@ type Difficulty = RecipeImportRecipeBody["difficulty"];
 type Duration = RecipeImportRecipeBody["duration"];
 type FuzzyText = "适量";
 type CropScene = "COVER" | "STEP";
+const maxRecipeImageUploadBytes = 10 * 1024 * 1024;
 
 interface EditIngredientRow {
   line: string;
@@ -798,6 +799,10 @@ async function handleImageFileChange(event: Event) {
   if (!file) return;
   if (!file.type.startsWith("image/")) {
     ElMessage.error("请选择图片文件");
+    return;
+  }
+  if (file.size > maxRecipeImageUploadBytes) {
+    ElMessage.error("图片过大，请选择 10 MB 以内的图片");
     return;
   }
 
