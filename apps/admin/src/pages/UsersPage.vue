@@ -578,15 +578,6 @@ onMounted(loadUsers);
           </el-descriptions-item>
         </el-descriptions>
 
-        <el-divider content-position="left">个人空间</el-divider>
-        <el-descriptions :column="1" border>
-          <el-descriptions-item label="空间状态">{{ entitlement.storage.state }}</el-descriptions-item>
-          <el-descriptions-item label="已用空间">{{ formatBytes(entitlement.storage.usedBytes) }}</el-descriptions-item>
-          <el-descriptions-item label="空间上限">{{ formatBytes(entitlement.storage.limitBytes) }}</el-descriptions-item>
-          <el-descriptions-item label="剩余空间">{{ formatBytes(entitlement.storage.remainingBytes) }}</el-descriptions-item>
-          <el-descriptions-item label="计算时间">{{ formatDateTime(entitlement.storage.calculatedAt) }}</el-descriptions-item>
-        </el-descriptions>
-
         <el-divider content-position="left">策略摘要</el-divider>
         <el-descriptions :column="1" border>
           <el-descriptions-item label="菜谱上限">{{ entitlement.recipePolicy.recipeLimit }}</el-descriptions-item>

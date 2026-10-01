@@ -64,18 +64,6 @@ export interface EffectiveImagePolicy {
   maxInputBytes: number;
 }
 
-export interface StorageUsageSummary {
-  state: "NORMAL" | "OVER_STORAGE_READONLY";
-  usedBytes: number;
-  limitBytes: number;
-  remainingBytes: number;
-  byModule: Array<{
-    module: string;
-    usedBytes: number;
-  }>;
-  calculatedAt: IsoDateTime;
-}
-
 export interface AdminUserEntitlementResponse {
   user: Pick<UserProfile, "id" | "uid" | "nickname" | "avatarUrl" | "phone" | "status" | "cookNo" | "bio" | "gender" | "birthDate">;
   membership: UserMembership;
@@ -83,7 +71,6 @@ export interface AdminUserEntitlementResponse {
     canUseProfileBackground: boolean;
     canUseHomeBackground: boolean;
   };
-  storage: StorageUsageSummary;
   recipePolicy: {
     recipeLimit: number;
     recycleDays: number;

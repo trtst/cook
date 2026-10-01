@@ -17,7 +17,7 @@ function expectExcludes(snippet, content = source) {
 expectIncludes("formatDateTime(row.createdAt)");
 expectIncludes("formatDateTime(row.updatedAt)");
 expectIncludes("formatDateTime(entitlement.membership.validUntil,");
-expectIncludes("formatDateTime(entitlement.storage.calculatedAt)");
+expectExcludes("formatDateTime(entitlement.storage.calculatedAt)");
 expectIncludes("查看完整手机号会记录审计日志");
 expectIncludes("revealUserPhone");
 expectIncludes("revealPhone(userId: UUID)", userApiSource);
