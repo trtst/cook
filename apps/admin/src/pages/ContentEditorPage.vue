@@ -62,6 +62,8 @@ const form = reactive({
 
 const isEdit = computed(() => contentId.value !== null);
 const isPage = computed(() => form.type === "PAGE");
+// 隐私政策和用户协议只允许编辑正文，固定标题、路径及其他元数据沿用服务端记录。
+const isLegalPage = computed(() => isPage.value && (form.slug === "privacy" || form.slug === "terms"));
 const selectedChannel = computed(() => channels.value.find(item => item.id === form.channelId) ?? null);
 const isOfficialMessage = computed(() => sourceMode.value === "official-message" || selectedChannel.value?.code === "OFFICIAL_NOTICE");
 const articleChannels = computed(() => channels.value.filter(item => publicArticleChannelCodes.has(item.code)));
@@ -71,11 +73,12 @@ const editableChannels = computed(() => {
   return articleChannels.value;
 });
 const pageTitle = computed(() => {
+  if (isLegalPage.value) return `编辑${form.title}`;
   if (isEdit.value) return "编辑内容";
   if (isPage.value) return "新建官网固定页";
   return sourceMode.value === "official-message" ? "新建官方消息" : "新建文章";
 });
-const previewHtml = computed(() => sanitizeContentHtml(form.bodyHtml || "<p>正文预览区域</p>"));
+const previewHtml = computed(() => sanitizeContentHtml(form.bodyHtml || (isLegalPage.value ? "" : "<p>正文预览区域</p>")));
 
 function parseRouteContentId(value: unknown) {
   const raw = Array.isArray(value) ? value[0] : value;
@@ -262,8 +265,11 @@ function buildSavePayload() {
 
 function validateForm() {
   const payload = buildSavePayload();
-  if (!payload.slug || !payload.title || !payload.summary || !payload.label || !payload.bodyHtml || !payload.bodyText) {
-    ElMessage.error(isPage.value ? "请完整填写标题、摘要、标签、slug 和正文" : "请完整填写标题、摘要和正文");
+  const invalidRequiredFields = isLegalPage.value
+    ? !payload.slug || !payload.title || !payload.bodyHtml || !payload.bodyText
+    : !payload.slug || !payload.title || !payload.summary || !payload.label || !payload.bodyHtml || !payload.bodyText;
+  if (invalidRequiredFields) {
+    ElMessage.error(isLegalPage.value ? "请填写正文" : isPage.value ? "请完整填写标题、摘要、标签、slug 和正文" : "请完整填写标题、摘要和正文");
     return null;
   }
   if (!isPage.value && !payload.channelId) {
@@ -549,42 +555,42 @@ onMounted(() => {
 
         <el-form label-position="top" :disabled="formLocked">
           <div class="editor-grid">
-            <el-form-item v-if="isPage" label="内容类型">
+            <el-form-item v-if="isPage && !isLegalPage" label="内容类型">
               <el-input model-value="官网固定页" disabled />
             </el-form-item>
-            <el-form-item label="栏目">
+            <el-form-item v-if="!isLegalPage" label="栏目">
               <el-select v-model="form.channelId" :disabled="isPage" placeholder="请选择栏目">
                 <el-option v-for="item in editableChannels" :key="item.id" :label="item.name" :value="item.id" />
               </el-select>
             </el-form-item>
             <el-form-item label="标题">
-              <el-input v-model="form.title" maxlength="80" show-word-limit />
+              <el-input v-model="form.title" :disabled="isLegalPage" maxlength="80" show-word-limit />
             </el-form-item>
-            <el-form-item v-if="isPage" label="标签">
+            <el-form-item v-if="isPage && !isLegalPage" label="标签">
               <el-input v-model="form.label" maxlength="16" show-word-limit />
             </el-form-item>
-            <el-form-item v-if="isPage" label="slug">
+            <el-form-item v-if="isPage && !isLegalPage" label="slug">
               <el-input v-model="form.slug" :disabled="isPage" maxlength="80" />
             </el-form-item>
-            <el-form-item v-if="isPage" label="访问路径">
+            <el-form-item v-if="isPage && !isLegalPage" label="访问路径">
               <el-input :model-value="form.path" disabled />
             </el-form-item>
-            <el-form-item class="editor-grid__full" label="摘要">
+            <el-form-item v-if="!isLegalPage" class="editor-grid__full" label="摘要">
               <el-input v-model="form.summary" type="textarea" :rows="3" maxlength="240" show-word-limit />
             </el-form-item>
             <el-form-item v-if="!isPage" class="editor-grid__full" label="关键词">
               <el-input v-model="form.keywords" maxlength="200" show-word-limit placeholder="多个关键词用分号隔开，例如：焯水; 去腥; 火候" />
             </el-form-item>
-            <el-form-item v-if="isPage" class="editor-grid__full" label="头部说明">
+            <el-form-item v-if="isPage && !isLegalPage" class="editor-grid__full" label="头部说明">
               <el-input v-model="form.heroNote" type="textarea" :rows="2" maxlength="200" show-word-limit />
             </el-form-item>
-            <el-form-item v-if="isPage" label="生效时间">
+            <el-form-item v-if="isPage && !isLegalPage" label="生效时间">
               <el-date-picker v-model="form.effectiveAt" type="datetime" value-format="YYYY-MM-DDTHH:mm" placeholder="选填" />
             </el-form-item>
-            <el-form-item v-if="isPage" label="排序">
+            <el-form-item v-if="isPage && !isLegalPage" label="排序">
               <el-input-number v-model="form.sortOrder" :min="0" />
             </el-form-item>
-            <el-form-item class="editor-grid__full" label="封面图">
+            <el-form-item v-if="!isLegalPage" class="editor-grid__full" label="封面图">
               <div class="cover-editor">
                 <div class="cover-editor__preview">
                   <img v-if="form.coverImageUrl" :src="form.coverImageUrl" alt="封面图预览" class="cover-editor__image" />
@@ -641,11 +647,13 @@ onMounted(() => {
           <h2>预览</h2>
         </div>
         <article class="content-preview">
-          <p class="content-preview__label">{{ form.label || "未设置标签" }}</p>
-          <h1>{{ form.title || "未设置标题" }}</h1>
-          <p class="content-preview__summary">{{ form.summary || "未设置摘要" }}</p>
-          <p v-if="form.heroNote" class="content-preview__note">{{ form.heroNote }}</p>
-          <img v-if="form.coverImageUrl" :src="form.coverImageUrl" alt="封面图预览" class="content-preview__cover" />
+          <template v-if="!isLegalPage">
+            <p class="content-preview__label">{{ form.label || "未设置标签" }}</p>
+            <h1>{{ form.title || "未设置标题" }}</h1>
+            <p class="content-preview__summary">{{ form.summary || "未设置摘要" }}</p>
+            <p v-if="form.heroNote" class="content-preview__note">{{ form.heroNote }}</p>
+            <img v-if="form.coverImageUrl" :src="form.coverImageUrl" alt="封面图预览" class="content-preview__cover" />
+          </template>
           <div class="content-preview__body" v-html="previewHtml" />
         </article>
       </div>
