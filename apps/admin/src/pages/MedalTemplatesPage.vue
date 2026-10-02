@@ -96,6 +96,7 @@ const previewing = ref(false);
 const importing = ref(false);
 const importPreview = ref<MedalTemplateImportPreview | null>(null);
 const importFile = ref<File | null>(null);
+const importOperationId = ref<string | null>(null);
 const importFileInput = ref<HTMLInputElement | null>(null);
 let syncingSelection = false;
 const earnedFileInput = ref<HTMLInputElement | null>(null);
@@ -363,6 +364,7 @@ async function handleImportFileChange(event: Event) {
   input.value = "";
   importFile.value = null;
   importPreview.value = null;
+  importOperationId.value = null;
   if (!file) return;
   if (!file.name.toLowerCase().endsWith(".json")) {
     ElMessage.warning("请选择 JSON 数据包");
@@ -376,6 +378,7 @@ async function handleImportFileChange(event: Event) {
   try {
     importPreview.value = await medalApi.previewImport(file);
     importFile.value = file;
+    importOperationId.value = createOperationId();
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : "勋章模板数据包校验失败");
   } finally {
@@ -386,7 +389,8 @@ async function handleImportFileChange(event: Event) {
 async function confirmImport() {
   const file = importFile.value;
   const preview = importPreview.value;
-  if (!file || !preview || preview.conflicts.length || preview.sourceEnvironment !== "TEST" || preview.targetEnvironment !== "ONLINE" || importing.value) return;
+  const operationId = importOperationId.value;
+  if (!file || !preview || !operationId || preview.conflicts.length || preview.sourceEnvironment !== "TEST" || preview.targetEnvironment !== "ONLINE" || importing.value) return;
   try {
     await ElMessageBox.confirm(
       `将从测试环境导入 ${preview.counts.total} 枚勋章模板：新增 ${preview.counts.new} 枚，更新 ${preview.counts.existing} 枚。确认写入线上环境吗？`,
@@ -398,10 +402,11 @@ async function confirmImport() {
   }
   importing.value = true;
   try {
-    const result = await medalApi.importPackage(file, createOperationId());
+    const result = await medalApi.importPackage(file, operationId);
     ElMessage.success(`已导入 ${result.importedCount} 枚：新增 ${result.createdCount} 枚，更新 ${result.updatedCount} 枚`);
     importFile.value = null;
     importPreview.value = null;
+    importOperationId.value = null;
     await loadList();
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : "导入勋章模板失败");

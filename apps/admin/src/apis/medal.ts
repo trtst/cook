@@ -44,7 +44,7 @@ export interface MedalTemplateTransferPackage {
 export interface MedalTemplateImportPreview {
   schemaVersion: "cook.medal-templates.v1";
   targetEnvironment: "ONLINE";
-  sourceEnvironment: "TEST" | "UNKNOWN";
+  sourceEnvironment: string;
   counts: { total: number; new: number; existing: number };
   conflicts: string[];
 }
