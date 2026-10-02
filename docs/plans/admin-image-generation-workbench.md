@@ -19,7 +19,7 @@
 
 ## Provider 边界
 
-Admin 只调用 `/admin/image-generation/*`。生图页下拉选择的服务作为跨管理员共享默认值保存，API 通过 `ImageGenerationProvider` 将生成请求路由到 Ark Seedream 或火山视觉智能通用 3.0；凭据和协议适配都留在 API，不改变 Admin 页面其余候选和目标回填契约。Ark 使用 `ARK_API_KEY`、`ARK_IMAGE_MODEL`、可选 `ARK_IMAGE_ENDPOINT`、`ARK_IMAGE_RESOLUTION`、`ARK_IMAGE_OUTPUT_FORMAT` 和 `ARK_IMAGE_WATERMARK`；视觉智能使用 API Key 方式，凭据放在 API 环境变量 `VOLCENGINE_CV_API_KEY`，固定请求 `https://openapi.cv.volces.com/api/common/v3/process`，`req_key=high_aes_general_v30l_zt2i`。视觉智能 Provider 在单个 API 进程内串行发送请求，遵守体验额度并发数为 1 的限制；同一 API 进程处理的不同管理员请求也共用该队列。两者都返回短期 URL，由 API 下载后存入现有候选临时 OSS。
+Admin 只调用 `/admin/image-generation/*`。生图页下拉选择的服务作为跨管理员共享默认值保存，API 通过 `ImageGenerationProvider` 将生成请求路由到 Ark Seedream 或火山视觉智能通用 3.0；凭据和协议适配都留在 API，不改变 Admin 页面其余候选和目标回填契约。Ark 使用 `ARK_API_KEY`、`ARK_IMAGE_MODEL`、可选 `ARK_IMAGE_ENDPOINT`、`ARK_IMAGE_RESOLUTION`、`ARK_IMAGE_OUTPUT_FORMAT` 和 `ARK_IMAGE_WATERMARK`；视觉智能使用 API Key 方式，凭据放在 API 环境变量 `VOLCENGINE_CV_API_KEY`，固定请求 `https://openapi.cv.volces.com/api/common/v3/process`，`req_key=high_aes_general_v30l_zt2i`。视觉智能 Provider 在进程内排队，并通过同一 PostgreSQL 数据库上的会话级 advisory lock 在多个 API 进程间串行；数据库不可用或排队超过 10 分钟时拒绝请求。锁持有期间不打开数据库事务。两者都返回短期 URL，由 API 下载后存入现有候选临时 OSS。
 
 ## 持久化和临时数据
 
