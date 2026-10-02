@@ -484,4 +484,4 @@
 - 实现不新增数据库表或 migration。API/Admin type-check、build、OpenAPI verify 和目标文件 `git diff --check` 已通过；未运行测试套件。
 - 待验收：Admin 浏览器交互、跨环境选中导出、任意环境导入预览和首次真实配置导入；代码部署状态另行记录。
 - 2026-10-02 发布准备复核：API/Admin type-check 与 build、API OpenAPI verify（338 operations / 297 response schemas）及 `git diff --check` 通过；未运行测试套件。初版功能及执行记录已推送到 `origin/main`；当前环境中服务器部署状态未核实。
-- 2026-10-02 用户确认取消勋章模板同步的环境方向门禁：API/Admin 已改为任意环境均可导出、预览和导入；环境字段仅供信息展示。待完成静态验证、推送与部署，随后进行 Admin 运行时验收。
+- 2026-10-02 用户确认取消勋章模板同步的环境方向门禁：API/Admin 已改为任意环境均可导出、预览和导入；环境字段仅供信息展示。API/Admin type-check、build、OpenAPI verify 和 `git diff --check` 通过；`3890bd9` 已推送到 `origin/main`，测试/线上服务器部署与 Admin 运行时验收待完成。
