@@ -96,5 +96,5 @@
 
 ## Delivery status
 
-- Local source and Admin build are ready for release; this checkout is `main` ahead of `origin/main` by the five medal feature/spec commits.
-- API and Admin deployment and browser interaction have not yet been confirmed. Production template import remains a separate action after deployment; the user must choose the templates in Admin.
+- API and Admin source plus production builds are ready; the feature and execution records are pushed to `origin/main`.
+- Production deployment and browser interaction have not yet been confirmed. Production template import remains a separate action after deployment; the user must choose the templates in Admin.

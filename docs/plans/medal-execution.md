@@ -483,4 +483,4 @@
 - 导入预览按模板 `code` 识别新增/更新；同编码不同 `awardRule` 整包冲突。确认导入后在事务内更新配置并写入审计与幂等记录；目标图片字段与包外模板保留。
 - 实现不新增数据库表或 migration。API/Admin type-check、build、OpenAPI verify 和目标文件 `git diff --check` 已通过；未运行测试套件。
 - 待验收：Admin 浏览器交互、测试环境选中导出、线上导入预览和首次真实配置导入；代码部署状态另行记录。
-- 2026-10-02 发布准备复核：API/Admin type-check 与 build、API OpenAPI verify（338 operations / 297 response schemas）及 `git diff --check` 通过；未运行测试套件。功能代码位于当前 `main` 的 5 个本地提交，尚未推送或部署；API/Admin 部署后仍需浏览器验收，再由用户勾选模板导出并确认首次线上导入。
+- 2026-10-02 发布准备复核：API/Admin type-check 与 build、API OpenAPI verify（338 operations / 297 response schemas）及 `git diff --check` 通过；未运行测试套件。功能及执行记录已推送到 `origin/main`；生产服务器尚未部署。Admin 部署后仍需浏览器验收，再由用户勾选模板导出并确认首次线上导入。
