@@ -13,6 +13,8 @@ import { formatStatusText } from "@/utils/status";
 const route = useRoute();
 const router = useRouter();
 const loading = ref(false);
+const batchPublishing = ref(false);
+const batchPublishProgress = ref({ finished: 0, total: 0 });
 const detail = ref<RecipeImportJobDetail | null>(null);
 let detailRequestId = 0;
 
@@ -88,6 +90,83 @@ async function removeJob() {
   }
 }
 
+async function publishAllReady() {
+  const currentJobId = jobId.value;
+  if (!detail.value || !currentJobId || batchPublishing.value || detail.value.readyCount < 1) return;
+  batchPublishing.value = true;
+  try {
+    await ElMessageBox.confirm(
+      `将发布此任务中全部 ${detail.value.readyCount} 条可发布菜谱，逐条处理并汇总结果。`,
+      "一键发布可发布菜谱",
+      { type: "warning", confirmButtonText: "开始发布", cancelButtonText: "取消" }
+    );
+  } catch (error) {
+    batchPublishing.value = false;
+    if (error !== "cancel" && error !== "close") {
+      ElMessage.error(error instanceof Error ? error.message : "确认批量发布失败");
+    }
+    return;
+  }
+
+  batchPublishProgress.value = { finished: 0, total: 0 };
+  try {
+    const readyItems: RecipeImportItemSummary[] = [];
+    let page = 1;
+    let hasNext = true;
+    while (hasNext) {
+      const result = await recipeApi.getImportJobDetail(currentJobId, { page, pageSize: 100, status: "READY" });
+      readyItems.push(...result.items.items);
+      hasNext = result.items.hasNext;
+      page += 1;
+    }
+
+    if (readyItems.length === 0) {
+      query.page = 1;
+      await loadDetail();
+      ElMessage.info("该任务已无可发布条目");
+      return;
+    }
+
+    batchPublishProgress.value = { finished: 0, total: readyItems.length };
+    const failures: string[] = [];
+    let successCount = 0;
+    for (const item of readyItems) {
+      try {
+        await recipeApi.publishImportItem(item.id, {
+          operationId: createOperationId(),
+          expectedVersion: item.version
+        });
+        successCount += 1;
+      } catch (error) {
+        failures.push(`${item.title || item.sourcePath}：${error instanceof Error ? error.message : "发布失败"}`);
+      } finally {
+        batchPublishProgress.value = {
+          ...batchPublishProgress.value,
+          finished: batchPublishProgress.value.finished + 1
+        };
+      }
+    }
+
+    query.page = 1;
+    await loadDetail();
+    const summary = `一键发布完成：成功 ${successCount} 条，失败 ${failures.length} 条。`;
+    if (failures.length) {
+      await ElMessageBox.alert(`${summary}\n\n失败项：\n${failures.join("\n")}`, "批量发布结果", {
+        type: successCount ? "warning" : "error",
+        confirmButtonText: "知道了"
+      });
+    } else {
+      ElMessage.success(summary);
+    }
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? `批量发布中断：${error.message}` : "批量发布中断，请刷新任务后重试");
+    await loadDetail();
+  } finally {
+    batchPublishing.value = false;
+    batchPublishProgress.value = { finished: 0, total: 0 };
+  }
+}
+
 function openItem(itemId: UUID) {
   void router.push(`/recipes/import-items/${itemId}`);
 }
@@ -114,7 +193,16 @@ onMounted(() => {
   <section class="page-stack">
     <div class="toolbar-panel page-toolbar">
       <el-button text :icon="ArrowLeft" @click="goBack">返回导入中心</el-button>
-      <el-button v-if="detail && detail.status !== 'RUNNING'" text type="danger" @click="removeJob">删除任务</el-button>
+      <el-button
+        v-if="detail && detail.readyCount > 0"
+        type="primary"
+        :loading="batchPublishing"
+        :disabled="batchPublishing"
+        @click="publishAllReady"
+      >
+        {{ batchPublishing && batchPublishProgress.total ? `发布中 ${batchPublishProgress.finished}/${batchPublishProgress.total}` : `一键发布可发布项（${detail.readyCount}）` }}
+      </el-button>
+      <el-button v-if="detail && detail.status !== 'RUNNING'" text type="danger" :disabled="batchPublishing" @click="removeJob">删除任务</el-button>
       <div class="toolbar-spacer" />
       <el-select v-model="query.status" class="toolbar-select" placeholder="全部条目状态" @change="handleStatusChange">
         <el-option label="全部条目" value="" />
