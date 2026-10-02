@@ -33,6 +33,7 @@ function parseRouteId(value: unknown) {
 }
 
 const jobId = computed<UUID | null>(() => parseRouteId(route.params.jobId));
+const isViewingJob = (targetJobId: UUID) => jobId.value === targetJobId;
 
 async function loadDetail() {
   const currentRequestId = ++detailRequestId;
@@ -110,6 +111,7 @@ async function publishAllReady() {
 
   batchPublishProgress.value = { finished: 0, total: 0 };
   try {
+    if (!isViewingJob(currentJobId)) return;
     const readyItems: RecipeImportItemSummary[] = [];
     let page = 1;
     let hasNext = true;
@@ -121,9 +123,11 @@ async function publishAllReady() {
     }
 
     if (readyItems.length === 0) {
-      query.page = 1;
-      await loadDetail();
-      ElMessage.info("该任务已无可发布条目");
+      if (isViewingJob(currentJobId)) {
+        query.page = 1;
+        await loadDetail();
+        ElMessage.info("该任务已无可发布条目");
+      }
       return;
     }
 
@@ -147,8 +151,10 @@ async function publishAllReady() {
       }
     }
 
+    if (!isViewingJob(currentJobId)) return;
     query.page = 1;
     await loadDetail();
+    if (!isViewingJob(currentJobId)) return;
     const summary = `一键发布完成：成功 ${successCount} 条，失败 ${failures.length} 条。`;
     if (failures.length) {
       await ElMessageBox.alert(`${summary}\n\n失败项：\n${failures.join("\n")}`, "批量发布结果", {
@@ -159,8 +165,11 @@ async function publishAllReady() {
       ElMessage.success(summary);
     }
   } catch (error) {
-    ElMessage.error(error instanceof Error ? `批量发布中断：${error.message}` : "批量发布中断，请刷新任务后重试");
-    await loadDetail();
+    if (isViewingJob(currentJobId)) {
+      ElMessage.error(error instanceof Error ? `批量发布中断：${error.message}` : "批量发布中断，请刷新任务后重试");
+      query.page = 1;
+      await loadDetail();
+    }
   } finally {
     batchPublishing.value = false;
     batchPublishProgress.value = { finished: 0, total: 0 };
