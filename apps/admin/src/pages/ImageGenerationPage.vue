@@ -24,12 +24,14 @@ const previewUrls = ref(new Map<number, string>());
 const loading = ref(false);
 const savingSettings = ref(false);
 const batchRunning = ref(false);
+const batchLoadingAction = ref<"missing" | "cover" | null>(null);
 const batchReplacing = ref(false);
 const replacingRecipeIds = reactive(new Set<number>());
 const batchProgress = ref("");
 
 const selectedRows = computed(() => [...selectedIds.value].map(id => targetCache.get(id)).filter((row): row is ImageGenerationTarget => Boolean(row)));
 const applicableSelectedSlotCount = computed(() => selectedRows.value.reduce((total, row) => total + row.slots.filter(slot => !slot.imageUrl && !slot.candidate).length, 0));
+const applicableSelectedCoverCount = computed(() => selectedRows.value.reduce((total, row) => total + row.slots.filter(slot => slot.targetType === "RECIPE_COVER" && !slot.imageUrl && !slot.candidate).length, 0));
 const selectedCandidateCount = computed(() => selectedRows.value.reduce((total, row) => total + row.slots.filter(slot => slot.candidate).length, 0));
 const selectedVisibleCount = computed(() => rows.value.filter(row => selectedIds.value.has(row.id)).length);
 const anyRecipeReplacing = computed(() => replacingRecipeIds.size > 0);
@@ -146,6 +148,7 @@ async function generateSelected() {
   if (!slots.length) { ElMessage.info("所选内容没有缺图位置"); return; }
   if (batchReplacing.value || anyRecipeReplacing.value) return;
   batchRunning.value = true;
+  batchLoadingAction.value = "missing";
   let completed = 0;
   try {
     const batchSize = 3;
@@ -157,7 +160,28 @@ async function generateSelected() {
     }
     await loadTargets();
     ElMessage.success(`成功生成 ${completed}/${slots.length} 张候选图`);
-  } finally { batchRunning.value = false; batchProgress.value = ""; }
+  } finally { batchRunning.value = false; batchLoadingAction.value = null; batchProgress.value = ""; }
+}
+
+async function generateSelectedCovers() {
+  if (type.value !== "RECIPE" || !selectedRows.value.length) { ElMessage.warning("请先选择菜谱"); return; }
+  const slots = selectedRows.value.flatMap(row => row.slots.filter(slot => slot.targetType === "RECIPE_COVER" && !slot.imageUrl && !slot.candidate));
+  if (!slots.length) { ElMessage.info("所选菜谱没有待生成的封面图"); return; }
+  if (batchReplacing.value || anyRecipeReplacing.value) return;
+  batchRunning.value = true;
+  batchLoadingAction.value = "cover";
+  let completed = 0;
+  try {
+    const batchSize = 3;
+    for (let offset = 0; offset < slots.length; offset += batchSize) {
+      const batch = slots.slice(offset, offset + batchSize);
+      batchProgress.value = `${offset + 1}-${offset + batch.length}/${slots.length}`;
+      const results = await Promise.all(batch.map(slot => generateSlot(slot, false)));
+      completed += results.filter(Boolean).length;
+    }
+    await loadTargets();
+    ElMessage.success(`成功生成 ${completed}/${slots.length} 张封面候选图`);
+  } finally { batchRunning.value = false; batchLoadingAction.value = null; batchProgress.value = ""; }
 }
 
 async function applyCandidates(candidates: ImageGenerationCandidate[], targetLabel: string) {
@@ -268,7 +292,10 @@ onBeforeUnmount(() => { [...previewUrls.value.keys()].forEach(releasePreview); }
         </el-select>
         <el-checkbox v-model="missingOnly">仅显示缺图片</el-checkbox>
         <span class="toolbar-spacer" />
-        <el-button type="primary" :loading="batchRunning" :disabled="batchRunning || batchReplacing || anyRecipeReplacing || !selectedRows.length" @click="generateSelected">
+        <el-button v-if="type === 'RECIPE'" type="success" plain :loading="batchLoadingAction === 'cover'" :disabled="batchRunning || batchReplacing || anyRecipeReplacing || !selectedRows.length || !applicableSelectedCoverCount" @click="generateSelectedCovers">
+          生成所选封面图 ({{ applicableSelectedCoverCount }})
+        </el-button>
+        <el-button type="primary" :loading="batchLoadingAction === 'missing'" :disabled="batchRunning || batchReplacing || anyRecipeReplacing || !selectedRows.length" @click="generateSelected">
           生成所选缺图 ({{ applicableSelectedSlotCount }})
         </el-button>
         <el-button v-if="type === 'RECIPE'" type="success" plain :loading="batchReplacing" :disabled="batchReplacing || batchRunning || anyRecipeReplacing || !selectedCandidateCount" @click="replaceSelectedCandidates">
