@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue"
 import { ElMessage, ElMessageBox } from "element-plus";
 import { ingredientApi, type AdminIngredientCategorySummary } from "@/apis/ingredient";
 import { recipeApi, type AdminInspirationCategorySummary } from "@/apis/recipe";
-import { imageGenerationApi, type ImageGenerationCandidate, type ImageGenerationSettings, type ImageGenerationSlot, type ImageGenerationTarget, type ImageGenerationType } from "@/apis/image-generation";
+import { imageGenerationApi, type ImageGenerationCandidate, type ImageGenerationProviderId, type ImageGenerationSettings, type ImageGenerationSlot, type ImageGenerationTarget, type ImageGenerationType } from "@/apis/image-generation";
 import { requestBlob } from "@/apis/http";
 import { createOperationId } from "@/utils/operation-id";
 
@@ -17,12 +17,14 @@ const targetCache = reactive(new Map<number, ImageGenerationTarget>());
 const page = ref(1);
 const pageSize = 20;
 const total = ref(0);
-const settings = ref<ImageGenerationSettings>({ ingredientKeywords: "", recipeCoverKeywords: "", recipeStepKeywords: "", updatedAt: "" });
+const settings = ref<ImageGenerationSettings>({ provider: "ARK_SEEDREAM", version: 1, ingredientKeywords: "", recipeCoverKeywords: "", recipeStepKeywords: "", updatedAt: "" });
+const selectedProvider = ref<ImageGenerationProviderId>("ARK_SEEDREAM");
 const keywordDrafts = reactive({ ingredientKeywords: "", recipeCoverKeywords: "", recipeStepKeywords: "" });
 const promptDrafts = reactive<Record<string, string>>({});
 const previewUrls = ref(new Map<number, string>());
 const loading = ref(false);
 const savingSettings = ref(false);
+const savingProvider = ref(false);
 const batchRunning = ref(false);
 const batchLoadingAction = ref<"missing" | "cover" | null>(null);
 const batchReplacing = ref(false);
@@ -63,6 +65,7 @@ async function loadCategories() {
 
 async function loadSettings() {
   settings.value = await imageGenerationApi.getSettings();
+  selectedProvider.value = settings.value.provider;
   keywordDrafts.ingredientKeywords = settings.value.ingredientKeywords;
   keywordDrafts.recipeCoverKeywords = settings.value.recipeCoverKeywords;
   keywordDrafts.recipeStepKeywords = settings.value.recipeStepKeywords;
@@ -117,19 +120,45 @@ async function refreshCandidatePreviews() {
 async function saveKeywords() {
   savingSettings.value = true;
   try {
-    settings.value = await imageGenerationApi.saveSettings({ operationId: createOperationId(), ...keywordDrafts });
+    settings.value = await imageGenerationApi.saveSettings({ operationId: createOperationId(), provider: settings.value.provider, version: settings.value.version, ...keywordDrafts });
+    selectedProvider.value = settings.value.provider;
     keywordDrafts.ingredientKeywords = settings.value.ingredientKeywords;
     keywordDrafts.recipeCoverKeywords = settings.value.recipeCoverKeywords;
     keywordDrafts.recipeStepKeywords = settings.value.recipeStepKeywords;
-    ElMessage.success("关键词已保存，之后生成将使用该设置");
+    ElMessage.success("共享生图设置已保存");
     Object.keys(promptDrafts).forEach(key => delete promptDrafts[key]);
   } catch (error) { ElMessage.error(error instanceof Error ? error.message : "保存关键词失败"); }
   finally { savingSettings.value = false; }
 }
 
-async function generateSlot(slot: ImageGenerationSlot, notify = true) {
+async function saveProviderDefault(provider: ImageGenerationProviderId) {
+  if (provider === settings.value.provider) return;
+  savingProvider.value = true;
+  try {
+    settings.value = await imageGenerationApi.saveSettings({
+      operationId: createOperationId(),
+      provider,
+      version: settings.value.version,
+      ingredientKeywords: settings.value.ingredientKeywords,
+      recipeCoverKeywords: settings.value.recipeCoverKeywords,
+      recipeStepKeywords: settings.value.recipeStepKeywords
+    });
+    selectedProvider.value = settings.value.provider;
+    ElMessage.success(`共享默认生图服务已切换为${provider === "ARK_SEEDREAM" ? "Ark Seedream" : "智能绘图通用 3.0"}`);
+  } catch (error) {
+    selectedProvider.value = settings.value.provider;
+    ElMessage.error(error instanceof Error ? error.message : "切换共享生图服务失败");
+  } finally { savingProvider.value = false; }
+}
+
+async function generateSlot(slot: ImageGenerationSlot, notify = true, failures?: string[]) {
+  const reportFailure = (message: string) => {
+    if (notify) ElMessage.error(message);
+    else failures?.push(`${slot.label}：${message}`);
+    return false;
+  };
   const prompt = promptFor(slot).trim();
-  if (!prompt) { if (notify) ElMessage.warning("请先填写当前图片的关键词"); return false; }
+  if (!prompt) return reportFailure("请先填写当前图片的关键词");
   try {
     const candidate = await imageGenerationApi.generate({ targetType: slot.targetType, targetId: slot.targetId, ...(slot.contentVersionId > 0 ? { contentVersionId: slot.contentVersionId } : {}), ...(slot.stepOrder > 0 ? { stepOrder: slot.stepOrder } : {}), prompt, operationId: createOperationId() });
     const url = await loadCandidatePreview(candidate);
@@ -139,7 +168,7 @@ async function generateSlot(slot: ImageGenerationSlot, notify = true) {
     slot.candidate = candidate;
     if (notify) ElMessage.success(`${slot.label}候选图已生成`);
     return true;
-  } catch (error) { if (notify) ElMessage.error(error instanceof Error ? error.message : "生成失败"); return false; }
+  } catch (error) { return reportFailure(error instanceof Error ? error.message : "生成失败"); }
 }
 
 async function generateSelected() {
@@ -150,16 +179,18 @@ async function generateSelected() {
   batchRunning.value = true;
   batchLoadingAction.value = "missing";
   let completed = 0;
+  const failures: string[] = [];
   try {
     const batchSize = 3;
     for (let offset = 0; offset < slots.length; offset += batchSize) {
       const batch = slots.slice(offset, offset + batchSize);
       batchProgress.value = `${offset + 1}-${offset + batch.length}/${slots.length}`;
-      const results = await Promise.all(batch.map(slot => generateSlot(slot, false)));
+      const results = await Promise.all(batch.map(slot => generateSlot(slot, false, failures)));
       completed += results.filter(Boolean).length;
     }
     await loadTargets();
-    ElMessage.success(`成功生成 ${completed}/${slots.length} 张候选图`);
+    if (failures.length) ElMessage.error(`生成 ${completed}/${slots.length} 张候选图；失败 ${failures.length} 张。${failures[0]}`);
+    else ElMessage.success(`成功生成 ${completed}/${slots.length} 张候选图`);
   } finally { batchRunning.value = false; batchLoadingAction.value = null; batchProgress.value = ""; }
 }
 
@@ -171,16 +202,18 @@ async function generateSelectedCovers() {
   batchRunning.value = true;
   batchLoadingAction.value = "cover";
   let completed = 0;
+  const failures: string[] = [];
   try {
     const batchSize = 3;
     for (let offset = 0; offset < slots.length; offset += batchSize) {
       const batch = slots.slice(offset, offset + batchSize);
       batchProgress.value = `${offset + 1}-${offset + batch.length}/${slots.length}`;
-      const results = await Promise.all(batch.map(slot => generateSlot(slot, false)));
+      const results = await Promise.all(batch.map(slot => generateSlot(slot, false, failures)));
       completed += results.filter(Boolean).length;
     }
     await loadTargets();
-    ElMessage.success(`成功生成 ${completed}/${slots.length} 张封面候选图`);
+    if (failures.length) ElMessage.error(`封面候选图生成 ${completed}/${slots.length} 张；失败 ${failures.length} 张。${failures[0]}`);
+    else ElMessage.success(`成功生成 ${completed}/${slots.length} 张封面候选图`);
   } finally { batchRunning.value = false; batchLoadingAction.value = null; batchProgress.value = ""; }
 }
 
@@ -291,6 +324,11 @@ onBeforeUnmount(() => { [...previewUrls.value.keys()].forEach(releasePreview); }
           <el-option v-for="item in categories" :key="item.id" :label="item.name" :value="item.id" />
         </el-select>
         <el-checkbox v-model="missingOnly">仅显示缺图片</el-checkbox>
+        <span class="provider-label">共享生图服务</span>
+        <el-select v-model="selectedProvider" class="provider-select" :loading="savingProvider" :disabled="savingProvider || savingSettings || batchRunning || batchReplacing || anyRecipeReplacing" @change="saveProviderDefault">
+          <el-option label="Ark Seedream" value="ARK_SEEDREAM" />
+          <el-option label="智能绘图通用 3.0" value="VOLCENGINE_CV" />
+        </el-select>
         <span class="toolbar-spacer" />
         <el-button v-if="type === 'RECIPE'" type="success" plain :loading="batchLoadingAction === 'cover'" :disabled="batchRunning || batchReplacing || anyRecipeReplacing || !selectedRows.length || !applicableSelectedCoverCount" @click="generateSelectedCovers">
           生成所选封面图 ({{ applicableSelectedCoverCount }})
@@ -305,7 +343,7 @@ onBeforeUnmount(() => { [...previewUrls.value.keys()].forEach(releasePreview); }
       <div v-if="type === 'INGREDIENT'" class="keywords-row">
         <div class="keywords-label"><strong>食材通用关键词</strong><span>保存后用于之后生成的食材图片。</span></div>
         <el-input v-model="keywordDrafts.ingredientKeywords" type="textarea" :rows="2" maxlength="1000" show-word-limit placeholder="输入食材图片通用的画面要求" />
-        <el-button :loading="savingSettings" @click="saveKeywords">保存关键词</el-button>
+        <el-button :loading="savingSettings" :disabled="savingProvider" @click="saveKeywords">保存共享设置</el-button>
       </div>
       <div v-else class="keywords-row recipe-keywords-row">
         <div class="keyword-field">
@@ -316,7 +354,7 @@ onBeforeUnmount(() => { [...previewUrls.value.keys()].forEach(releasePreview); }
           <div class="keywords-label"><strong>步骤通用关键词</strong><span>普通步骤图和 Wiki 步骤图共用。</span></div>
           <el-input v-model="keywordDrafts.recipeStepKeywords" type="textarea" :rows="2" maxlength="1000" show-word-limit placeholder="输入食谱步骤图通用的画面要求" />
         </div>
-        <el-button :loading="savingSettings" @click="saveKeywords">保存食谱关键词</el-button>
+        <el-button :loading="savingSettings" :disabled="savingProvider" @click="saveKeywords">保存共享设置</el-button>
       </div>
       <div class="filter-row"><el-checkbox v-model="selectAllVisible" :indeterminate="hasPartialSelection">选择当前页</el-checkbox><span>已选 {{ selectedRows.length }} 项</span><span v-if="batchProgress" class="progress-text">正在生成 {{ batchProgress }}</span></div>
     </el-card>
@@ -358,5 +396,5 @@ onBeforeUnmount(() => { [...previewUrls.value.keys()].forEach(releasePreview); }
 </template>
 
 <style scoped>
-.image-generation-page{display:flex;flex-direction:column;gap:16px}.page-heading,.toolbar-row,.filter-row,.target-heading,.keywords-row,.slot-actions{display:flex;align-items:center;gap:12px}.page-heading{justify-content:space-between}.page-heading h1{margin:0;font-size:22px}.page-heading p{margin:6px 0 0;color:var(--el-text-color-secondary)}.toolbar-card{position:sticky;top:0;z-index:2}.toolbar-row{flex-wrap:wrap}.toolbar-spacer{flex:1}.category-select{width:190px}.keywords-row{margin-top:18px;align-items:flex-end}.keywords-label{display:flex;flex-direction:column;gap:5px;min-width:220px}.keywords-label span,.target-id{font-size:12px;color:var(--el-text-color-secondary)}.keywords-row :deep(.el-textarea){flex:1}.recipe-keywords-row{align-items:flex-end}.keyword-field{display:flex;flex:1;min-width:220px;flex-direction:column;gap:7px}.filter-row{margin-top:14px;padding-top:12px;border-top:1px solid var(--el-border-color-lighter);font-size:13px;color:var(--el-text-color-secondary)}.progress-text{margin-left:auto;color:var(--el-color-primary)}.target-list{display:flex;flex-direction:column;gap:12px}.target-heading{min-width:0}.target-heading strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.target-id{margin-left:auto}.target-heading :deep(.el-button){flex-shrink:0}.slot-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:14px}.slot-card{display:flex;flex-direction:column;gap:10px;padding:12px;border:1px solid var(--el-border-color-lighter);border-radius:8px}.slot-label{font-weight:600}.image-pair{display:grid;grid-template-columns:1fr 1fr;gap:10px}.image-preview{position:relative;display:flex;align-items:center;justify-content:center;min-height:135px;aspect-ratio:4/3;background:var(--el-fill-color-lighter);border-radius:6px;overflow:hidden}.image-preview img{width:100%;height:100%;object-fit:contain}.image-preview>span{position:absolute;left:6px;top:6px;padding:2px 6px;border-radius:4px;background:#0009;color:white;font-size:11px}.image-empty{color:var(--el-text-color-placeholder);font-size:12px}.slot-actions{flex-wrap:wrap}@media(max-width:760px){.toolbar-row{align-items:flex-start}.keywords-row{align-items:stretch;flex-direction:column}.keywords-label{min-width:0}.keyword-field{min-width:0}}
+.image-generation-page{display:flex;flex-direction:column;gap:16px}.page-heading,.toolbar-row,.filter-row,.target-heading,.keywords-row,.slot-actions{display:flex;align-items:center;gap:12px}.page-heading{justify-content:space-between}.page-heading h1{margin:0;font-size:22px}.page-heading p{margin:6px 0 0;color:var(--el-text-color-secondary)}.toolbar-card{position:sticky;top:0;z-index:2}.toolbar-row{flex-wrap:wrap}.toolbar-spacer{flex:1}.category-select{width:190px}.provider-label{font-size:13px;color:var(--el-text-color-secondary)}.provider-select{width:210px}.keywords-row{margin-top:18px;align-items:flex-end}.keywords-label{display:flex;flex-direction:column;gap:5px;min-width:220px}.keywords-label span,.target-id{font-size:12px;color:var(--el-text-color-secondary)}.keywords-row :deep(.el-textarea){flex:1}.recipe-keywords-row{align-items:flex-end}.keyword-field{display:flex;flex:1;min-width:220px;flex-direction:column;gap:7px}.filter-row{margin-top:14px;padding-top:12px;border-top:1px solid var(--el-border-color-lighter);font-size:13px;color:var(--el-text-color-secondary)}.progress-text{margin-left:auto;color:var(--el-color-primary)}.target-list{display:flex;flex-direction:column;gap:12px}.target-heading{min-width:0}.target-heading strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.target-id{margin-left:auto}.target-heading :deep(.el-button){flex-shrink:0}.slot-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:14px}.slot-card{display:flex;flex-direction:column;gap:10px;padding:12px;border:1px solid var(--el-border-color-lighter);border-radius:8px}.slot-label{font-weight:600}.image-pair{display:grid;grid-template-columns:1fr 1fr;gap:10px}.image-preview{position:relative;display:flex;align-items:center;justify-content:center;min-height:135px;aspect-ratio:4/3;background:var(--el-fill-color-lighter);border-radius:6px;overflow:hidden}.image-preview img{width:100%;height:100%;object-fit:contain}.image-preview>span{position:absolute;left:6px;top:6px;padding:2px 6px;border-radius:4px;background:#0009;color:white;font-size:11px}.image-empty{color:var(--el-text-color-placeholder);font-size:12px}.slot-actions{flex-wrap:wrap}@media(max-width:760px){.toolbar-row{align-items:flex-start}.keywords-row{align-items:stretch;flex-direction:column}.keywords-label{min-width:0}.keyword-field{min-width:0}}
 </style>

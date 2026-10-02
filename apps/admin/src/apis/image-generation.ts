@@ -2,6 +2,7 @@ import { requestData, type PageResult, type OperationId, type UUID } from "./htt
 
 export type ImageGenerationType = "INGREDIENT" | "RECIPE";
 export type ImageGenerationTargetType = "INGREDIENT" | "RECIPE_COVER" | "RECIPE_STEP" | "WIKI_STEP";
+export type ImageGenerationProviderId = "ARK_SEEDREAM" | "VOLCENGINE_CV";
 
 export interface ImageGenerationCandidate {
   id: UUID;
@@ -35,6 +36,8 @@ export interface ImageGenerationTarget {
 }
 
 export interface ImageGenerationSettings {
+  provider: ImageGenerationProviderId;
+  version: number;
   ingredientKeywords: string;
   recipeCoverKeywords: string;
   recipeStepKeywords: string;
@@ -45,9 +48,10 @@ export const imageGenerationApi = {
   getSettings() {
     return requestData<ImageGenerationSettings>("/admin/image-generation/settings");
   },
-  saveSettings(payload: Pick<ImageGenerationSettings, "ingredientKeywords" | "recipeCoverKeywords" | "recipeStepKeywords"> & { operationId: OperationId }) {
+  saveSettings(payload: Pick<ImageGenerationSettings, "provider" | "version" | "ingredientKeywords" | "recipeCoverKeywords" | "recipeStepKeywords"> & { operationId: OperationId }) {
     const { operationId, ...body } = payload;
-    return requestData<ImageGenerationSettings>("/admin/image-generation/settings", { method: "PUT", body, idempotencyKey: operationId });
+    const { version, ...settings } = body;
+    return requestData<ImageGenerationSettings>("/admin/image-generation/settings", { method: "PUT", body: { ...settings, expectedVersion: version }, idempotencyKey: operationId });
   },
   listTargets(query: { type: ImageGenerationType; categoryId?: UUID; missingOnly: boolean; page?: number; pageSize?: number }) {
     const params = new URLSearchParams({ type: query.type, missingOnly: String(query.missingOnly), page: String(query.page ?? 1), pageSize: String(query.pageSize ?? 20) });
