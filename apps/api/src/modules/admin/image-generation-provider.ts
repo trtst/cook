@@ -68,34 +68,50 @@ type VolcengineVisualImageResponse = {
 
 @Injectable()
 export class VolcengineVisualImageGenerationProvider implements ImageGenerationProvider {
+  private requestQueue: Promise<void> = Promise.resolve();
+
   async generate(prompt: string, options: { aspectRatio: ImageGenerationAspectRatio }) {
     const apiKey = process.env.VOLCENGINE_CV_API_KEY?.trim();
     if (!apiKey) throw new ServiceUnavailableException("请在 API 服务配置 VOLCENGINE_CV_API_KEY");
     const { width, height } = visualImageSizes[options.aspectRatio];
-    let response: Response;
+    return this.runSerially(async () => {
+      let response: Response;
+      try {
+        response = await fetch("https://openapi.cv.volces.com/api/common/v3/process", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            req_key: "high_aes_general_v30l_zt2i",
+            prompt,
+            width,
+            height,
+            return_url: true,
+            logo_info: { add_logo: true, position: 0, language: 0, opacity: 1 }
+          }),
+          signal: AbortSignal.timeout(120_000)
+        });
+      } catch {
+        throw new ServiceUnavailableException("连接火山视觉智能生图接口失败");
+      }
+      const body = await response.json().catch(() => ({})) as VolcengineVisualImageResponse;
+      if (!response.ok || body.status !== 10000 || body.data?.algorithm_base_resp?.status_code !== 0) {
+        throw new BadRequestException(body.data?.algorithm_base_resp?.status_message ?? body.message ?? `火山视觉智能生图失败（${response.status}）`);
+      }
+      const imageUrl = body.data.image_urls?.[0];
+      if (!imageUrl) throw new BadRequestException("火山视觉智能响应未包含图片 URL");
+      return { imageUrl };
+    });
+  }
+
+  private async runSerially<T>(request: () => Promise<T>): Promise<T> {
+    const previous = this.requestQueue;
+    let release!: () => void;
+    this.requestQueue = new Promise<void>(resolve => { release = resolve; });
+    await previous;
     try {
-      response = await fetch("https://openapi.cv.volces.com/api/common/v3/process", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          req_key: "high_aes_general_v30l_zt2i",
-          prompt,
-          width,
-          height,
-          return_url: true,
-          logo_info: { add_logo: true, position: 0, language: 0, opacity: 1 }
-        }),
-        signal: AbortSignal.timeout(120_000)
-      });
-    } catch {
-      throw new ServiceUnavailableException("连接火山视觉智能生图接口失败");
+      return await request();
+    } finally {
+      release();
     }
-    const body = await response.json().catch(() => ({})) as VolcengineVisualImageResponse;
-    if (!response.ok || body.status !== 10000 || body.data?.algorithm_base_resp?.status_code !== 0) {
-      throw new BadRequestException(body.data?.algorithm_base_resp?.status_message ?? body.message ?? `火山视觉智能生图失败（${response.status}）`);
-    }
-    const imageUrl = body.data.image_urls?.[0];
-    if (!imageUrl) throw new BadRequestException("火山视觉智能响应未包含图片 URL");
-    return { imageUrl };
   }
 }
