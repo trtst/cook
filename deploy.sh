@@ -32,6 +32,7 @@ Notes:
   - 需在服务器项目根目录执行，或直接执行 /srv/cook/deploy.sh
   - 默认会执行 git pull、pnpm install
   - api 模式会在停止 cook-api 后执行迁移预检和迁移；迁移失败时服务保持停止，等待数据库恢复处理
+  - full/api 模式要求 apps/api/.env 配置 ARK_API_KEY 和 ARK_IMAGE_MODEL；预检只报告缺项，不输出密钥
   - 完整发布要求 apps/worker/.env 配置生产 DATABASE_URL 和 ARTICLE_SCHEDULED_PUBLISH_WORKER_ENABLED=true；迁移成功后自动构建并通过 PM2 启动/重载 cook-worker
   - admin/site 模式会重新构建对应前端并重启 nginx
 EOF
@@ -95,6 +96,71 @@ run_install() {
   pnpm install
 }
 
+verify_image_generation_env() {
+  local api_env="$ROOT_DIR/apps/api/.env"
+  if [[ ! -r "$api_env" ]]; then
+    log "missing $api_env; configure production API environment before deploying the image-generation workbench"
+    return 1
+  fi
+
+  if ! node --env-file="$api_env" -e '
+    if (!process.env.ARK_API_KEY?.trim() || !process.env.ARK_IMAGE_MODEL?.trim()) {
+      console.error("apps/api/.env must set ARK_API_KEY and ARK_IMAGE_MODEL. Secret values are not printed.");
+      process.exit(1);
+    }
+  '; then
+    log "Ark image-generation configuration is incomplete"
+    return 1
+  fi
+}
+
+verify_api_health() {
+  local api_env="$ROOT_DIR/apps/api/.env"
+  local api_port
+  local health_url
+
+  local api_online=false
+  for attempt in {1..15}; do
+    if pm2 jlist | node -e '
+      let output = "";
+      process.stdin.setEncoding("utf8");
+      process.stdin.on("data", chunk => { output += chunk; });
+      process.stdin.on("end", () => {
+        try {
+          const apps = JSON.parse(output);
+          const api = apps.find(app => app.name === "cook-api");
+          if (!api || api.pm2_env?.status !== "online") process.exitCode = 1;
+        } catch {
+          process.exitCode = 1;
+        }
+      });
+    ' >/dev/null 2>&1; then
+      api_online=true
+      break
+    fi
+    sleep 2
+  done
+
+  if [[ "$api_online" != true ]]; then
+    log "cook-api did not reach online state; inspect pm2 logs cook-api"
+    return 1
+  fi
+
+  api_port="$(node --env-file="$api_env" -p 'process.env.PORT || "3100"')"
+  health_url="${API_HEALTH_URL:-http://127.0.0.1:${api_port}/api/app-config}"
+  log "checking the local API health endpoint"
+  for attempt in {1..15}; do
+    if curl --silent --fail --output /dev/null "$health_url"; then
+      log "API health check passed"
+      return 0
+    fi
+    sleep 2
+  done
+
+  log "API health check failed; inspect pm2 logs cook-api"
+  return 1
+}
+
 prepare_worker() {
   local worker_env="$ROOT_DIR/apps/worker/.env"
   if [[ ! -r "$worker_env" ]]; then
@@ -147,6 +213,7 @@ deploy_api() {
 
   log "restart cook-api"
   pm2 restart cook-api
+  verify_api_health
   API_DEPLOYED=true
 }
 
@@ -197,6 +264,7 @@ main() {
   case "$MODE" in
     full)
       run_git_pull
+      verify_image_generation_env
       run_install
       prepare_worker
       deploy_api
@@ -207,6 +275,7 @@ main() {
       ;;
     api)
       run_git_pull
+      verify_image_generation_env
       run_install
       deploy_api
       ;;
