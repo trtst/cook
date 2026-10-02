@@ -10,7 +10,7 @@ import type { AdminRecipeImageScene } from "../../contracts/types";
 type ImageType = "INGREDIENT" | "RECIPE";
 type TargetType = "INGREDIENT" | "RECIPE_COVER" | "RECIPE_STEP" | "WIKI_STEP";
 type GenerateTarget = { targetType: TargetType; targetId: number; contentVersionId?: number; stepOrder?: number; prompt: string };
-type RecipeImageTargetRow = Prisma.RecipeGetPayload<{ include: { currentVersion: { include: { cookAssistant: true } }; inspirationCategory: true } }>;
+type RecipeImageTargetRow = Prisma.RecipeGetPayload<{ include: { currentVersion: { include: { cookAssistant: true } }; inspirationCategory: true; owner: { include: { publicContentPoolMember: true } } } }>;
 type CandidateResult = { id: number; targetType: TargetType; targetId: number; contentVersionId: number; stepOrder: number; prompt: string; tempKey: string };
 type ApplyResult = { candidateId: number; applied: true; targetType: TargetType; targetId: number };
 
@@ -104,7 +104,9 @@ export class AdminImageGenerationService {
     if (input.missingOnly) {
       const categoryFilter = input.categoryId ? Prisma.sql`AND recipe."inspiration_category_id" = ${input.categoryId}` : Prisma.empty;
       const missingPredicate = Prisma.sql`(
-        (recipe."is_inspiration" AND (
+        (recipe."is_inspiration" AND recipe."inspiration_category_id" IS NOT NULL AND EXISTS (
+          SELECT 1 FROM "public_content_user_pool_members" AS pool_member WHERE pool_member."user_id" = recipe."owner_id"
+        ) AND (
           NULLIF(recipe."cover_image_url", '') IS NULL
           OR EXISTS (
             SELECT 1
@@ -148,7 +150,7 @@ export class AdminImageGenerationService {
       `);
       const targetIds = targetRows.map(row => row.id);
       const pageRows = targetIds.length
-        ? await this.prisma.recipe.findMany({ where: { ...where, id: { in: targetIds } }, include: { currentVersion: { include: { cookAssistant: true } }, inspirationCategory: true } })
+        ? await this.prisma.recipe.findMany({ where: { ...where, id: { in: targetIds } }, include: { currentVersion: { include: { cookAssistant: true } }, inspirationCategory: true, owner: { include: { publicContentPoolMember: true } } } })
         : [];
       const rowsById = new Map(pageRows.map(row => [row.id, row]));
       rows = targetIds.flatMap(id => {
@@ -157,7 +159,7 @@ export class AdminImageGenerationService {
       });
     } else {
       const [pageRows, total] = await Promise.all([
-        this.prisma.recipe.findMany({ where, include: { currentVersion: { include: { cookAssistant: true } }, inspirationCategory: true }, orderBy: [{ updatedAt: "desc" }, { id: "desc" }], skip, take: pageSize }),
+        this.prisma.recipe.findMany({ where, include: { currentVersion: { include: { cookAssistant: true } }, inspirationCategory: true, owner: { include: { publicContentPoolMember: true } } }, orderBy: [{ updatedAt: "desc" }, { id: "desc" }], skip, take: pageSize }),
         this.prisma.recipe.count({ where })
       ]);
       rows = pageRows;
@@ -173,7 +175,8 @@ export class AdminImageGenerationService {
         const candidate = candidatesByKey.get(`${targetType}:${recipe.id}:${recipe.currentVersionId}:${stepOrder}`) ?? null;
         slots.push({ targetType, targetId: recipe.id, contentVersionId: recipe.currentVersionId, stepOrder, label, imageUrl: typeof imageUrl === "string" ? imageUrl : null, imagePrompt: typeof imagePrompt === "string" ? imagePrompt : null, candidate });
       };
-      if (recipe.isInspiration) {
+      const isPublicPoolSystemRecipe = recipe.isInspiration && recipe.inspirationCategoryId !== null && recipe.owner.publicContentPoolMember !== null;
+      if (isPublicPoolSystemRecipe) {
         addSlot("RECIPE_COVER", 0, recipe.coverImageUrl, recipe.title, "封面图");
         contentSteps.forEach((step, index) => addSlot("RECIPE_STEP", index + 1, step.imageUrl, step.imagePrompt ?? step.text, `制作步骤 ${index + 1}`));
       }
@@ -286,11 +289,12 @@ export class AdminImageGenerationService {
       if (!ingredient) throw new BadRequestException("系统食材不存在或不可用");
       return;
     }
-    const recipe = await this.prisma.recipe.findFirst({ where: { id: target.targetId, status: "ACTIVE" }, include: { currentVersion: { include: { cookAssistant: true } } } });
+    const recipe = await this.prisma.recipe.findFirst({ where: { id: target.targetId, status: "ACTIVE" }, include: { currentVersion: { include: { cookAssistant: true } }, owner: { include: { publicContentPoolMember: true } } } });
     if (!recipe) throw new BadRequestException("菜谱不存在或不可用");
     if (target.contentVersionId !== recipe.currentVersionId) throw new BadRequestException("菜谱正文版本已变化，请刷新列表");
+    const isPublicPoolSystemRecipe = recipe.isInspiration && recipe.inspirationCategoryId !== null && recipe.owner.publicContentPoolMember !== null;
     if (target.targetType === "RECIPE_COVER" || target.targetType === "RECIPE_STEP") {
-      if (!recipe.isInspiration) throw new BadRequestException("个人菜谱不支持生成封面或制作步骤图");
+      if (!isPublicPoolSystemRecipe) throw new BadRequestException("仅公共内容池用户发布的系统菜谱支持生成封面或制作步骤图");
       if (target.targetType === "RECIPE_STEP") {
         const order = target.stepOrder;
         if (!order || order > stepsOf(recipe.currentVersion.stepsJson).length) throw new BadRequestException("菜谱步骤不存在");
@@ -329,12 +333,13 @@ export class AdminImageGenerationService {
         const buffer = await this.images.readTempImageBuffer(candidate.tempKey);
         await this.admin.uploadIngredientImage(request, candidate.targetId, operationId, expectedVersion, { buffer, size: buffer.length }, adminId);
       } else if (candidate.targetType === "RECIPE_COVER" || candidate.targetType === "RECIPE_STEP" || candidate.targetType === "WIKI_STEP") {
-        const recipe = await this.prisma.recipe.findFirst({ where: { id: candidate.targetId, status: "ACTIVE" }, select: { isInspiration: true } });
+        const recipe = await this.prisma.recipe.findFirst({ where: { id: candidate.targetId, status: "ACTIVE" }, select: { isInspiration: true, inspirationCategoryId: true, currentVersionId: true, owner: { select: { publicContentPoolMember: { select: { userId: true } } } } } });
         if (!recipe) throw new BadRequestException("菜谱不存在或不可用");
-        if (candidate.targetType !== "WIKI_STEP" && !recipe.isInspiration) throw new BadRequestException("个人菜谱不支持替换封面或制作步骤图片");
-        if (candidate.targetType === "WIKI_STEP" && !recipe.isInspiration) {
+        const isPublicPoolSystemRecipe = recipe.isInspiration && recipe.inspirationCategoryId !== null && recipe.owner.publicContentPoolMember !== null;
+        if (candidate.targetType !== "WIKI_STEP" && !isPublicPoolSystemRecipe) throw new BadRequestException("仅公共内容池用户发布的系统菜谱支持替换封面或制作步骤图片");
+        if (candidate.targetType === "WIKI_STEP" && !isPublicPoolSystemRecipe) {
           const document = await this.admin.exportRecipeWiki(candidate.targetId, adminId);
-          if (document.contentVersionId !== candidate.contentVersionId) throw new BadRequestException("菜谱正文版本已变化，请重新生成候选图");
+          if (document.contentVersionId !== candidate.contentVersionId || recipe.currentVersionId !== candidate.contentVersionId) throw new BadRequestException("菜谱正文版本已变化，请重新生成候选图");
           const assistant = document.wiki.assistant;
           const step = assistant.steps.find(item => item.order === candidate.stepOrder);
           if (!step) throw new BadRequestException("Wiki 步骤已变化，请刷新后重试");
