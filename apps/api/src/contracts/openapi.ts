@@ -1469,6 +1469,8 @@ export class AdminRecipeImageBackfillResultModel {
 }
 
 export class AdminImageGenerationSettingsModel {
+  @ApiProperty({ type: String, enum: ["ARK_SEEDREAM", "VOLCENGINE_CV"] }) provider!: string;
+  @ApiProperty({ type: Number, minimum: 1 }) version!: number;
   @ApiProperty({ type: String, maxLength: 1000 }) ingredientKeywords!: string;
   @ApiProperty({ type: String, maxLength: 1000 }) recipeCoverKeywords!: string;
   @ApiProperty({ type: String, maxLength: 1000 }) recipeStepKeywords!: string;

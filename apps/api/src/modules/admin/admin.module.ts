@@ -14,7 +14,7 @@ import { AdminRecipeImageController } from "./admin-recipe-image.controller";
 import { AdminRecipeImageService } from "./admin-recipe-image.service";
 import { AdminImageGenerationController } from "./admin-image-generation.controller";
 import { AdminImageGenerationService } from "./admin-image-generation.service";
-import { ArkImageGenerationProvider, IMAGE_GENERATION_PROVIDER } from "./image-generation-provider";
+import { ArkImageGenerationProvider, IMAGE_GENERATION_PROVIDERS, VolcengineVisualImageGenerationProvider, type ImageGenerationProviderMap } from "./image-generation-provider";
 import {
   AdminSiteContentController,
   SiteContentArticleController,
@@ -63,7 +63,15 @@ import { SiteContentImageService } from "./site-content-image.service";
     AdminRecipeImageService,
     AdminImageGenerationService,
     ArkImageGenerationProvider,
-    { provide: IMAGE_GENERATION_PROVIDER, useExisting: ArkImageGenerationProvider },
+    VolcengineVisualImageGenerationProvider,
+    {
+      provide: IMAGE_GENERATION_PROVIDERS,
+      useFactory: (ark: ArkImageGenerationProvider, visual: VolcengineVisualImageGenerationProvider): ImageGenerationProviderMap => ({
+        ARK_SEEDREAM: ark,
+        VOLCENGINE_CV: visual
+      }),
+      inject: [ArkImageGenerationProvider, VolcengineVisualImageGenerationProvider]
+    },
     SuperAdminGuard
   ],
   exports: [IngredientImageService, AdminRecipeImageService]

@@ -24,6 +24,11 @@ enum AdminImageGenerationTargetType {
   WIKI_STEP
 }
 
+enum AdminImageGenerationProvider {
+  ARK_SEEDREAM
+  VOLCENGINE_CV
+}
+
 enum UserStatus {
   ACTIVE
   DISABLED
@@ -555,6 +560,8 @@ model AdminAccount {
 
 model AdminImageGenerationSettings {
   id                  Int      @id @default(1)
+  provider            AdminImageGenerationProvider @default(ARK_SEEDREAM)
+  version             Int      @default(1)
   ingredientKeywords  String   @default("") @map("ingredient_keywords") @db.VarChar(1000)
   recipeCoverKeywords String   @default("") @map("recipe_cover_keywords") @db.VarChar(1000)
   recipeStepKeywords  String   @default("") @map("recipe_step_keywords") @db.VarChar(1000)

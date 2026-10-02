@@ -2777,6 +2777,15 @@ export class AdminRecipeImageBackfillDto {
 }
 
 export class AdminImageGenerationSettingsDto {
+  @ApiProperty({ enum: ["ARK_SEEDREAM", "VOLCENGINE_CV"] })
+  @IsIn(["ARK_SEEDREAM", "VOLCENGINE_CV"])
+  provider!: "ARK_SEEDREAM" | "VOLCENGINE_CV";
+
+  @ApiProperty({ minimum: 1 })
+  @IsInt()
+  @Min(1)
+  expectedVersion!: number;
+
   @ApiProperty({ maxLength: 1000 })
   @IsString()
   @MaxLength(1000)

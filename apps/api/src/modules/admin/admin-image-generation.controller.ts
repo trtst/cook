@@ -17,12 +17,12 @@ export class AdminImageGenerationController {
   constructor(@Inject(AdminImageGenerationService) private readonly service: AdminImageGenerationService) {}
 
   @Get("settings")
-  @ApiOkModel(AdminImageGenerationSettingsModel, "读取生图关键词")
+  @ApiOkModel(AdminImageGenerationSettingsModel, "读取共享生图服务和关键词设置")
   getSettings() { return this.service.getSettings().then(result => ok(result)); }
 
   @Put("settings")
   @ApiIdempotencyKey()
-  @ApiOkModel(AdminImageGenerationSettingsModel, "保存食材和食谱的共享生图关键词")
+  @ApiOkModel(AdminImageGenerationSettingsModel, "保存共享生图服务和关键词设置")
   saveSettings(@Body() body: AdminImageGenerationSettingsDto, @ReadIdempotencyKey() operationId: string, @Req() request: RequestWithAdmin) {
     return this.service.saveSettings(body, operationId, request.admin.adminId).then(result => ok(result));
   }

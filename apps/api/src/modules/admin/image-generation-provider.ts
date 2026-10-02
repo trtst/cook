@@ -1,12 +1,15 @@
 import { BadRequestException, Injectable, ServiceUnavailableException } from "@nestjs/common";
 
-export const IMAGE_GENERATION_PROVIDER = Symbol("IMAGE_GENERATION_PROVIDER");
+export const IMAGE_GENERATION_PROVIDERS = Symbol("IMAGE_GENERATION_PROVIDERS");
 
 export type ImageGenerationAspectRatio = "1:1" | "4:3" | "16:9";
+export type ImageGenerationProviderId = "ARK_SEEDREAM" | "VOLCENGINE_CV";
 
 export interface ImageGenerationProvider {
   generate(prompt: string, options: { aspectRatio: ImageGenerationAspectRatio }): Promise<{ imageUrl: string }>;
 }
+
+export type ImageGenerationProviderMap = Readonly<Record<ImageGenerationProviderId, ImageGenerationProvider>>;
 
 const imageSizes = {
   "1K": { "1:1": "1024x1024", "4:3": "1152x864", "16:9": "1424x800" },
@@ -44,6 +47,55 @@ export class ArkImageGenerationProvider implements ImageGenerationProvider {
     if (!response.ok) throw new BadRequestException(body.error?.message ?? `火山方舟生图失败（${response.status}）`);
     const imageUrl = body.data?.[0]?.url;
     if (!imageUrl) throw new BadRequestException("火山方舟响应未包含图片 URL");
+    return { imageUrl };
+  }
+}
+
+const visualImageSizes: Record<ImageGenerationAspectRatio, { width: number; height: number }> = {
+  "1:1": { width: 1328, height: 1328 },
+  "4:3": { width: 1472, height: 1104 },
+  "16:9": { width: 1664, height: 936 }
+};
+
+type VolcengineVisualImageResponse = {
+  status?: number;
+  message?: string;
+  data?: {
+    algorithm_base_resp?: { status_code?: number; status_message?: string };
+    image_urls?: string[];
+  };
+};
+
+@Injectable()
+export class VolcengineVisualImageGenerationProvider implements ImageGenerationProvider {
+  async generate(prompt: string, options: { aspectRatio: ImageGenerationAspectRatio }) {
+    const apiKey = process.env.VOLCENGINE_CV_API_KEY?.trim();
+    if (!apiKey) throw new ServiceUnavailableException("请在 API 服务配置 VOLCENGINE_CV_API_KEY");
+    const { width, height } = visualImageSizes[options.aspectRatio];
+    let response: Response;
+    try {
+      response = await fetch("https://openapi.cv.volces.com/api/common/v3/process", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          req_key: "high_aes_general_v30l_zt2i",
+          prompt,
+          width,
+          height,
+          return_url: true,
+          logo_info: { add_logo: true, position: 0, language: 0, opacity: 1 }
+        }),
+        signal: AbortSignal.timeout(120_000)
+      });
+    } catch {
+      throw new ServiceUnavailableException("连接火山视觉智能生图接口失败");
+    }
+    const body = await response.json().catch(() => ({})) as VolcengineVisualImageResponse;
+    if (!response.ok || body.status !== 10000 || body.data?.algorithm_base_resp?.status_code !== 0) {
+      throw new BadRequestException(body.data?.algorithm_base_resp?.status_message ?? body.message ?? `火山视觉智能生图失败（${response.status}）`);
+    }
+    const imageUrl = body.data.image_urls?.[0];
+    if (!imageUrl) throw new BadRequestException("火山视觉智能响应未包含图片 URL");
     return { imageUrl };
   }
 }

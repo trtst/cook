@@ -3,7 +3,7 @@ import { Prisma } from "@prisma/client";
 import { PrismaService } from "../../common/prisma.service";
 import { AdminRecipeImageService } from "./admin-recipe-image.service";
 import { AdminService } from "./admin.service";
-import { IMAGE_GENERATION_PROVIDER, type ImageGenerationProvider } from "./image-generation-provider";
+import { IMAGE_GENERATION_PROVIDERS, type ImageGenerationProviderId, type ImageGenerationProviderMap } from "./image-generation-provider";
 import { completeAdminIdempotentOperation, getAdminIdempotentResult, startAdminIdempotentOperation } from "../../common/idempotency";
 import type { AdminRecipeImageScene } from "../../contracts/types";
 
@@ -43,12 +43,14 @@ export class AdminImageGenerationService {
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(AdminRecipeImageService) private readonly images: AdminRecipeImageService,
     @Inject(AdminService) private readonly admin: AdminService,
-    @Inject(IMAGE_GENERATION_PROVIDER) private readonly provider: ImageGenerationProvider
+    @Inject(IMAGE_GENERATION_PROVIDERS) private readonly providers: ImageGenerationProviderMap
   ) {}
 
   async getSettings() {
     const row = await this.prisma.adminImageGenerationSettings.findUnique({ where: { id: 1 } });
     return {
+      provider: row?.provider ?? "ARK_SEEDREAM",
+      version: row?.version ?? 1,
       ingredientKeywords: row?.ingredientKeywords ?? "",
       recipeCoverKeywords: row?.recipeCoverKeywords ?? "",
       recipeStepKeywords: row?.recipeStepKeywords ?? "",
@@ -56,23 +58,27 @@ export class AdminImageGenerationService {
     };
   }
 
-  async saveSettings(input: { ingredientKeywords: string; recipeCoverKeywords: string; recipeStepKeywords: string }, operationId: string, adminId: number) {
+  async saveSettings(input: { provider: ImageGenerationProviderId; expectedVersion: number; ingredientKeywords: string; recipeCoverKeywords: string; recipeStepKeywords: string }, operationId: string, adminId: number) {
     const normalized = {
+      provider: input.provider,
       ingredientKeywords: input.ingredientKeywords.trim(),
       recipeCoverKeywords: input.recipeCoverKeywords.trim(),
       recipeStepKeywords: input.recipeStepKeywords.trim()
     };
-    const requestHash = JSON.stringify(normalized);
+    const requestHash = JSON.stringify({ ...normalized, expectedVersion: input.expectedVersion });
     return this.prisma.$transaction(async tx => {
       const repeated = await getAdminIdempotentResult<Awaited<ReturnType<AdminImageGenerationService["getSettings"]>>>(tx, operationId, "admin-image-generation:settings", adminId, requestHash);
       if (repeated) return repeated;
       await startAdminIdempotentOperation(tx, operationId, "admin-image-generation:settings", adminId, requestHash);
-      const row = await tx.adminImageGenerationSettings.upsert({
-        where: { id: 1 },
-        update: { ...normalized, updatedByAdminId: adminId },
-        create: { id: 1, ...normalized, updatedByAdminId: adminId }
+      const updated = await tx.adminImageGenerationSettings.updateMany({
+        where: { id: 1, version: input.expectedVersion },
+        data: { ...normalized, updatedByAdminId: adminId, version: { increment: 1 } }
       });
+      if (updated.count !== 1) throw new ConflictException("生图共享设置已被其他管理员更新，请刷新后重试");
+      const row = await tx.adminImageGenerationSettings.findUniqueOrThrow({ where: { id: 1 } });
       const result = {
+        provider: row.provider,
+        version: row.version,
         ingredientKeywords: row.ingredientKeywords,
         recipeCoverKeywords: row.recipeCoverKeywords,
         recipeStepKeywords: row.recipeStepKeywords,
@@ -202,7 +208,9 @@ export class AdminImageGenerationService {
     let tempKey: string | null = null;
     try {
       await this.assertGenerationTarget(normalizedTarget);
-      const generated = await this.provider.generate(prompt, { aspectRatio });
+      const selectedProvider = await this.prisma.adminImageGenerationSettings.findUnique({ where: { id: 1 }, select: { provider: true } });
+      const provider = this.providers[selectedProvider?.provider ?? "ARK_SEEDREAM"];
+      const generated = await provider.generate(prompt, { aspectRatio });
       const staged = await this.images.stageGeneratedTempImageFromUrl(scene, generated.imageUrl);
       tempKey = staged.image.tempKey;
       const old = await this.prisma.adminImageGenerationCandidate.findFirst({ where: { targetType: target.targetType, targetId: target.targetId, contentVersionId: target.contentVersionId ?? 0, stepOrder: target.stepOrder ?? 0 } });
