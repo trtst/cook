@@ -127,6 +127,7 @@ function createPublishService(
     }
   };
   const prisma = {
+    $queryRaw: async () => [{ id: 10000001 }],
     adminAccount: {
       findUnique: async () => ({ status: "ACTIVE", roles: ["SUPER_ADMIN"] })
     },
@@ -295,7 +296,7 @@ test("limits the number of remotely downloaded images in one publish", async () 
   });
 
   await assert.rejects(
-    () => (service as any).stageRecipeImportImages({}, buildRawBody(), recipeBody, [], []),
+    () => (service as any).stageRecipeImportImages({}, 10000001, buildRawBody(), recipeBody, [], []),
     /远程图片数量不能超过 50 张/
   );
   assert.equal(publishCount, 50);
@@ -403,7 +404,7 @@ test("limits the total size of remotely downloaded images in one publish", async
   });
 
   await assert.rejects(
-    () => (service as any).stageRecipeImportImages({}, buildRawBody(), recipeBody, [], []),
+    () => (service as any).stageRecipeImportImages({}, 10000001, buildRawBody(), recipeBody, [], []),
     /远程图片总大小不能超过 100 MB/
   );
   assert.equal(publishCount, 2);
@@ -583,7 +584,7 @@ test("audits temporary image cleanup failures after import staging aborts", asyn
     action: "RECIPE_IMAGE_CLEANUP_FAILED",
     objectType: "RECIPE_IMPORT_ITEM",
     objectId: 901,
-    payload: { tempKeys: ["temp-cover.png"] }
+    payload: { phase: "import-temp-cleanup", tempKeys: ["temp-cover.png"] }
   }]);
 });
 
@@ -1764,6 +1765,7 @@ test("merging a JSON imported ingredient marks the source merged and points draf
       updateMany: async () => ({ count: 1 })
     },
     ingredient: {
+      findMany: async () => [],
       findFirst: async ({ where }: { where: { id?: number; status?: unknown } }) => {
         if (where.id === source.id || where.status === "PENDING") return source;
         if (where.id === target.id) return target;

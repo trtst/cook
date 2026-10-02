@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, ServiceUnavailableException } from "@nestjs/common";
+import { Pool, type PoolClient } from "pg";
 
 export const IMAGE_GENERATION_PROVIDERS = Symbol("IMAGE_GENERATION_PROVIDERS");
 
@@ -69,12 +70,13 @@ type VolcengineVisualImageResponse = {
 @Injectable()
 export class VolcengineVisualImageGenerationProvider implements ImageGenerationProvider {
   private requestQueue: Promise<void> = Promise.resolve();
+  private lockPool: Pool | null = null;
 
   async generate(prompt: string, options: { aspectRatio: ImageGenerationAspectRatio }) {
     const apiKey = process.env.VOLCENGINE_CV_API_KEY?.trim();
     if (!apiKey) throw new ServiceUnavailableException("请在 API 服务配置 VOLCENGINE_CV_API_KEY");
     const { width, height } = visualImageSizes[options.aspectRatio];
-    return this.runSerially(async () => {
+    return this.runSerially(() => this.runWithGlobalLock(async () => {
       let response: Response;
       try {
         response = await fetch("https://openapi.cv.volces.com/api/common/v3/process", {
@@ -100,7 +102,54 @@ export class VolcengineVisualImageGenerationProvider implements ImageGenerationP
       const imageUrl = body.data.image_urls?.[0];
       if (!imageUrl) throw new BadRequestException("火山视觉智能响应未包含图片 URL");
       return { imageUrl };
-    });
+    }));
+  }
+
+  async onModuleDestroy() {
+    await this.lockPool?.end();
+    this.lockPool = null;
+  }
+
+  private async runWithGlobalLock<T>(request: () => Promise<T>): Promise<T> {
+    const databaseUrl = process.env.DATABASE_URL?.trim();
+    if (!databaseUrl) throw new ServiceUnavailableException("视觉智能生图限流需要配置 API 服务 DATABASE_URL");
+
+    this.lockPool ??= new Pool({ connectionString: databaseUrl, max: 1, connectionTimeoutMillis: 5_000, idleTimeoutMillis: 30_000 });
+    let client: PoolClient;
+    try {
+      client = await this.lockPool.connect();
+    } catch {
+      throw new ServiceUnavailableException("无法连接数据库获取视觉智能生图限流锁");
+    }
+
+    const lockName = "admin-volcengine-visual-image-generation";
+    const deadline = Date.now() + 10 * 60_000;
+    let locked = false;
+    let destroyClient = false;
+    try {
+      while (!locked && Date.now() < deadline) {
+        const result = await client.query<{ locked: boolean }>(
+          "SELECT pg_try_advisory_lock(hashtextextended($1, 0)) AS locked",
+          [lockName]
+        );
+        locked = result.rows[0]?.locked === true;
+        if (!locked) await new Promise(resolve => setTimeout(resolve, 500));
+      }
+      if (!locked) throw new ServiceUnavailableException("视觉智能生图排队超时，请稍后重试");
+      return await request();
+    } catch (error) {
+      if (error instanceof ServiceUnavailableException || error instanceof BadRequestException) throw error;
+      throw new ServiceUnavailableException("获取视觉智能生图限流锁失败");
+    } finally {
+      if (locked) {
+        try {
+          await client.query("SELECT pg_advisory_unlock(hashtextextended($1, 0))", [lockName]);
+        } catch {
+          destroyClient = true;
+        }
+      }
+      client.release(destroyClient);
+    }
   }
 
   private async runSerially<T>(request: () => Promise<T>): Promise<T> {
