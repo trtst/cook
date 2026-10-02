@@ -474,3 +474,13 @@
 - 机器检查与后端联调：`prisma validate`、`prisma generate`、API/Client/Admin type-check、Client 微信小程序生产构建、Admin 生产构建、OpenAPI 检查、`git diff --check` 和 `verify:medal-flow` 已通过；本地 migration 已部署。微信小程序页面自动化未能启动，暂不标记全端联调完成。
 - 首发范围确认：纯计划餐次没有逐项食材准备状态，首发完整闭环只覆盖饭局准备流程；未来若要支持纯计划，先定义准备确认交互与最小服务端事实，不能把默认 `MealPlanDish.purchaseState=READY` 当作准备证据。
 - 待人工验收：微信分享回调与图片分享菜单的真实触发行为，以及勋章墙/详情页运行时呈现。
+
+## 勋章模板配置跨环境导入导出（2026-10-02）
+
+- Admin 勋章模板页支持勾选已上架模板并导出 JSON；已勾选记录跨页保留，本页全选只影响当前页，修改关键字/状态/类别筛选后清空选择。
+- `cook.medal-templates.v1` 数据包只包含模板编码、规则、类别、文案、状态、阈值、排序和限定时间，不包含环境 ID、图片地址、图片文件或用户获得记录。
+- `POST /admin/medal-templates/export` 仅在 `SYSTEM_DATA_ENVIRONMENT=TEST` 导出请求所选且仍为 `LISTED` 的模板；`POST /admin/medal-templates/preview` 与 `POST /admin/medal-templates/import` 仅在 `ONLINE` 接受 `TEST` 来源数据包。
+- 导入预览按模板 `code` 识别新增/更新；同编码不同 `awardRule` 整包冲突。确认导入后在事务内更新配置并写入审计与幂等记录；目标图片字段与包外模板保留。
+- 实现不新增数据库表或 migration。API/Admin type-check、build、OpenAPI verify 和目标文件 `git diff --check` 已通过；未运行测试套件。
+- 待验收：Admin 浏览器交互、测试环境选中导出、线上导入预览和首次真实配置导入；代码部署状态另行记录。
+- 2026-10-02 发布准备复核：API/Admin type-check 与 build、API OpenAPI verify（338 operations / 297 response schemas）及 `git diff --check` 通过；未运行测试套件。功能代码位于当前 `main` 的 5 个本地提交，尚未推送或部署；API/Admin 部署后仍需浏览器验收，再由用户勾选模板导出并确认首次线上导入。
