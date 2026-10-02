@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from "vue";
-import { Plus, Upload } from "@element-plus/icons-vue";
-import { ElMessage, ElMessageBox } from "element-plus";
+import { computed, nextTick, onMounted, reactive, ref } from "vue";
+import { Download, Plus, Upload } from "@element-plus/icons-vue";
+import { ElMessage, ElMessageBox, type TableInstance } from "element-plus";
 import {
   medalApi,
   type AdminMedalTemplateSummary,
+  type MedalTemplateImportPreview,
   type MedalImageType,
   type MedalAwardRule,
   type MedalCategory,
@@ -88,6 +89,15 @@ const dialogMode = ref<DialogMode>("create");
 const editingRow = ref<AdminMedalTemplateSummary | null>(null);
 const items = ref<AdminMedalTemplateSummary[]>([]);
 const total = ref(0);
+const tableRef = ref<TableInstance | null>(null);
+const selectedIds = ref<number[]>([]);
+const exporting = ref(false);
+const previewing = ref(false);
+const importing = ref(false);
+const importPreview = ref<MedalTemplateImportPreview | null>(null);
+const importFile = ref<File | null>(null);
+const importFileInput = ref<HTMLInputElement | null>(null);
+let syncingSelection = false;
 const earnedFileInput = ref<HTMLInputElement | null>(null);
 const lockedFileInput = ref<HTMLInputElement | null>(null);
 
@@ -262,25 +272,142 @@ async function loadList() {
       status: query.status || undefined,
       category: query.category || undefined
     });
+    syncingSelection = true;
     items.value = result.items;
     total.value = result.total;
+    const unavailableIds = new Set(result.items.filter(item => item.status !== "LISTED").map(item => item.id));
+    selectedIds.value = selectedIds.value.filter(id => !unavailableIds.has(id));
+    await nextTick();
+    tableRef.value?.clearSelection();
+    for (const item of result.items) {
+      if (item.status === "LISTED" && selectedIds.value.includes(item.id)) {
+        tableRef.value?.toggleRowSelection(item, true);
+      }
+    }
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : "加载勋章模板失败");
   } finally {
+    syncingSelection = false;
     loading.value = false;
   }
 }
 
 function handleSearch() {
+  clearSelection();
   query.page = 1;
   void loadList();
 }
 
 function selectCategory(category: MedalCategory | "") {
   if (query.category === category) return;
+  clearSelection();
   query.category = category;
   query.page = 1;
   void loadList();
+}
+
+function clearSelection() {
+  selectedIds.value = [];
+  tableRef.value?.clearSelection();
+}
+
+function rowSelectable(row: AdminMedalTemplateSummary) {
+  return row.status === "LISTED";
+}
+
+function handleSelectionChange(rows: AdminMedalTemplateSummary[]) {
+  if (syncingSelection) return;
+  const visibleIds = new Set(items.value.map(item => item.id));
+  const ids = new Set(selectedIds.value.filter(id => !visibleIds.has(id)));
+  for (const row of rows) {
+    if (row.status === "LISTED") ids.add(row.id);
+  }
+  selectedIds.value = [...ids];
+}
+
+function downloadJson(fileName: string, value: unknown) {
+  const blob = new Blob([JSON.stringify(value, null, 2)], { type: "application/json;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = fileName;
+  anchor.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+async function exportSelected() {
+  if (!selectedIds.value.length || exporting.value) return;
+  if (selectedIds.value.length > 500) {
+    ElMessage.warning("单次最多导出 500 枚勋章模板");
+    return;
+  }
+  exporting.value = true;
+  try {
+    const document = await medalApi.exportSelected(selectedIds.value);
+    downloadJson(`cook-medal-templates-${new Date().toISOString().slice(0, 10)}.json`, document);
+    ElMessage.success(`已导出 ${document.templates.length} 枚勋章模板`);
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : "导出勋章模板失败");
+  } finally {
+    exporting.value = false;
+  }
+}
+
+function chooseImportFile() {
+  if (!previewing.value && !importing.value) importFileInput.value?.click();
+}
+
+async function handleImportFileChange(event: Event) {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0] ?? null;
+  input.value = "";
+  importFile.value = null;
+  importPreview.value = null;
+  if (!file) return;
+  if (!file.name.toLowerCase().endsWith(".json")) {
+    ElMessage.warning("请选择 JSON 数据包");
+    return;
+  }
+  if (file.size <= 0 || file.size > 2 * 1024 * 1024) {
+    ElMessage.warning("数据包大小须在 2 MB 以内");
+    return;
+  }
+  previewing.value = true;
+  try {
+    importPreview.value = await medalApi.previewImport(file);
+    importFile.value = file;
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : "勋章模板数据包校验失败");
+  } finally {
+    previewing.value = false;
+  }
+}
+
+async function confirmImport() {
+  const file = importFile.value;
+  const preview = importPreview.value;
+  if (!file || !preview || preview.conflicts.length || preview.sourceEnvironment !== "TEST" || preview.targetEnvironment !== "ONLINE" || importing.value) return;
+  try {
+    await ElMessageBox.confirm(
+      `将从测试环境导入 ${preview.counts.total} 枚勋章模板：新增 ${preview.counts.new} 枚，更新 ${preview.counts.existing} 枚。确认写入线上环境吗？`,
+      "确认导入勋章模板",
+      { confirmButtonText: "确认导入", cancelButtonText: "取消", type: "warning" }
+    );
+  } catch {
+    return;
+  }
+  importing.value = true;
+  try {
+    const result = await medalApi.importPackage(file, createOperationId());
+    ElMessage.success(`已导入 ${result.importedCount} 枚：新增 ${result.createdCount} 枚，更新 ${result.updatedCount} 枚`);
+    importFile.value = null;
+    importPreview.value = null;
+    await loadList();
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : "导入勋章模板失败");
+  } finally {
+    importing.value = false;
+  }
 }
 
 function openCreate() {
@@ -425,6 +552,7 @@ async function changeStatus(row: AdminMedalTemplateSummary, status: MedalTemplat
       expectedVersion: row.version,
       status
     });
+    if (status !== "LISTED") selectedIds.value = selectedIds.value.filter(id => id !== row.id);
     ElMessage.success(`已${actionMap[status]}`);
     await loadList();
   } catch (error) {
@@ -520,11 +648,13 @@ onMounted(() => {
 <template>
   <section class="page-stack">
     <div class="toolbar-panel page-toolbar">
-      <el-input v-model="query.keyword" class="toolbar-search" placeholder="搜索勋章名称 / 简介" clearable @keyup.enter="handleSearch" />
+      <el-input v-model="query.keyword" class="toolbar-search" placeholder="搜索勋章名称 / 简介" clearable @input="clearSelection" @keyup.enter="handleSearch" />
       <el-select v-model="query.status" clearable placeholder="状态" style="width: 140px" @change="handleSearch">
         <el-option v-for="item in statusOptions" :key="item.value" :label="item.label" :value="item.value" />
       </el-select>
       <el-button type="primary" :icon="Plus" @click="openCreate">新增勋章</el-button>
+      <el-button :icon="Download" :loading="exporting" :disabled="selectedIds.length === 0" @click="exportSelected">导出已选（{{ selectedIds.length }}）</el-button>
+      <el-button :icon="Upload" :loading="previewing" :disabled="importing" @click="chooseImportFile">导入数据包</el-button>
     </div>
 
     <div class="category-panel table-panel">
@@ -544,7 +674,8 @@ onMounted(() => {
     </div>
 
     <div class="work-panel" v-loading="loading">
-      <el-table :data="items" border>
+      <el-table ref="tableRef" :data="items" row-key="id" border @selection-change="handleSelectionChange">
+        <el-table-column type="selection" width="48" :selectable="rowSelectable" />
         <el-table-column label="图片" width="170">
           <template #default="{ row }">
             <div class="image-pair">
@@ -604,6 +735,18 @@ onMounted(() => {
           @current-change="loadList"
         />
       </div>
+    </div>
+
+    <div v-if="importPreview" class="work-panel">
+      <div class="dialog-section__title">勋章模板导入预览 · {{ importFile?.name }}</div>
+      <p>数据包：{{ importPreview.schemaVersion }}；来源：{{ importPreview.sourceEnvironment }}；目标：{{ importPreview.targetEnvironment }}</p>
+      <p>共 {{ importPreview.counts.total }} 枚；新增 {{ importPreview.counts.new }} 枚；更新 {{ importPreview.counts.existing }} 枚。</p>
+      <el-alert v-if="importPreview.conflicts.length" title="存在冲突，无法导入" type="error" :closable="false">
+        <ul>
+          <li v-for="(conflict, index) in importPreview.conflicts" :key="index">{{ conflict }}</li>
+        </ul>
+      </el-alert>
+      <el-button type="primary" :loading="importing" :disabled="importPreview.conflicts.length > 0 || importPreview.sourceEnvironment !== 'TEST' || importPreview.targetEnvironment !== 'ONLINE'" @click="confirmImport">确认导入线上环境</el-button>
     </div>
 
     <el-dialog v-model="dialogVisible" :title="dialogTitle" width="760px" destroy-on-close @closed="resetForm">
@@ -754,6 +897,13 @@ onMounted(() => {
       </template>
     </el-dialog>
 
+    <input
+      ref="importFileInput"
+      class="visually-hidden"
+      type="file"
+      accept="application/json,.json"
+      @change="handleImportFileChange"
+    />
     <input
       ref="earnedFileInput"
       class="visually-hidden"

@@ -19,6 +19,42 @@ export type MedalCategory =
 export type MedalTemplateStatus = "DRAFT" | "LISTED" | "UNLISTED" | "ARCHIVED";
 export type MedalImageType = "earned" | "locked";
 
+export interface MedalTemplateTransferItem {
+  code: string;
+  awardRule: MedalAwardRule;
+  category: MedalCategory;
+  name: string;
+  description: string;
+  condition: string;
+  status: "LISTED";
+  targetCount: number;
+  sortOrder: number;
+  isLimited: boolean;
+  startAt: IsoDateTime | null;
+  endAt: IsoDateTime | null;
+}
+
+export interface MedalTemplateTransferPackage {
+  schemaVersion: "cook.medal-templates.v1";
+  sourceEnvironment: "TEST";
+  exportedAt: IsoDateTime;
+  templates: MedalTemplateTransferItem[];
+}
+
+export interface MedalTemplateImportPreview {
+  schemaVersion: "cook.medal-templates.v1";
+  targetEnvironment: "ONLINE";
+  sourceEnvironment: "TEST" | "UNKNOWN";
+  counts: { total: number; new: number; existing: number };
+  conflicts: string[];
+}
+
+export interface MedalTemplateImportResult {
+  importedCount: number;
+  createdCount: number;
+  updatedCount: number;
+}
+
 export interface AdminMedalTemplateSummary {
   id: UUID;
   code: string;
@@ -98,6 +134,22 @@ export const medalApi = {
     return requestData<PageResult<AdminMedalTemplateSummary>>("/admin/medal-templates", {
       query: { ...query }
     });
+  },
+  exportSelected(templateIds: number[]) {
+    return requestData<MedalTemplateTransferPackage>("/admin/medal-templates/export", {
+      method: "POST",
+      body: { templateIds }
+    });
+  },
+  previewImport(file: File) {
+    const form = new FormData();
+    form.append("file", file);
+    return uploadForm<MedalTemplateImportPreview>("/admin/medal-templates/preview", form);
+  },
+  importPackage(file: File, operationId: OperationId) {
+    const form = new FormData();
+    form.append("file", file);
+    return uploadForm<MedalTemplateImportResult>("/admin/medal-templates/import", form, { idempotencyKey: operationId });
   },
   create(body: CreateAdminMedalTemplatePayload) {
     const { operationId, ...payload } = body;
