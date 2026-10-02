@@ -446,7 +446,7 @@ export class MedalService {
         await tx.auditEvent.create({ data: { actorType: "ADMIN", actorAdminId: adminId, action: "MEDAL_TEMPLATE_IMPORTED", objectType: "MEDAL_TEMPLATE", payload: { schemaVersion: transferVersion, sourceEnvironment: "TEST", targetEnvironment: "ONLINE", ...result } } });
         await completeAdminIdempotentOperation(tx, operationId, "admin-medal-template:import", adminId, requestHash, result);
         return result;
-      }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30_000 });
+      }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 120_000 });
     } catch (error) {
       if (isUniqueConstraintError(error) || (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2034")) throw new ConflictException("勋章模板导入遇到并发修改，请重新预览");
       throw error;
