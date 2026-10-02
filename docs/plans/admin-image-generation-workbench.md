@@ -19,11 +19,11 @@
 
 ## Provider 边界
 
-Admin 只调用 `/admin/image-generation/*`。API 内部定义 `ImageGenerationProvider`，Ark Provider 持有凭据、模型名和供应商请求/响应格式；替换供应商时替换该 Provider 绑定，不改 Admin 页面、候选记录和目标回填契约。`ARK_API_KEY`、`ARK_IMAGE_MODEL`、可选 `ARK_IMAGE_ENDPOINT`、`ARK_IMAGE_RESOLUTION`、`ARK_IMAGE_OUTPUT_FORMAT` 和 `ARK_IMAGE_WATERMARK` 仅配置在 API 服务端。请求固定使用 URL 响应且关闭流式输出，以兼容候选图片暂存流程。
+Admin 只调用 `/admin/image-generation/*`。生图页下拉选择的服务作为跨管理员共享默认值保存，API 通过 `ImageGenerationProvider` 将生成请求路由到 Ark Seedream 或火山视觉智能通用 3.0；凭据和协议适配都留在 API，不改变 Admin 页面其余候选和目标回填契约。Ark 使用 `ARK_API_KEY`、`ARK_IMAGE_MODEL`、可选 `ARK_IMAGE_ENDPOINT`、`ARK_IMAGE_RESOLUTION`、`ARK_IMAGE_OUTPUT_FORMAT` 和 `ARK_IMAGE_WATERMARK`；视觉智能使用 API Key 方式，凭据放在 API 环境变量 `VOLCENGINE_CV_API_KEY`，固定请求 `https://openapi.cv.volces.com/api/common/v3/process`，`req_key=high_aes_general_v30l_zt2i`。两者都返回短期 URL，由 API 下载后存入现有候选临时 OSS。
 
 ## 持久化和临时数据
 
-- `admin_image_generation_settings` 以单例保存食材、食谱封面和食谱步骤共享关键词。
+- `admin_image_generation_settings` 以单例保存跨管理员共享默认生图服务、版本号，以及食材、食谱封面和食谱步骤关键词。
 - `admin_image_generation_candidates` 保存候选目标、正文版本、步骤序号、提示词和 OSS `tempKey`；图片二进制只放既有临时图片 OSS 目录。
 - 应用候选后或明确删除时移除候选行和临时对象；重生只在新图生成及暂存成功后替换候选。
 - 工作台后续下线时，可移除工作台路由/API/provider 并按部署迁移规范清理候选临时对象，再移除两张专用表。不可连带删除已回填的正式图片。
