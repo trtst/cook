@@ -2553,6 +2553,48 @@ export class AdminMedalTemplateModel {
   @ApiProperty(dateTime) updatedAt!: string;
 }
 
+export class MedalTemplateTransferItemModel {
+  @ApiProperty({ type: String, maxLength: 64 }) code!: string;
+  @ApiProperty({ type: String, enum: ["MEAL_COMPLETION", "DINING_EVENT_COMPLETION", "GROUP_MEAL_COMPLETION", "FULL_LOOP_COMPLETION", "SHOPPING_COMPLETION", "FRIDGE_MAINTENANCE", "MEMORY_SHARE_STARTED_TOTAL", "RECOMMENDATION_ADOPTED_TOTAL"] }) awardRule!: string;
+  @ApiProperty({ type: String, enum: ["MEAL_CHECKIN", "DINING_COLLABORATION", "HOLIDAY_LIMITED", "RECOMMENDATION_CONTRIBUTION"] }) category!: string;
+  @ApiProperty({ type: String, maxLength: 64 }) name!: string;
+  @ApiProperty({ type: String, maxLength: 255 }) description!: string;
+  @ApiProperty({ type: String, maxLength: 255 }) condition!: string;
+  @ApiProperty({ type: String, enum: ["LISTED"] }) status!: "LISTED";
+  @ApiProperty({ type: Number, minimum: 1 }) targetCount!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) sortOrder!: number;
+  @ApiProperty({ type: Boolean }) isLimited!: boolean;
+  @ApiProperty({ ...dateTime, nullable: true }) startAt!: string | null;
+  @ApiProperty({ ...dateTime, nullable: true }) endAt!: string | null;
+}
+
+export class AdminMedalTemplateTransferPackageModel {
+  @ApiProperty({ type: String, enum: ["cook.medal-templates.v1"] }) schemaVersion!: string;
+  @ApiProperty({ type: String, enum: ["TEST"] }) sourceEnvironment!: string;
+  @ApiProperty(dateTime) exportedAt!: string;
+  @ApiProperty({ type: [MedalTemplateTransferItemModel], minItems: 1, maxItems: 500 }) templates!: MedalTemplateTransferItemModel[];
+}
+
+export class AdminMedalTemplateTransferCountsModel {
+  @ApiProperty({ type: Number }) total!: number;
+  @ApiProperty({ type: Number }) new!: number;
+  @ApiProperty({ type: Number }) existing!: number;
+}
+
+export class AdminMedalTemplateTransferPreviewModel {
+  @ApiProperty({ type: String, enum: ["cook.medal-templates.v1"] }) schemaVersion!: string;
+  @ApiProperty({ type: String, enum: ["ONLINE"] }) targetEnvironment!: string;
+  @ApiProperty({ type: String, example: "TEST" }) sourceEnvironment!: string;
+  @ApiProperty({ type: AdminMedalTemplateTransferCountsModel }) counts!: AdminMedalTemplateTransferCountsModel;
+  @ApiProperty({ type: [String] }) conflicts!: string[];
+}
+
+export class AdminMedalTemplateImportResultModel {
+  @ApiProperty({ type: Number }) importedCount!: number;
+  @ApiProperty({ type: Number }) createdCount!: number;
+  @ApiProperty({ type: Number }) updatedCount!: number;
+}
+
 export class SharePreviewParticipantModel {
   @ApiProperty(nullableString) displayName!: string | null;
   @ApiProperty(nullableString) avatarUrl!: string | null;

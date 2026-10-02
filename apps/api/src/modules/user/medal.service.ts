@@ -9,10 +9,14 @@ import {
 } from "../../common/idempotency";
 import type {
   AdminMedalTemplateSummary,
+  AdminMedalTemplateImportResult,
+  AdminMedalTemplateTransferPackage,
+  AdminMedalTemplateTransferPreview,
   CreateAdminMedalTemplateRequest,
   MedalCategory,
   MedalCategorySummary,
   MedalTemplateStatus,
+  MedalTemplateTransferItem,
   MedalWallResponse,
   PageResult,
   SetAdminMedalTemplateStatusRequest,
@@ -50,6 +54,69 @@ const awardRuleIconKeyMap: Record<MedalAwardRule, string> = {
   MEMORY_SHARE_STARTED_TOTAL: "DINING_EVENT",
   RECOMMENDATION_ADOPTED_TOTAL: "RECOMMEND"
 };
+const transferVersion = "cook.medal-templates.v1" as const;
+const transferFields = ["code", "awardRule", "category", "name", "description", "condition", "status", "targetCount", "sortOrder", "isLimited", "startAt", "endAt"];
+
+function transferEnvironment(expected: "TEST" | "ONLINE") {
+  if (process.env.SYSTEM_DATA_ENVIRONMENT?.trim().toUpperCase() !== expected) {
+    throw new ConflictException(`勋章模板同步仅允许在 ${expected} 环境执行`);
+  }
+}
+
+function validTransferDate(value: unknown) {
+  if (value === null) return true;
+  if (typeof value !== "string") return false;
+  const parts = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,3})?(?:Z|[+-](\d{2}):(\d{2}))$/.exec(value);
+  if (!parts) return false;
+  const year = Number(parts[1]);
+  const month = Number(parts[2]);
+  const day = Number(parts[3]);
+  const hour = Number(parts[4]);
+  const minute = Number(parts[5]);
+  const second = Number(parts[6]);
+  const zoneHour = parts[7] === undefined ? null : Number(parts[7]);
+  const zoneMinute = parts[8] === undefined ? null : Number(parts[8]);
+  const calendar = new Date(Date.UTC(year, month - 1, day));
+  return calendar.getUTCFullYear() === year && calendar.getUTCMonth() + 1 === month && calendar.getUTCDate() === day &&
+    hour < 24 && minute < 60 && second < 60 && (zoneHour === null || zoneHour <= 14) && (zoneMinute === null || zoneMinute < 60) && !Number.isNaN(Date.parse(value));
+}
+
+function transferPackage(input: unknown): { data: AdminMedalTemplateTransferPackage | null; conflicts: string[] } {
+  const conflicts: string[] = [];
+  if (!input || typeof input !== "object" || Array.isArray(input)) return { data: null, conflicts: ["数据包必须是 JSON 对象"] };
+  const value = input as Record<string, unknown>;
+  if (Object.keys(value).some(key => !["schemaVersion", "sourceEnvironment", "exportedAt", "templates"].includes(key))) conflicts.push("数据包包含未允许的字段");
+  if (value.schemaVersion !== transferVersion) conflicts.push("数据包版本错误");
+  if (value.sourceEnvironment !== "TEST") conflicts.push("仅接受 TEST 环境数据包");
+  if (!validTransferDate(value.exportedAt) || value.exportedAt === null) conflicts.push("导出时间格式错误");
+  if (!Array.isArray(value.templates) || value.templates.length < 1 || value.templates.length > 500) {
+    conflicts.push("模板数量必须为 1 至 500 条");
+    return { data: null, conflicts };
+  }
+  const codes = new Set<string>();
+  for (const [index, row] of value.templates.entries()) {
+    const label = `第 ${index + 1} 条模板`;
+    if (!row || typeof row !== "object" || Array.isArray(row)) { conflicts.push(`${label}格式错误`); continue; }
+    const item = row as Record<string, unknown>;
+    if (Object.keys(item).some(key => !transferFields.includes(key)) || transferFields.some(key => !Object.hasOwn(item, key))) conflicts.push(`${label}字段错误`);
+    if (typeof item.code !== "string" || !/^[A-Z0-9_]{1,64}$/.test(item.code)) conflicts.push(`${label}编码错误`);
+    else if (codes.has(item.code)) conflicts.push(`模板编码 ${item.code} 重复`);
+    else codes.add(item.code);
+    if (typeof item.awardRule !== "string" || !Object.hasOwn(awardRuleIconKeyMap, item.awardRule)) conflicts.push(`${label}发放规则错误`);
+    if (typeof item.category !== "string" || !orderedCategories.includes(item.category as MedalCategory)) conflicts.push(`${label}分类错误`);
+    for (const [key, limit] of [["name", 64], ["description", 255], ["condition", 255]] as const) {
+      if (typeof item[key] !== "string" || !item[key].trim() || item[key].length > limit || item[key] !== item[key].trim()) conflicts.push(`${label}${key}错误`);
+    }
+    if (item.status !== "LISTED") conflicts.push(`${label}必须为 LISTED`);
+    if (typeof item.targetCount !== "number" || !Number.isSafeInteger(item.targetCount) || item.targetCount < 1) conflicts.push(`${label}阈值错误`);
+    if (typeof item.sortOrder !== "number" || !Number.isSafeInteger(item.sortOrder) || item.sortOrder < 0) conflicts.push(`${label}排序值错误`);
+    if (typeof item.isLimited !== "boolean") conflicts.push(`${label}限时标记错误`);
+    if (!validTransferDate(item.startAt) || !validTransferDate(item.endAt)) conflicts.push(`${label}活动时间格式错误`);
+    if (item.isLimited === false && (item.startAt !== null || item.endAt !== null)) conflicts.push(`${label}非限时模板不能设置活动时间`);
+    if (typeof item.startAt === "string" && typeof item.endAt === "string" && Date.parse(item.startAt) >= Date.parse(item.endAt)) conflicts.push(`${label}活动时间范围错误`);
+  }
+  return { data: conflicts.length ? null : value as unknown as AdminMedalTemplateTransferPackage, conflicts };
+}
 
 function toIsoDate(value: Date | null) {
   return value ? value.toISOString() : null;
@@ -292,6 +359,98 @@ export class MedalService {
       total,
       hasNext: skip + items.length < total
     };
+  }
+
+  async exportTemplates(templateIds: number[]): Promise<AdminMedalTemplateTransferPackage> {
+    transferEnvironment("TEST");
+    if (!Array.isArray(templateIds) || templateIds.length < 1 || templateIds.length > 500 || new Set(templateIds).size !== templateIds.length || templateIds.some(id => !Number.isSafeInteger(id) || id < 1)) {
+      throw new BadRequestException("请选择 1 至 500 个不同的勋章模板");
+    }
+    const rows = await this.prisma.medalTemplate.findMany({
+      where: { id: { in: templateIds } },
+      select: { id: true, code: true, awardRule: true, category: true, name: true, description: true, condition: true, status: true, targetCount: true, sortOrder: true, isLimited: true, startAt: true, endAt: true }
+    });
+    if (rows.length !== templateIds.length || rows.some(row => row.status !== "LISTED")) throw new ConflictException("所选勋章模板不存在或未上架，请刷新后重试");
+    const byId = new Map(rows.map(row => [row.id, row]));
+    const templates: MedalTemplateTransferItem[] = templateIds.map(id => {
+      const row = byId.get(id)!;
+      return {
+        code: row.code, awardRule: row.awardRule, category: row.category,
+        name: row.name, description: row.description, condition: row.condition,
+        status: "LISTED", targetCount: row.targetCount, sortOrder: row.sortOrder,
+        isLimited: row.isLimited, startAt: toIsoDate(row.startAt), endAt: toIsoDate(row.endAt)
+      };
+    });
+    return { schemaVersion: transferVersion, sourceEnvironment: "TEST", exportedAt: new Date().toISOString(), templates };
+  }
+
+  async previewTemplateImport(input: unknown): Promise<AdminMedalTemplateTransferPreview> {
+    transferEnvironment("ONLINE");
+    const parsed = transferPackage(input);
+    const templates = parsed.data?.templates ?? [];
+    const raw = input && typeof input === "object" && !Array.isArray(input) ? input as Record<string, unknown> : null;
+    const current = templates.length ? await this.prisma.medalTemplate.findMany({
+      where: { code: { in: templates.map(item => item.code) } },
+      select: { code: true, awardRule: true }
+    }) : [];
+    const byCode = new Map(current.map(item => [item.code, item]));
+    for (const item of templates) {
+      const matched = byCode.get(item.code);
+      if (matched && matched.awardRule !== item.awardRule) parsed.conflicts.push(`模板编码 ${item.code} 的发放规则与线上不一致`);
+    }
+    return {
+      schemaVersion: transferVersion,
+      targetEnvironment: "ONLINE",
+      sourceEnvironment: typeof raw?.sourceEnvironment === "string" ? raw.sourceEnvironment : "UNKNOWN",
+      counts: { total: Array.isArray(raw?.templates) ? raw.templates.length : 0, new: templates.length - current.length, existing: current.length },
+      conflicts: parsed.conflicts
+    };
+  }
+
+  async importTemplates(input: unknown, operationId: string, adminId: UUID): Promise<AdminMedalTemplateImportResult> {
+    transferEnvironment("ONLINE");
+    const parsed = transferPackage(input);
+    if (!parsed.data || parsed.conflicts.length) throw new BadRequestException(parsed.conflicts.join("；"));
+    const data = parsed.data;
+    const requestHash = JSON.stringify(data);
+    try {
+      return await this.prisma.$transaction(async tx => {
+        const repeated = await getAdminIdempotentResult<AdminMedalTemplateImportResult>(tx, operationId, "admin-medal-template:import", adminId, requestHash);
+        if (repeated) return repeated;
+        await startAdminIdempotentOperation(tx, operationId, "admin-medal-template:import", adminId, requestHash);
+        const current = await tx.medalTemplate.findMany({ where: { code: { in: data.templates.map(item => item.code) } }, select: { code: true, awardRule: true, version: true } });
+        const byCode = new Map(current.map(item => [item.code, item]));
+        if (data.templates.some(item => byCode.has(item.code) && byCode.get(item.code)!.awardRule !== item.awardRule)) {
+          throw new ConflictException("同编码勋章模板的发放规则不一致，整批未导入");
+        }
+        let createdCount = 0;
+        let updatedCount = 0;
+        for (const item of data.templates) {
+          const fields = {
+            category: item.category, name: item.name, description: item.description, condition: item.condition,
+            status: "LISTED" as const, targetCount: item.targetCount, sortOrder: item.sortOrder,
+            isLimited: item.isLimited, startAt: item.startAt ? new Date(item.startAt) : null,
+            endAt: item.endAt ? new Date(item.endAt) : null
+          };
+          const matched = byCode.get(item.code);
+          if (matched) {
+            const updated = await tx.medalTemplate.updateMany({ where: { code: item.code, awardRule: item.awardRule, version: matched.version }, data: { ...fields, version: { increment: 1 } } });
+            if (updated.count !== 1) throw new ConflictException("勋章模板已被更新，请重新预览");
+            updatedCount++;
+          } else {
+            await tx.medalTemplate.create({ data: { ...fields, code: item.code, awardRule: item.awardRule, iconKey: awardRuleIconKeyMap[item.awardRule], earnedImageSourceUrl: null, lockedImageSourceUrl: null, earnedImageUpdatedAt: null, lockedImageUpdatedAt: null, version: 1 } });
+            createdCount++;
+          }
+        }
+        const result = { importedCount: data.templates.length, createdCount, updatedCount };
+        await tx.auditEvent.create({ data: { actorType: "ADMIN", actorAdminId: adminId, action: "MEDAL_TEMPLATE_IMPORTED", objectType: "MEDAL_TEMPLATE", payload: { schemaVersion: transferVersion, sourceEnvironment: "TEST", targetEnvironment: "ONLINE", ...result } } });
+        await completeAdminIdempotentOperation(tx, operationId, "admin-medal-template:import", adminId, requestHash, result);
+        return result;
+      }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30_000 });
+    } catch (error) {
+      if (isUniqueConstraintError(error) || (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2034")) throw new ConflictException("勋章模板导入遇到并发修改，请重新预览");
+      throw error;
+    }
   }
 
   async createTemplate(request: AssetRequest, body: CreateAdminMedalTemplateRequest, adminId: UUID): Promise<AdminMedalTemplateSummary> {

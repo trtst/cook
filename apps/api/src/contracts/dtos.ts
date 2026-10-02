@@ -1071,6 +1071,17 @@ export class AdminMedalTemplateQueryDto extends PageQueryDto {
   category?: "MEAL_CHECKIN" | "DINING_COLLABORATION" | "HOLIDAY_LIMITED" | "RECOMMENDATION_CONTRIBUTION";
 }
 
+export class AdminMedalTemplateExportDto {
+  @ApiProperty({ type: [Number], minItems: 1, maxItems: 500, example: [1, 2] })
+  @IsArray()
+  @ArrayNotEmpty()
+  @ArrayMaxSize(500)
+  @ArrayUnique()
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  templateIds!: number[];
+}
+
 class MedalTemplateFieldsDto {
   @ApiProperty({ enum: medalCategoryValues })
   @IsIn(medalCategoryValues)

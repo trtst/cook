@@ -1,6 +1,6 @@
 import { BadRequestException, Body, Controller, Delete, Get, Inject, Param, ParseIntPipe, Post, Put, Query, Req, UploadedFile, UploadedFiles, UseGuards, UseInterceptors } from "@nestjs/common";
 import { FilesInterceptor, FileInterceptor } from "@nestjs/platform-express";
-import { ApiBearerAuth, ApiConsumes, ApiTags } from "@nestjs/swagger";
+import { ApiBearerAuth, ApiBody, ApiConsumes, ApiTags } from "@nestjs/swagger";
 import { ok } from "../../common/api-response";
 import { AdminAuthGuard } from "../../common/admin-auth.guard";
 import type { RequestWithAdmin } from "../../common/auth-context";
@@ -10,6 +10,7 @@ import { SuperAdminGuard } from "../../common/super-admin.guard";
 import { recipeJsonUploadLimits, recipeJsonUploadStorage } from "../admin/recipe-import-upload";
 import {
   AdminMedalTemplateQueryDto,
+  AdminMedalTemplateExportDto,
   AdminInspirationCategoryNameDto,
   AdminInspirationCategoryQueryDto,
   AdminIngredientCategoryNameDto,
@@ -78,6 +79,9 @@ import {
 import {
   AdminDashboardSummaryModel,
   AdminMedalTemplateModel,
+  AdminMedalTemplateTransferPackageModel,
+  AdminMedalTemplateTransferPreviewModel,
+  AdminMedalTemplateImportResultModel,
   AdminDeleteIngredientCategoryResultModel,
   AdminDeleteIngredientResultModel,
   AdminDeleteInspirationCategoryResultModel,
@@ -264,6 +268,43 @@ export class AdminController {
     @Body() body: CreateAdminMedalTemplateDto
   ) {
     return this.medalService.createTemplate(request, { ...body, operationId }, request.admin.adminId).then(result => ok(result));
+  }
+
+  @Post("medal-templates/export")
+  @UseGuards(AdminAuthGuard, SuperAdminGuard)
+  @ApiBearerAuth("AdminBearerAuth")
+  @ApiOkModel(AdminMedalTemplateTransferPackageModel, "导出选中的已上架勋章模板配置")
+  exportMedalTemplates(@Body() body: AdminMedalTemplateExportDto) {
+    return this.medalService.exportTemplates(body.templateIds).then(result => ok(result));
+  }
+
+  @Post("medal-templates/preview")
+  @UseGuards(AdminAuthGuard, SuperAdminGuard)
+  @ApiBearerAuth("AdminBearerAuth")
+  @UseInterceptors(FileInterceptor("file", { limits: { fileSize: 2 * 1024 * 1024 } }))
+  @ApiBody({ schema: { type: "object", required: ["file"], properties: { file: { type: "string", format: "binary" } } } })
+  @ApiConsumes("multipart/form-data")
+  @ApiOkModel(AdminMedalTemplateTransferPreviewModel, "预览 TEST 勋章模板配置包")
+  previewMedalTemplates(@UploadedFile() file?: { buffer?: Buffer }) {
+    return this.medalService.previewTemplateImport(this.parseMedalPackage(file)).then(result => ok(result));
+  }
+
+  @Post("medal-templates/import")
+  @UseGuards(AdminAuthGuard, SuperAdminGuard)
+  @ApiBearerAuth("AdminBearerAuth")
+  @UseInterceptors(FileInterceptor("file", { limits: { fileSize: 2 * 1024 * 1024 } }))
+  @ApiIdempotencyKey()
+  @ApiBody({ schema: { type: "object", required: ["file"], properties: { file: { type: "string", format: "binary" } } } })
+  @ApiConsumes("multipart/form-data")
+  @ApiOkModel(AdminMedalTemplateImportResultModel, "事务性导入 TEST 勋章模板配置包")
+  importMedalTemplates(@Req() request: RequestWithAdmin, @ReadIdempotencyKey() operationId: string, @UploadedFile() file?: { buffer?: Buffer }) {
+    return this.medalService.importTemplates(this.parseMedalPackage(file), operationId, request.admin.adminId).then(result => ok(result));
+  }
+
+  private parseMedalPackage(file?: { buffer?: Buffer }) {
+    if (!file?.buffer) throw new BadRequestException("请上传 JSON 数据包");
+    try { return JSON.parse(file.buffer.toString("utf8")) as unknown; }
+    catch { throw new BadRequestException("JSON 数据包格式无效"); }
   }
 
   @Put("medal-templates/:templateId")

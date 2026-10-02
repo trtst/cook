@@ -70,6 +70,9 @@
 | AdminTableTopic | DELETE | `/admin/table-topics/{topicId}/image` | 后台清空话题封面图 |
 | AdminMedal | GET | `/admin/medal-templates` | 后台勋章模板分页列表 |
 | AdminMedal | POST | `/admin/medal-templates` | 后台新增勋章模板 |
+| AdminMedal | POST | `/admin/medal-templates/export` | TEST 环境按选中 ID 导出已上架模板配置包 |
+| AdminMedal | POST | `/admin/medal-templates/preview` | ONLINE 环境预览 TEST 模板配置包 |
+| AdminMedal | POST | `/admin/medal-templates/import` | ONLINE 环境事务性导入 TEST 模板配置包 |
 | AdminMedal | PUT | `/admin/medal-templates/{templateId}` | 后台编辑勋章模板 |
 | AdminMedal | POST | `/admin/medal-templates/{templateId}/status` | 后台切换勋章模板状态 |
 | AdminContent | POST | `/admin/content/{contentId}/schedule` | 预约或取消知识文章的定时发布 |

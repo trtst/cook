@@ -3075,6 +3075,42 @@ export interface AdminMedalTemplateSummary {
   updatedAt: IsoDateTime;
 }
 
+export interface MedalTemplateTransferItem {
+  code: string;
+  awardRule: MedalAwardRule;
+  category: MedalCategory;
+  name: string;
+  description: string;
+  condition: string;
+  status: "LISTED";
+  targetCount: number;
+  sortOrder: number;
+  isLimited: boolean;
+  startAt: IsoDateTime | null;
+  endAt: IsoDateTime | null;
+}
+
+export interface AdminMedalTemplateTransferPackage {
+  schemaVersion: "cook.medal-templates.v1";
+  sourceEnvironment: "TEST";
+  exportedAt: IsoDateTime;
+  templates: MedalTemplateTransferItem[];
+}
+
+export interface AdminMedalTemplateTransferPreview {
+  schemaVersion: "cook.medal-templates.v1";
+  targetEnvironment: "ONLINE";
+  sourceEnvironment: string;
+  counts: { total: number; new: number; existing: number };
+  conflicts: string[];
+}
+
+export interface AdminMedalTemplateImportResult {
+  importedCount: number;
+  createdCount: number;
+  updatedCount: number;
+}
+
 export interface AdminMedalTemplateQuery {
   page: number;
   pageSize: number;
