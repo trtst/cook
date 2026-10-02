@@ -2570,7 +2570,7 @@ export class MedalTemplateTransferItemModel {
 
 export class AdminMedalTemplateTransferPackageModel {
   @ApiProperty({ type: String, enum: ["cook.medal-templates.v1"] }) schemaVersion!: string;
-  @ApiProperty({ type: String, enum: ["TEST"] }) sourceEnvironment!: string;
+  @ApiProperty({ type: String, enum: ["TEST", "ONLINE", "UNKNOWN"] }) sourceEnvironment!: string;
   @ApiProperty(dateTime) exportedAt!: string;
   @ApiProperty({ type: [MedalTemplateTransferItemModel], minItems: 1, maxItems: 500 }) templates!: MedalTemplateTransferItemModel[];
 }
@@ -2583,8 +2583,8 @@ export class AdminMedalTemplateTransferCountsModel {
 
 export class AdminMedalTemplateTransferPreviewModel {
   @ApiProperty({ type: String, enum: ["cook.medal-templates.v1"] }) schemaVersion!: string;
-  @ApiProperty({ type: String, enum: ["ONLINE"] }) targetEnvironment!: string;
-  @ApiProperty({ type: String, example: "TEST" }) sourceEnvironment!: string;
+  @ApiProperty({ type: String, enum: ["TEST", "ONLINE", "UNKNOWN"] }) targetEnvironment!: string;
+  @ApiProperty({ type: String, enum: ["TEST", "ONLINE", "UNKNOWN"] }) sourceEnvironment!: string;
   @ApiProperty({ type: AdminMedalTemplateTransferCountsModel }) counts!: AdminMedalTemplateTransferCountsModel;
   @ApiProperty({ type: [String] }) conflicts!: string[];
 }

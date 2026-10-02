@@ -36,15 +36,15 @@ export interface MedalTemplateTransferItem {
 
 export interface MedalTemplateTransferPackage {
   schemaVersion: "cook.medal-templates.v1";
-  sourceEnvironment: "TEST";
+  sourceEnvironment: "TEST" | "ONLINE" | "UNKNOWN";
   exportedAt: IsoDateTime;
   templates: MedalTemplateTransferItem[];
 }
 
 export interface MedalTemplateImportPreview {
   schemaVersion: "cook.medal-templates.v1";
-  targetEnvironment: "ONLINE";
-  sourceEnvironment: string;
+  targetEnvironment: "TEST" | "ONLINE" | "UNKNOWN";
+  sourceEnvironment: "TEST" | "ONLINE" | "UNKNOWN";
   counts: { total: number; new: number; existing: number };
   conflicts: string[];
 }

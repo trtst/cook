@@ -57,10 +57,9 @@ const awardRuleIconKeyMap: Record<MedalAwardRule, string> = {
 const transferVersion = "cook.medal-templates.v1" as const;
 const transferFields = ["code", "awardRule", "category", "name", "description", "condition", "status", "targetCount", "sortOrder", "isLimited", "startAt", "endAt"];
 
-function transferEnvironment(expected: "TEST" | "ONLINE") {
-  if (process.env.SYSTEM_DATA_ENVIRONMENT?.trim().toUpperCase() !== expected) {
-    throw new ConflictException(`勋章模板同步仅允许在 ${expected} 环境执行`);
-  }
+function transferEnvironmentLabel(): "TEST" | "ONLINE" | "UNKNOWN" {
+  const value = process.env.SYSTEM_DATA_ENVIRONMENT?.trim().toUpperCase();
+  return value === "TEST" || value === "ONLINE" ? value : "UNKNOWN";
 }
 
 function validTransferDate(value: unknown) {
@@ -87,12 +86,12 @@ function transferPackage(input: unknown): { data: AdminMedalTemplateTransferPack
   const value = input as Record<string, unknown>;
   if (Object.keys(value).some(key => !["schemaVersion", "sourceEnvironment", "exportedAt", "templates"].includes(key))) conflicts.push("数据包包含未允许的字段");
   if (value.schemaVersion !== transferVersion) conflicts.push("数据包版本错误");
-  if (value.sourceEnvironment !== "TEST") conflicts.push("仅接受 TEST 环境数据包");
   if (!validTransferDate(value.exportedAt) || value.exportedAt === null) conflicts.push("导出时间格式错误");
   if (!Array.isArray(value.templates) || value.templates.length < 1 || value.templates.length > 500) {
     conflicts.push("模板数量必须为 1 至 500 条");
     return { data: null, conflicts };
   }
+  const sourceEnvironment = value.sourceEnvironment === "TEST" || value.sourceEnvironment === "ONLINE" ? value.sourceEnvironment : "UNKNOWN";
   const codes = new Set<string>();
   for (const [index, row] of value.templates.entries()) {
     const label = `第 ${index + 1} 条模板`;
@@ -115,7 +114,10 @@ function transferPackage(input: unknown): { data: AdminMedalTemplateTransferPack
     if (item.isLimited === false && (item.startAt !== null || item.endAt !== null)) conflicts.push(`${label}非限时模板不能设置活动时间`);
     if (typeof item.startAt === "string" && typeof item.endAt === "string" && Date.parse(item.startAt) >= Date.parse(item.endAt)) conflicts.push(`${label}活动时间范围错误`);
   }
-  return { data: conflicts.length ? null : value as unknown as AdminMedalTemplateTransferPackage, conflicts };
+  return {
+    data: conflicts.length ? null : { ...value, sourceEnvironment } as unknown as AdminMedalTemplateTransferPackage,
+    conflicts
+  };
 }
 
 function toIsoDate(value: Date | null) {
@@ -362,7 +364,6 @@ export class MedalService {
   }
 
   async exportTemplates(templateIds: number[]): Promise<AdminMedalTemplateTransferPackage> {
-    transferEnvironment("TEST");
     if (!Array.isArray(templateIds) || templateIds.length < 1 || templateIds.length > 500 || new Set(templateIds).size !== templateIds.length || templateIds.some(id => !Number.isSafeInteger(id) || id < 1)) {
       throw new BadRequestException("请选择 1 至 500 个不同的勋章模板");
     }
@@ -381,14 +382,14 @@ export class MedalService {
         isLimited: row.isLimited, startAt: toIsoDate(row.startAt), endAt: toIsoDate(row.endAt)
       };
     });
-    return { schemaVersion: transferVersion, sourceEnvironment: "TEST", exportedAt: new Date().toISOString(), templates };
+    return { schemaVersion: transferVersion, sourceEnvironment: transferEnvironmentLabel(), exportedAt: new Date().toISOString(), templates };
   }
 
   async previewTemplateImport(input: unknown): Promise<AdminMedalTemplateTransferPreview> {
-    transferEnvironment("ONLINE");
     const parsed = transferPackage(input);
     const templates = parsed.data?.templates ?? [];
     const raw = input && typeof input === "object" && !Array.isArray(input) ? input as Record<string, unknown> : null;
+    const sourceEnvironment = raw?.sourceEnvironment === "TEST" || raw?.sourceEnvironment === "ONLINE" ? raw.sourceEnvironment : "UNKNOWN";
     const current = templates.length ? await this.prisma.medalTemplate.findMany({
       where: { code: { in: templates.map(item => item.code) } },
       select: { code: true, awardRule: true }
@@ -396,19 +397,18 @@ export class MedalService {
     const byCode = new Map(current.map(item => [item.code, item]));
     for (const item of templates) {
       const matched = byCode.get(item.code);
-      if (matched && matched.awardRule !== item.awardRule) parsed.conflicts.push(`模板编码 ${item.code} 的发放规则与线上不一致`);
+      if (matched && matched.awardRule !== item.awardRule) parsed.conflicts.push(`模板编码 ${item.code} 的发放规则与当前环境不一致`);
     }
     return {
       schemaVersion: transferVersion,
-      targetEnvironment: "ONLINE",
-      sourceEnvironment: typeof raw?.sourceEnvironment === "string" ? raw.sourceEnvironment : "UNKNOWN",
+      targetEnvironment: transferEnvironmentLabel(),
+      sourceEnvironment,
       counts: { total: Array.isArray(raw?.templates) ? raw.templates.length : 0, new: templates.length - current.length, existing: current.length },
       conflicts: parsed.conflicts
     };
   }
 
   async importTemplates(input: unknown, operationId: string, adminId: UUID): Promise<AdminMedalTemplateImportResult> {
-    transferEnvironment("ONLINE");
     const parsed = transferPackage(input);
     if (!parsed.data || parsed.conflicts.length) throw new BadRequestException(parsed.conflicts.join("；"));
     const data = parsed.data;
@@ -443,7 +443,7 @@ export class MedalService {
           }
         }
         const result = { importedCount: data.templates.length, createdCount, updatedCount };
-        await tx.auditEvent.create({ data: { actorType: "ADMIN", actorAdminId: adminId, action: "MEDAL_TEMPLATE_IMPORTED", objectType: "MEDAL_TEMPLATE", payload: { schemaVersion: transferVersion, sourceEnvironment: "TEST", targetEnvironment: "ONLINE", ...result } } });
+        await tx.auditEvent.create({ data: { actorType: "ADMIN", actorAdminId: adminId, action: "MEDAL_TEMPLATE_IMPORTED", objectType: "MEDAL_TEMPLATE", payload: { schemaVersion: transferVersion, sourceEnvironment: data.sourceEnvironment, targetEnvironment: transferEnvironmentLabel(), ...result } } });
         await completeAdminIdempotentOperation(tx, operationId, "admin-medal-template:import", adminId, requestHash, result);
         return result;
       }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 120_000 });

@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 在 Admin 勋章模板页按勾选导出已上架模板配置，并允许线上校验、预览和导入测试环境 JSON 包。
+**Goal:** 在 Admin 勋章模板页按勾选导出已上架模板配置，并允许任意环境预览和导入 JSON 包。
 
-**Architecture:** 在现有 Admin 勋章模板 API/Service 中增加独立的模板同步包能力，不扩展通用系统数据包。包以 `code` 作为跨环境键，不包含图片字段；线上导入采用单事务按 `code` 新增或更新，保留线上图片和包内缺失的模板。
+**Architecture:** 在现有 Admin 勋章模板 API/Service 中增加独立的模板同步包能力，不扩展通用系统数据包。包以 `code` 作为跨环境键，不包含图片字段；任意环境均可单事务按 `code` 新增或更新，保留目标环境图片和包内缺失的模板。
 
 **Tech Stack:** NestJS、Prisma、class-validator、Vue 3、Element Plus、TypeScript、OpenAPI 3.0。
 
@@ -14,10 +14,10 @@
 
 - 只导出用户勾选且服务端确认状态为 `LISTED` 的模板。
 - 列表每页保持 20 条；跨页保留选择；本页全选仅作用于当前页；修改关键词、状态或类别时清空选择。
-- JSON 包版本为 `cook.medal-templates.v1`，来源环境为 `TEST`，目标环境只能为 `ONLINE`。
+- JSON 包版本为 `cook.medal-templates.v1`；来源和目标环境信息仅供展示，缺失时显示 `UNKNOWN`，不限制同步方向。
 - JSON 只包含 `code / awardRule / category / name / description / condition / status / targetCount / sortOrder / isLimited / startAt / endAt`；不包含 ID、版本、图片 URL 或图片文件。
 - 匹配同一 `code` 时 `awardRule` 必须一致；导入更新不得修改模板 code、发放规则或任何图片字段。
-- 数据包缺失的线上记录保留；新增和更新必须处于同一事务，冲突时整批回滚。
+- 数据包缺失的目标环境记录保留；新增和更新必须处于同一事务，冲突时整批回滚。
 - 导入/导出/预览仅限 `SUPER_ADMIN`；导入必须使用数字字符串幂等键并写审计。
 - 不新增 Prisma Model 或 migration；实现后更新 `docs/api-contract.md`、`docs/api-index.md`、`docs/plans/medal-execution.md` 和 `docs/plans/minor_change_log.md`。
 - 保留当前工作区中与生图工作台有关的已有修改。
@@ -37,17 +37,17 @@
 
 **Interfaces:**
 - `AdminMedalTemplateExportDto`: `{ templateIds: number[] }`, 非空、正整数、最多 500 个。
-- Package: `{ schemaVersion: "cook.medal-templates.v1", sourceEnvironment: "TEST", exportedAt: string, templates: MedalTemplateTransferItem[] }`。
+- Package: `{ schemaVersion: "cook.medal-templates.v1", sourceEnvironment: "TEST" | "ONLINE" | "UNKNOWN", exportedAt: string, templates: MedalTemplateTransferItem[] }`; environment is informational only.
 - `MedalTemplateTransferItem`: `{ code, awardRule, category, name, description, condition, status: "LISTED", targetCount, sortOrder, isLimited, startAt, endAt }`。
-- `AdminMedalTemplateTransferPreview`: `{ schemaVersion, targetEnvironment: "ONLINE", sourceEnvironment, counts: { total, new, existing }, conflicts: string[] }`。
+- `AdminMedalTemplateTransferPreview`: `{ schemaVersion, targetEnvironment: "TEST" | "ONLINE" | "UNKNOWN", sourceEnvironment: "TEST" | "ONLINE" | "UNKNOWN", counts: { total, new, existing }, conflicts: string[] }`; environment labels do not restrict operations.
 - Export endpoint: `POST /admin/medal-templates/export`, JSON body with selected `templateIds`, returns the package.
 - Preview endpoint: `POST /admin/medal-templates/preview`, multipart `file`, returns preview.
 - Import endpoint: `POST /admin/medal-templates/import`, multipart `file`, `Idempotency-Key`, returns `{ importedCount, createdCount, updatedCount }`.
 
-- [x] **Step 1: Add DTO, transfer package, preview, and result types.** Reuse current medal enum types; cap selected IDs and package rows at 500 and upload size at 2 MB; reject malformed dates, invalid time ranges, duplicate codes, non-`LISTED` rows, wrong schema version, non-TEST source, and wrong destination environment.
+- [x] **Step 1: Add DTO, transfer package, preview, and result types.** Reuse current medal enum types; cap selected IDs and package rows at 500 and upload size at 2 MB; reject malformed dates, invalid time ranges, duplicate codes, non-`LISTED` rows, and wrong schema version. Environment labels are informational.
 - [x] **Step 2: Add export, preview, and import controller routes.** Place routes before parameterized `medal-templates/:templateId` routes. Apply `AdminAuthGuard` and `SuperAdminGuard`; parse multipart packages with the same bounded-file pattern used by Admin system-data imports.
-- [x] **Step 3: Implement export projection.** Read selected IDs, require every row to exist and be `LISTED`, then return only the package fields. Obtain environment from `SYSTEM_DATA_ENVIRONMENT`; reject export unless it is `TEST`.
-- [x] **Step 4: Implement preview and code matching.** Accept imports only when target `SYSTEM_DATA_ENVIRONMENT` is `ONLINE` and source is `TEST`. Count new/matching codes. Report invalid values and same-code/different-awardRule conflicts without writing.
+- [x] **Step 3: Implement export projection.** Read selected IDs, require every row to exist and be `LISTED`, then return only the package fields. Record configured environment as informational metadata; do not reject export based on environment.
+- [x] **Step 4: Implement preview and code matching.** Allow preview in any environment and accept packages regardless of source label. Count new/matching codes. Report invalid values and same-code/different-awardRule conflicts without writing.
 - [x] **Step 5: Implement atomic import by code.** For new rows create with the provided code and `LISTED` status; derive `iconKey` from `awardRule`, initialize absent image fields to null, and initialize version. For matching rows update only category, display copy, threshold, sort order, limited dates, status, and version; preserve existing `code`, `awardRule`, image fields, and all rows absent from the package. Record one admin audit event and persist the idempotent result in the transaction.
 - [x] **Step 6: Update OpenAPI and contract indexes.** Document request/response fields, file and record bounds, environment restrictions, role, idempotency, conflicts, and image exclusion.
 - [x] **Step 7: Run API type-check and build.** Confirm DTO decorators, controller signatures, Prisma writes, and OpenAPI model registration compile.
@@ -88,7 +88,7 @@
 
 - Only explicitly selected `LISTED` rows appear in the package, including selections retained across pages.
 - Package JSON contains no database ID, image bytes, or image URL fields.
-- Test export succeeds only in `TEST`; import succeeds only in `ONLINE` for a `TEST` package.
+- Export and import succeed in any environment; environment labels are informational only.
 - A valid package imports into empty production as new `LISTED` templates.
 - Reimport updates same-code/same-rule configuration while retaining production image values.
 - Same-code/different-rule or malformed input rejects the whole package without partial writes.
@@ -97,4 +97,4 @@
 ## Delivery status
 
 - API and Admin source plus production builds are ready; the feature and execution records are pushed to `origin/main`.
-- Production deployment and browser interaction have not yet been confirmed. Production template import remains a separate action after deployment; the user must choose the templates in Admin.
+- The latest environment-neutral change still needs deployment and browser interaction. Template import remains a separate action after deployment; the user chooses templates in Admin and confirms import into the current environment.

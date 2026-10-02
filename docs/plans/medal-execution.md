@@ -479,8 +479,9 @@
 
 - Admin 勋章模板页支持勾选已上架模板并导出 JSON；已勾选记录跨页保留，本页全选只影响当前页，修改关键字/状态/类别筛选后清空选择。
 - `cook.medal-templates.v1` 数据包只包含模板编码、规则、类别、文案、状态、阈值、排序和限定时间，不包含环境 ID、图片地址、图片文件或用户获得记录。
-- `POST /admin/medal-templates/export` 仅在 `SYSTEM_DATA_ENVIRONMENT=TEST` 导出请求所选且仍为 `LISTED` 的模板；`POST /admin/medal-templates/preview` 与 `POST /admin/medal-templates/import` 仅在 `ONLINE` 接受 `TEST` 来源数据包。
+- 勋章模板导出、预览和导入均可在任意环境执行；`sourceEnvironment` / `targetEnvironment` 只作信息展示，不限制方向。兼容已有 TEST 来源包。
 - 导入预览按模板 `code` 识别新增/更新；同编码不同 `awardRule` 整包冲突。确认导入后在事务内更新配置并写入审计与幂等记录；目标图片字段与包外模板保留。
 - 实现不新增数据库表或 migration。API/Admin type-check、build、OpenAPI verify 和目标文件 `git diff --check` 已通过；未运行测试套件。
-- 待验收：Admin 浏览器交互、测试环境选中导出、线上导入预览和首次真实配置导入；代码部署状态另行记录。
-- 2026-10-02 发布准备复核：API/Admin type-check 与 build、API OpenAPI verify（338 operations / 297 response schemas）及 `git diff --check` 通过；未运行测试套件。功能及执行记录已推送到 `origin/main`；生产服务器尚未部署。Admin 部署后仍需浏览器验收，再由用户勾选模板导出并确认首次线上导入。
+- 待验收：Admin 浏览器交互、跨环境选中导出、任意环境导入预览和首次真实配置导入；代码部署状态另行记录。
+- 2026-10-02 发布准备复核：API/Admin type-check 与 build、API OpenAPI verify（338 operations / 297 response schemas）及 `git diff --check` 通过；未运行测试套件。初版功能及执行记录已推送到 `origin/main`；当前环境中服务器部署状态未核实。
+- 2026-10-02 用户确认取消勋章模板同步的环境方向门禁：API/Admin 已改为任意环境均可导出、预览和导入；环境字段仅供信息展示。待完成静态验证、推送与部署，随后进行 Admin 运行时验收。

@@ -390,10 +390,10 @@ async function confirmImport() {
   const file = importFile.value;
   const preview = importPreview.value;
   const operationId = importOperationId.value;
-  if (!file || !preview || !operationId || preview.conflicts.length || preview.sourceEnvironment !== "TEST" || preview.targetEnvironment !== "ONLINE" || importing.value) return;
+  if (!file || !preview || !operationId || preview.conflicts.length || importing.value) return;
   try {
     await ElMessageBox.confirm(
-      `将从测试环境导入 ${preview.counts.total} 枚勋章模板：新增 ${preview.counts.new} 枚，更新 ${preview.counts.existing} 枚。确认写入线上环境吗？`,
+      `将导入 ${preview.counts.total} 枚勋章模板：新增 ${preview.counts.new} 枚，更新 ${preview.counts.existing} 枚。确认写入当前环境吗？`,
       "确认导入勋章模板",
       { confirmButtonText: "确认导入", cancelButtonText: "取消", type: "warning" }
     );
@@ -744,14 +744,14 @@ onMounted(() => {
 
     <div v-if="importPreview" class="work-panel">
       <div class="dialog-section__title">勋章模板导入预览 · {{ importFile?.name }}</div>
-      <p>数据包：{{ importPreview.schemaVersion }}；来源：{{ importPreview.sourceEnvironment }}；目标：{{ importPreview.targetEnvironment }}</p>
+      <p>数据包：{{ importPreview.schemaVersion }}；来源环境信息：{{ importPreview.sourceEnvironment }}；当前环境信息：{{ importPreview.targetEnvironment }}</p>
       <p>共 {{ importPreview.counts.total }} 枚；新增 {{ importPreview.counts.new }} 枚；更新 {{ importPreview.counts.existing }} 枚。</p>
       <el-alert v-if="importPreview.conflicts.length" title="存在冲突，无法导入" type="error" :closable="false">
         <ul>
           <li v-for="(conflict, index) in importPreview.conflicts" :key="index">{{ conflict }}</li>
         </ul>
       </el-alert>
-      <el-button type="primary" :loading="importing" :disabled="importPreview.conflicts.length > 0 || importPreview.sourceEnvironment !== 'TEST' || importPreview.targetEnvironment !== 'ONLINE'" @click="confirmImport">确认导入线上环境</el-button>
+      <el-button type="primary" :loading="importing" :disabled="importPreview.conflicts.length > 0" @click="confirmImport">确认导入当前环境</el-button>
     </div>
 
     <el-dialog v-model="dialogVisible" :title="dialogTitle" width="760px" destroy-on-close @closed="resetForm">
