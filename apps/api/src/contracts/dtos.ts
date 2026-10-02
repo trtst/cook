@@ -2776,6 +2776,84 @@ export class AdminRecipeImageBackfillDto {
   images!: AdminRecipeImageBackfillFileDto[];
 }
 
+export class AdminImageGenerationSettingsDto {
+  @ApiProperty({ maxLength: 1000 })
+  @IsString()
+  @MaxLength(1000)
+  ingredientKeywords!: string;
+
+  @ApiProperty({ maxLength: 1000 })
+  @IsString()
+  @MaxLength(1000)
+  recipeCoverKeywords!: string;
+
+  @ApiProperty({ maxLength: 1000 })
+  @IsString()
+  @MaxLength(1000)
+  recipeStepKeywords!: string;
+}
+
+export class AdminImageGenerationQueryDto extends PageQueryDto {
+  @ApiProperty({ enum: ["INGREDIENT", "RECIPE"] })
+  @IsIn(["INGREDIENT", "RECIPE"])
+  type!: "INGREDIENT" | "RECIPE";
+
+  @ApiPropertyOptional({ example: resourceIdExample })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  categoryId?: number;
+
+  @ApiPropertyOptional({ default: true })
+  @IsOptional()
+  @Transform(({ value }) => value === true || value === "true")
+  @IsBoolean()
+  missingOnly?: boolean;
+}
+
+export class AdminImageGenerationTargetDto {
+  @ApiProperty({ enum: ["INGREDIENT", "RECIPE_COVER", "RECIPE_STEP", "WIKI_STEP"] })
+  @IsIn(["INGREDIENT", "RECIPE_COVER", "RECIPE_STEP", "WIKI_STEP"])
+  targetType!: "INGREDIENT" | "RECIPE_COVER" | "RECIPE_STEP" | "WIKI_STEP";
+
+  @ApiProperty({ example: resourceIdExample })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  targetId!: number;
+
+  @ApiPropertyOptional({ example: resourceIdExample })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  contentVersionId?: number;
+
+  @ApiPropertyOptional({ example: 1 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  stepOrder?: number;
+
+  @ApiProperty({ maxLength: 1000 })
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(1000)
+  prompt!: string;
+}
+
+export class AdminImageGenerationApplyDto extends OperationDto {
+  @ApiPropertyOptional({ example: 1 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  expectedVersion?: number;
+}
+
 export class AdminRecipeWikiQueryDto extends PageQueryDto {
 }
 

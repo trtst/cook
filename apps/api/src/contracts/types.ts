@@ -1410,7 +1410,7 @@ export interface UploadImageResponse {
   upload: UploadImageSummary;
 }
 
-export type AdminRecipeImageScene = "COVER" | "STEP";
+export type AdminRecipeImageScene = "COVER" | "STEP" | "INGREDIENT";
 
 export interface AdminRecipeImageUploadSummary {
   tempKey: string;

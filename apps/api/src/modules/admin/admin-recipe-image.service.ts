@@ -4,7 +4,7 @@ import * as http from "node:http";
 import * as https from "node:https";
 import { isIP } from "node:net";
 import { basename } from "node:path";
-import { BadRequestException, Injectable, NotFoundException, Optional } from "@nestjs/common";
+import { BadRequestException, Injectable, Logger, NotFoundException, Optional } from "@nestjs/common";
 import sharp from "sharp";
 import { assetKey, AssetStorageService } from "../../common/asset-storage.service";
 import { compressUploadedImage } from "../../common/image-compression";
@@ -35,6 +35,7 @@ const maxRemoteRedirects = 3;
 const coverRatio = 4 / 3;
 const coverRatioTolerance = 0.02;
 const tempKeyPattern = /^[a-z0-9-]+(?:\.original)?\.(png|jpg|jpeg|webp)$/i;
+const logger = new Logger("AdminRecipeImageService");
 
 function imageSharp(buffer: Buffer) {
   return sharp(buffer, { limitInputPixels: maxImagePixels, failOn: "truncated" });
@@ -50,6 +51,22 @@ function getImageFormat(format: string | undefined): ImageMeta["extension"] | nu
 function imageMeta(format: ImageMeta["extension"], width: number, height: number): ImageMeta {
   const contentType = format === "jpg" ? "image/jpeg" : `image/${format}`;
   return { contentType, extension: format, width, height };
+}
+
+async function normalizeIngredientImage(buffer: Buffer): Promise<{ buffer: Buffer; meta: ImageMeta }> {
+  if (!buffer.length || buffer.length > maxImageBytes) throw new BadRequestException("图片不能超过 10 MB");
+  try {
+    const output = await imageSharp(buffer)
+      .rotate()
+      .resize(500, 500, { fit: "contain", background: "#ffffff" })
+      .jpeg({ quality: 78, mozjpeg: true })
+      .toBuffer({ resolveWithObject: true });
+    if (output.data.length > 250 * 1024) throw new BadRequestException("食材图片成品不能超过 250 KB");
+    return { buffer: output.data, meta: imageMeta("jpg", output.info.width, output.info.height) };
+  } catch (error) {
+    if (error instanceof BadRequestException) throw error;
+    throw new BadRequestException("图片损坏或无法处理");
+  }
 }
 
 async function normalizeImage(buffer: Buffer): Promise<{ buffer: Buffer; meta: ImageMeta }> {
@@ -86,6 +103,9 @@ async function inspectStoredImage(buffer: Buffer): Promise<ImageMeta> {
 }
 
 function assertSceneMeta(scene: AdminRecipeImageScene, meta: ImageMeta) {
+  if (scene === "INGREDIENT" && (meta.width !== 500 || meta.height !== 500)) {
+    throw new BadRequestException("食材图片必须为 500×500 像素");
+  }
   if (scene !== "COVER") return;
   const ratio = meta.width / meta.height;
   if (!Number.isFinite(ratio) || Math.abs(ratio - coverRatio) > coverRatioTolerance) {
@@ -175,15 +195,23 @@ function readRemoteResponse(url: URL) {
       headers: {
         accept: "image/jpeg,image/png,image/webp"
       },
-      lookup(hostname, _options, callback) {
+      lookup(hostname, options, callback) {
         lookupDns(hostname, { all: true, verbatim: true })
           .then(addresses => {
             addresses.forEach(item => assertPublicAddress(item.address));
-            const address = addresses[0]?.address;
+            if (options.all) {
+              if (addresses.length === 0) throw new Error("remote address unavailable");
+              callback(null, addresses);
+              return;
+            }
+            const address = addresses[0];
             if (!address) throw new Error("remote address unavailable");
-            callback(null, address, isIP(address));
+            callback(null, address.address, address.family);
           })
-          .catch(error => callback(error as Error, "", 0));
+          .catch(error => {
+            if (options.all) callback(error as Error, []);
+            else callback(error as Error, "", 0);
+          });
       }
     }, response => {
       const status = response.statusCode ?? 0;
@@ -241,6 +269,12 @@ async function readRemoteImage(url: string) {
       if (error instanceof Error && error.message === "remote image too large") {
         throw new BadRequestException("远程图片大小不能超过 10 MB");
       }
+      const errorCode = error && typeof error === "object" && "code" in error && typeof error.code === "string"
+        ? error.code
+        : error instanceof Error && error.message === "remote image timeout"
+          ? "ETIMEDOUT"
+          : "NETWORK_ERROR";
+      logger.warn(`Generated image download failed host=${safeUrl.hostname} reason=${errorCode}`);
       throw new BadRequestException("远程图片下载失败或超时");
     }
 
@@ -283,7 +317,9 @@ export class AdminRecipeImageService {
     if (!file.buffer || typeof file.size !== "number") {
       throw new BadRequestException("请上传图片");
     }
-    const normalized = await normalizeImage(file.buffer);
+    const normalized = scene === "INGREDIENT"
+      ? await normalizeIngredientImage(file.buffer)
+      : await normalizeImage(file.buffer);
     const meta = normalized.meta;
     assertSceneMeta(scene, meta);
     const tempKey = `${randomUUID()}.${meta.extension}`;
@@ -298,6 +334,20 @@ export class AdminRecipeImageService {
         height: meta.height
       }
     };
+  }
+
+  async stageGeneratedTempImageFromUrl(scene: AdminRecipeImageScene, imageUrl: string): Promise<AdminRecipeImageUploadResponse> {
+    await assertSafeRemoteUrl(imageUrl);
+    const source = await this.remoteImageReader(imageUrl);
+    let buffer = source;
+    if (scene === "COVER") {
+      try {
+        buffer = await imageSharp(source).rotate().resize(1200, 900, { fit: "cover", position: "attention" }).jpeg({ quality: 88, mozjpeg: true }).toBuffer();
+      } catch {
+        throw new BadRequestException("生成的封面图无法裁切到 4:3，请重新生成");
+      }
+    }
+    return this.stageTempImage({}, scene, { buffer, size: buffer.length });
   }
 
   async publishTempImage(request: RequestLike, recipeId: number, scene: AdminRecipeImageScene, tempKey: string) {
@@ -319,6 +369,15 @@ export class AdminRecipeImageService {
     }
     assertSceneMeta(scene, meta);
     return this.writePublishedImage(request, recipeId, meta, publishedBuffer);
+  }
+
+  async readTempImageBuffer(tempKey: string) {
+    const normalizedTempKey = this.normalizeTempKey(tempKey);
+    try {
+      return await this.assetStorage.readBuffer(this.tempStorageKey(normalizedTempKey));
+    } catch {
+      throw new BadRequestException("图片上传状态已失效，请重新生成");
+    }
   }
 
   async publishImageBuffer(request: RequestLike, recipeId: number, scene: AdminRecipeImageScene, buffer: Buffer) {

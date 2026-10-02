@@ -1166,7 +1166,7 @@ export class UploadImageResultModel {
 
 export class AdminRecipeImageUploadModel {
   @ApiProperty({ type: String }) tempKey!: string;
-  @ApiProperty({ type: String, enum: ["COVER", "STEP"] }) scene!: string;
+  @ApiProperty({ type: String, enum: ["COVER", "STEP", "INGREDIENT"] }) scene!: string;
   @ApiProperty({ type: String }) contentType!: string;
   @ApiProperty({ type: Number, minimum: 0 }) sizeBytes!: number;
   @ApiProperty({ type: Number, minimum: 1 }) width!: number;
@@ -1466,6 +1466,55 @@ export class AdminRecipeImageBackfillResultModel {
   @ApiProperty({ type: Number, minimum: 1 }) nextContentVersionId!: number;
   @ApiProperty({ type: Number, minimum: 1 }) updatedCount!: number;
   @ApiProperty({ type: [AdminRecipeImageBackfillItemResultModel] }) items!: AdminRecipeImageBackfillItemResultModel[];
+}
+
+export class AdminImageGenerationSettingsModel {
+  @ApiProperty({ type: String, maxLength: 1000 }) ingredientKeywords!: string;
+  @ApiProperty({ type: String, maxLength: 1000 }) recipeCoverKeywords!: string;
+  @ApiProperty({ type: String, maxLength: 1000 }) recipeStepKeywords!: string;
+  @ApiProperty({ type: String, format: "date-time" }) updatedAt!: string;
+}
+
+export class AdminImageGenerationDeleteResultModel {
+  @ApiProperty({ type: Boolean }) deleted!: boolean;
+}
+
+export class AdminImageGenerationApplyResultModel {
+  @ApiProperty({ type: Number }) candidateId!: number;
+  @ApiProperty({ type: Boolean }) applied!: boolean;
+  @ApiProperty({ type: String, enum: ["INGREDIENT", "RECIPE_COVER", "RECIPE_STEP", "WIKI_STEP"] }) targetType!: string;
+  @ApiProperty({ type: Number }) targetId!: number;
+}
+
+export class AdminImageGenerationCandidateModel {
+  @ApiProperty({ type: Number }) id!: number;
+  @ApiProperty({ type: String, enum: ["INGREDIENT", "RECIPE_COVER", "RECIPE_STEP", "WIKI_STEP"] }) targetType!: string;
+  @ApiProperty({ type: Number }) targetId!: number;
+  @ApiProperty({ type: Number }) contentVersionId!: number;
+  @ApiProperty({ type: Number }) stepOrder!: number;
+  @ApiProperty({ type: String }) prompt!: string;
+  @ApiProperty({ type: String }) tempKey!: string;
+}
+
+export class AdminImageGenerationTargetSlotModel {
+  @ApiProperty({ type: String, enum: ["INGREDIENT", "RECIPE_COVER", "RECIPE_STEP", "WIKI_STEP"] }) targetType!: string;
+  @ApiProperty({ type: Number }) targetId!: number;
+  @ApiProperty({ type: Number }) contentVersionId!: number;
+  @ApiProperty({ type: Number }) stepOrder!: number;
+  @ApiProperty({ type: String }) label!: string;
+  @ApiProperty({ type: String, nullable: true }) imageUrl!: string | null;
+  @ApiProperty({ type: String, nullable: true }) imagePrompt!: string | null;
+  @ApiProperty({ type: () => AdminImageGenerationCandidateModel, nullable: true }) candidate!: AdminImageGenerationCandidateModel | null;
+}
+
+export class AdminImageGenerationTargetModel {
+  @ApiProperty({ type: Number }) id!: number;
+  @ApiProperty({ type: String }) title!: string;
+  @ApiProperty({ type: Number, nullable: true }) categoryId!: number | null;
+  @ApiProperty({ type: String }) categoryName!: string;
+  @ApiProperty({ type: Number }) missingCount!: number;
+  @ApiPropertyOptional({ type: Number, nullable: true }) version?: number;
+  @ApiProperty({ type: () => [AdminImageGenerationTargetSlotModel] }) slots!: AdminImageGenerationTargetSlotModel[];
 }
 
 export class AdminRecipeWikiSummaryModel {

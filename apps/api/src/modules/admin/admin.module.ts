@@ -12,6 +12,9 @@ import { AdminDashboardController } from "./admin-dashboard.controller";
 import { AdminDashboardService } from "./admin-dashboard.service";
 import { AdminRecipeImageController } from "./admin-recipe-image.controller";
 import { AdminRecipeImageService } from "./admin-recipe-image.service";
+import { AdminImageGenerationController } from "./admin-image-generation.controller";
+import { AdminImageGenerationService } from "./admin-image-generation.service";
+import { ArkImageGenerationProvider, IMAGE_GENERATION_PROVIDER } from "./image-generation-provider";
 import {
   AdminSiteContentController,
   SiteContentArticleController,
@@ -43,7 +46,8 @@ import { SiteContentImageService } from "./site-content-image.service";
     SiteContentArticleController,
     SiteOfficialMessageController,
     SiteContentImagePublicController,
-    AdminRecipeImageController
+    AdminRecipeImageController,
+    AdminImageGenerationController
   ],
   providers: [
     AdminService,
@@ -57,6 +61,9 @@ import { SiteContentImageService } from "./site-content-image.service";
     IngredientImageService,
     SiteContentImageService,
     AdminRecipeImageService,
+    AdminImageGenerationService,
+    ArkImageGenerationProvider,
+    { provide: IMAGE_GENERATION_PROVIDER, useExisting: ArkImageGenerationProvider },
     SuperAdminGuard
   ],
   exports: [IngredientImageService, AdminRecipeImageService]

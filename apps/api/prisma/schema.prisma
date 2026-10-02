@@ -12,6 +12,18 @@ enum AdminAccountStatus {
   DISABLED
 }
 
+enum AdminImageGenerationAssetType {
+  INGREDIENT
+  RECIPE
+}
+
+enum AdminImageGenerationTargetType {
+  INGREDIENT
+  RECIPE_COVER
+  RECIPE_STEP
+  WIKI_STEP
+}
+
 enum UserStatus {
   ACTIVE
   DISABLED
@@ -535,8 +547,42 @@ model AdminAccount {
   recipeAssistantUpdates RecipeCookAssistant[] @relation("RecipeCookAssistantUpdater")
   nutritionSnapshotUpdates RecipeNutritionSnapshot[] @relation("RecipeNutritionSnapshotUpdater")
   ingredientImportJobs IngredientImportJob[]
+  imageGenerationCandidates AdminImageGenerationCandidate[]
+  updatedImageGenerationSettings AdminImageGenerationSettings[]
 
   @@map("admin_accounts")
+}
+
+model AdminImageGenerationSettings {
+  id                  Int      @id @default(1)
+  ingredientKeywords  String   @default("") @map("ingredient_keywords") @db.VarChar(1000)
+  recipeCoverKeywords String   @default("") @map("recipe_cover_keywords") @db.VarChar(1000)
+  recipeStepKeywords  String   @default("") @map("recipe_step_keywords") @db.VarChar(1000)
+  updatedByAdminId    Int?     @map("updated_by_admin_id")
+  updatedAt           DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  updatedByAdmin AdminAccount? @relation(fields: [updatedByAdminId], references: [id], onDelete: SetNull)
+
+  @@map("admin_image_generation_settings")
+}
+
+model AdminImageGenerationCandidate {
+  id               Int                          @id @default(autoincrement())
+  assetType        AdminImageGenerationAssetType  @map("asset_type")
+  targetType       AdminImageGenerationTargetType @map("target_type")
+  targetId         Int                          @map("target_id")
+  contentVersionId Int                          @default(0) @map("content_version_id")
+  stepOrder        Int                          @default(0) @map("step_order")
+  tempKey          String                       @unique @map("temp_key") @db.VarChar(80)
+  prompt           String                       @db.VarChar(2000)
+  createdByAdminId Int                          @map("created_by_admin_id")
+  createdAt        DateTime                     @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  createdBy AdminAccount @relation(fields: [createdByAdminId], references: [id], onDelete: Cascade)
+
+  @@unique([targetType, targetId, contentVersionId, stepOrder])
+  @@index([assetType, targetId, createdAt])
+  @@map("admin_image_generation_candidates")
 }
 
 model AdminMaterialImage {
@@ -2625,7 +2671,7 @@ model IdempotencyRecord {
   diningGroup DiningGroup?  @relation(fields: [diningGroupId], references: [id])
 
   @@index([userId, operationType])
-  @@index([adminId, operationType])
+  @@index([adminId, operationType, createdAt], map: "idempotency_records_admin_operation_created_idx")
   @@index([diningGroupId, operationType])
   @@index([operationId, operationType, userId, diningGroupId])
   @@index([expiresAt])
