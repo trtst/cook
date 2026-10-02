@@ -134,6 +134,12 @@ const router = createRouter({
           meta: { title: "系统菜谱" }
         },
         {
+          path: "recipes/image-generation",
+          name: "image-generation",
+          component: () => import("@/pages/ImageGenerationPage.vue"),
+          meta: { title: "图片生成" }
+        },
+        {
           path: "recipes/wiki",
           name: "recipe-wiki",
           component: () => import("@/pages/RecipeWikiPage.vue"),

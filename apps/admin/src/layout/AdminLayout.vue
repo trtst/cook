@@ -42,6 +42,7 @@ const activeMenu = computed(() => {
     route.path !== "/recipes/reports" &&
     route.path !== "/recipes/categories" &&
     route.path !== "/recipes/wiki" &&
+    route.path !== "/recipes/image-generation" &&
     route.path !== "/recipes/imports" &&
     route.path !== "/recipes/pending"
   ) {
@@ -137,6 +138,7 @@ function triggerHeaderRefresh() {
           </template>
           <el-menu-item index="/recipes/categories">系统菜谱分类</el-menu-item>
           <el-menu-item index="/recipes/list">系统菜谱</el-menu-item>
+          <el-menu-item index="/recipes/image-generation">图片生成</el-menu-item>
           <el-menu-item index="/recipes/wiki">Wiki 补充</el-menu-item>
           <el-menu-item index="/recipes/imports">菜谱导入中心</el-menu-item>
           <el-menu-item index="/recipes/pending">待审核菜谱</el-menu-item>
