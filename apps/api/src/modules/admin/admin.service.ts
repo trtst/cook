@@ -23,6 +23,7 @@ import type {
   AdminRecipeImageBackfillRequest,
   AdminRecipeImageBackfillResult,
   AdminRecipeImageExportItem,
+  AdminRecipeImportContentSyncResult,
   AdminRecipeWiki,
   AdminRecipeWikiNutrition,
   AdminRecipeWikiTag,
@@ -185,6 +186,47 @@ function recipeImportTempKeys(body: RecipeImportRecipeBody) {
       .map(value => value?.trim())
       .filter((value): value is string => Boolean(value))
   );
+}
+
+function readRecipeImportPrompts(jsonText: string) {
+  const empty = {
+    steps: [] as Array<{ text: string | null; imagePrompt: string | null }>,
+    assistantSteps: [] as Array<{ text: string | null; imagePrompt: string | null }>
+  };
+  try {
+    const document: unknown = JSON.parse(jsonText);
+    if (!document || typeof document !== "object" || Array.isArray(document)) return empty;
+    const root = document as Record<string, unknown>;
+    const recipe = root.recipe;
+    const wiki = root.wiki;
+    if (!recipe || typeof recipe !== "object" || Array.isArray(recipe)) return empty;
+    const content = (recipe as Record<string, unknown>).content;
+    if (!content || typeof content !== "object" || Array.isArray(content)) return empty;
+    const assistant = wiki && typeof wiki === "object" && !Array.isArray(wiki)
+      ? (wiki as Record<string, unknown>).assistant
+      : null;
+    const rawSteps = (content as Record<string, unknown>).steps;
+    const rawAssistantSteps = assistant && typeof assistant === "object" && !Array.isArray(assistant)
+      ? (assistant as Record<string, unknown>).steps
+      : null;
+    const readSteps = (rows: unknown) => {
+      if (!Array.isArray(rows)) return [] as Array<{ text: string | null; imagePrompt: string | null }>;
+      return rows.map(step => {
+        if (!step || typeof step !== "object" || Array.isArray(step)) return { text: null, imagePrompt: null };
+        const row = step as Record<string, unknown>;
+        return {
+          text: typeof row.text === "string" ? row.text.trim() : null,
+          imagePrompt: typeof row.imagePrompt === "string" && row.imagePrompt.trim() ? row.imagePrompt.trim() : null
+        };
+      });
+    };
+    return {
+      steps: readSteps(rawSteps),
+      assistantSteps: readSteps(rawAssistantSteps)
+    };
+  } catch {
+    return empty;
+  }
 }
 
 function toDateText(value: Date | null) {
@@ -4685,19 +4727,21 @@ export class AdminService {
       const rawBody = fromJson<RecipeImportRawBody>(currentItem.rawBodyJson);
       const previousRecipeBody = normalizeRecipeImportBody(fromJson<RecipeImportRecipeBody>(currentItem.recipeBodyJson));
       const previousTempKeys = recipeImportTempKeys(previousRecipeBody);
+      const sourcePrompts = readRecipeImportPrompts(rawBody.jsonText);
       const nextRecipeBody = await this.prepareRecipeImportBody(tx, body.recipeBody, true);
-      const submittedAssistantSteps = body.recipeBody.assistantSteps ?? [];
+      nextRecipeBody.steps = nextRecipeBody.steps.map((step, index) => ({
+        ...step,
+        imagePrompt: step.imagePrompt?.trim() || previousRecipeBody.steps[index]?.imagePrompt?.trim() || (
+          sourcePrompts.steps[index]?.text === step.text ? sourcePrompts.steps[index].imagePrompt : null
+        )
+      }));
       const previousAssistantSteps = previousRecipeBody.assistantSteps ?? [];
       nextRecipeBody.assistantSteps = (nextRecipeBody.assistantSteps ?? []).map((step, index) => {
-        const submittedStep = submittedAssistantSteps[index];
         const previousStep = previousAssistantSteps[index];
-        if (
-          !Object.prototype.hasOwnProperty.call(submittedStep ?? {}, "imagePrompt") &&
-          previousStep?.imagePrompt?.trim()
-        ) {
-          return { ...step, imagePrompt: previousStep.imagePrompt.trim() };
-        }
-        return step;
+        return {
+          ...step,
+          imagePrompt: step.imagePrompt?.trim() || previousStep?.imagePrompt?.trim() || sourcePrompts.assistantSteps[index]?.imagePrompt || null
+        };
       });
       const nextTempKeys = recipeImportTempKeys(nextRecipeBody);
       const staleTempKeys = Array.from(previousTempKeys).filter(key => !nextTempKeys.has(key));
@@ -5138,7 +5182,7 @@ export class AdminService {
           inspirationCategory: true,
           currentVersion: {
             select: {
-              versionTags: { where: { status: "CANDIDATE", tagCode: { in: [...recipeWikiTagCodes] } }, select: { id: true } },
+              versionTags: { where: { status: "CANDIDATE", source: { not: "AUTO" }, tagCode: { in: [...recipeWikiTagCodes] } }, select: { id: true } },
               cookAssistant: { select: { candidateJson: true, status: true } }
             }
           }
@@ -5164,6 +5208,193 @@ export class AdminService {
     };
   }
 
+  async syncRecipeContentFromImports(
+    recipeIds: UUID[],
+    operationId: OperationId,
+    adminId: UUID
+  ): Promise<AdminRecipeImportContentSyncResult> {
+    await this.requireSuperAdmin(adminId);
+    const uniqueIds = Array.from(new Set(recipeIds)).sort((left, right) => left - right);
+    if (!uniqueIds.length || uniqueIds.length > 100) throw new BadRequestException("一次最多同步 100 道菜谱");
+    const requestHash = JSON.stringify(uniqueIds);
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getAdminIdempotentResult<AdminRecipeImportContentSyncResult>(
+        tx, operationId, "admin-recipe:sync-import-content", adminId, requestHash
+      );
+      if (repeated) return repeated;
+      await startAdminIdempotentOperation(tx, operationId, "admin-recipe:sync-import-content", adminId, requestHash);
+      const items: AdminRecipeImportContentSyncResult["items"] = [];
+      for (const recipeId of uniqueIds) {
+        await tx.$executeRawUnsafe("SAVEPOINT admin_recipe_content_sync_item");
+        try {
+          await tx.$queryRaw`SELECT "id" FROM "recipes" WHERE "id" = ${recipeId} FOR UPDATE`;
+          const recipe = await tx.recipe.findUnique({
+            where: { id: recipeId },
+            include: {
+              currentVersion: {
+                include: {
+                  versionTags: true,
+                  cookAssistant: true,
+                  cookAssistantUnlocks: { where: { status: "CONSUMED" } }
+                }
+              }
+            }
+          });
+          if (!recipe || !recipe.isInspiration || !recipe.inspirationCategoryId || recipe.status !== "ACTIVE") {
+            throw new Error("不是正常的已发布系统菜谱");
+          }
+
+          const imports = await tx.recipeImportItem.findMany({
+            where: { recipeId, status: "PUBLISHED", job: { sourceType: "JSON" } },
+            select: { recipeBodyJson: true, rawBodyJson: true }
+          });
+          if (imports.length !== 1) {
+            throw new Error(imports.length === 0 ? "找不到唯一关联的已发布导入 JSON" : "关联了多份导入 JSON，无法确定同步来源");
+          }
+          const importBody = normalizeRecipeImportBody(fromJson<RecipeImportRecipeBody>(imports[0]!.recipeBodyJson));
+          if (!importBody.title.trim() || !importBody.ingredients.length || !importBody.steps.length) {
+            throw new Error("关联导入 JSON 的菜名、食材或步骤不完整");
+          }
+          const currentContent = versionToContent(recipe.currentVersion);
+          if (!currentContent.difficulty || !currentContent.duration) {
+            throw new Error("当前菜谱的难度或时长不完整，无法只同步指定正文项目");
+          }
+          if (importBody.steps.length !== currentContent.steps.length) {
+            throw new Error("导入步骤数量与当前步骤图槽位不一致");
+          }
+          const imageMismatch = currentContent.steps.some((step, index) => Boolean(step.imageUrl) && step.text !== importBody.steps[index]?.text);
+          if (imageMismatch) throw new Error("步骤图对应的步骤文字已变化，无法安全对位");
+          if (importBody.ingredients.some(item => !item.ingredientId || (!item.fuzzyText && !item.unitId))) {
+            throw new Error("导入 JSON 中有食材或单位尚未完成结构化匹配");
+          }
+
+          const sourcePrompts = readRecipeImportPrompts(fromJson<RecipeImportRawBody>(imports[0]!.rawBodyJson).jsonText);
+          const contentInput: AdminRecipeContentInput = {
+            name: importBody.title.trim(),
+            story: importBody.story,
+            baseServings: currentContent.baseServings,
+            difficulty: currentContent.difficulty,
+            duration: currentContent.duration,
+            estimatedCalories: currentContent.estimatedCalories,
+            tips: currentContent.tips,
+            keywords: importBody.keywords,
+            tools: importBody.tools ?? [],
+            ingredients: importBody.ingredients.map(item => ({
+              ingredientId: item.ingredientId!,
+              amount: item.fuzzyText
+                ? { kind: "FUZZY", text: item.fuzzyText }
+                : { kind: "EXACT", quantity: item.quantity ?? "", unitId: item.unitId! }
+            })),
+            steps: importBody.steps.map((step, index) => ({
+              text: step.text,
+              imageUrl: currentContent.steps[index]?.imageUrl ?? null,
+              imageTempKey: null,
+              imagePrompt: step.imagePrompt?.trim() || (
+                sourcePrompts.steps[index]?.text === step.text.trim() ? sourcePrompts.steps[index]?.imagePrompt : null
+              )
+            }))
+          };
+          const content = await this.buildAdminRecipeContent(
+            tx,
+            contentInput,
+            currentContent.steps.map(step => step.imageUrl)
+          );
+          this.assertAdminRecipeContent(content);
+
+          const nextVersion = await tx.recipeContentVersion.create({
+            data: this.buildAdminRecipeVersionCreateInput(content, recipe.coverImageUrl)
+          });
+          await loadRecipeNutritionSummary(tx, nextVersion.id, content);
+          if (recipe.currentVersion.versionTags.length) {
+            await tx.recipeVersionTag.createMany({
+              data: recipe.currentVersion.versionTags.map(({ id: _id, recipeVersionId: _versionId, createdAt: _createdAt, updatedAt: _updatedAt, ...tag }) => ({
+                ...tag,
+                recipeVersionId: nextVersion.id
+              }))
+            });
+          }
+          await replaceAutoRecipeVersionTags(tx, nextVersion.id, content);
+          const assistant = recipe.currentVersion.cookAssistant;
+          if (assistant) {
+            await tx.recipeCookAssistant.create({
+              data: {
+                recipeVersionId: nextVersion.id,
+                status: assistant.status,
+                candidateJson: assistant.candidateJson == null ? Prisma.DbNull : toJson(assistant.candidateJson),
+                snapshotJson: assistant.snapshotJson == null ? Prisma.DbNull : toJson(assistant.snapshotJson),
+                generatedAt: assistant.generatedAt,
+                lastAttemptAt: assistant.lastAttemptAt,
+                attemptCount: assistant.attemptCount,
+                lastError: assistant.lastError,
+                source: assistant.source,
+                isLocked: assistant.isLocked,
+                updatedByAdminId: assistant.updatedByAdminId
+              }
+            });
+          }
+          if (recipe.currentVersion.cookAssistantUnlocks.length) {
+            await tx.cookAssistantUnlock.createMany({
+              data: recipe.currentVersion.cookAssistantUnlocks.map(({ id: _id, recipeVersionId: _versionId, ...unlock }) => ({
+                ...unlock,
+                recipeVersionId: nextVersion.id,
+                countsTowardDailyLimit: false
+              }))
+            });
+          }
+          const updated = await tx.recipe.updateMany({
+            where: { id: recipeId, currentVersionId: recipe.currentVersionId, version: recipe.version },
+            data: {
+              currentVersionId: nextVersion.id,
+              title: content.name,
+              searchText: buildRecipeSearchText(content),
+              version: { increment: 1 }
+            }
+          });
+          if (updated.count !== 1) throw new ConflictException("菜谱已被更新，请刷新后重试");
+          await tx.auditEvent.create({
+            data: {
+              actorType: "ADMIN",
+              actorAdminId: adminId,
+              action: "RECIPE_CONTENT_SYNCED_FROM_IMPORT",
+              objectType: "RECIPE",
+              objectId: recipeId,
+              payload: { previousVersionId: recipe.currentVersionId, nextVersionId: nextVersion.id }
+            }
+          });
+          items.push({
+            recipeId,
+            status: "SYNCED",
+            contentVersionId: recipe.currentVersionId,
+            nextContentVersionId: nextVersion.id,
+            message: null
+          });
+          await tx.$executeRawUnsafe("RELEASE SAVEPOINT admin_recipe_content_sync_item");
+        } catch (error) {
+          await tx.$executeRawUnsafe("ROLLBACK TO SAVEPOINT admin_recipe_content_sync_item");
+          await tx.$executeRawUnsafe("RELEASE SAVEPOINT admin_recipe_content_sync_item");
+          items.push({
+            recipeId,
+            status: "SKIPPED",
+            contentVersionId: null,
+            nextContentVersionId: null,
+            message: error instanceof BadRequestException || error instanceof ConflictException
+              ? error.message
+              : error instanceof Error && error.constructor === Error
+                ? error.message
+                : "同步失败，请稍后重试"
+          });
+        }
+      }
+      const result: AdminRecipeImportContentSyncResult = {
+        syncedCount: items.filter(item => item.status === "SYNCED").length,
+        skippedCount: items.filter(item => item.status === "SKIPPED").length,
+        items
+      };
+      await completeAdminIdempotentOperation(tx, operationId, "admin-recipe:sync-import-content", adminId, requestHash, result);
+      return result;
+    });
+  }
+
   async confirmRecipeWikiCandidates(recipeIds: UUID[], operationId: OperationId, adminId: UUID): Promise<ConfirmAdminRecipeWikiCandidatesResult> {
     await this.requireSuperAdmin(adminId);
     const uniqueIds = Array.from(new Set(recipeIds)).sort((left, right) => left - right);
@@ -5185,7 +5416,7 @@ export class AdminService {
           select: {
             id: true,
             currentVersionId: true,
-            currentVersion: { select: { versionTags: { where: { status: "CANDIDATE", tagCode: { in: [...recipeWikiTagCodes] } }, select: { id: true } }, cookAssistant: true } }
+            currentVersion: { select: { versionTags: { where: { status: "CANDIDATE", source: { not: "AUTO" }, tagCode: { in: [...recipeWikiTagCodes] } }, select: { id: true } }, cookAssistant: true } }
           }
         });
         if (!recipe) throw new BadRequestException("存在无效或非正常菜谱");
@@ -5195,7 +5426,7 @@ export class AdminService {
         if (!hasTags && !hasAssistant) throw new ConflictException("所选菜谱没有待确认的 Wiki 候选，请刷新列表");
         if (hasTags) {
           await tx.recipeVersionTag.updateMany({
-            where: { recipeVersionId: recipe.currentVersionId, status: "CANDIDATE", tagCode: { in: [...recipeWikiTagCodes] } },
+            where: { recipeVersionId: recipe.currentVersionId, status: "CANDIDATE", source: { not: "AUTO" }, tagCode: { in: [...recipeWikiTagCodes] } },
             data: { status: "CONFIRMED", isLocked: true }
           });
         }

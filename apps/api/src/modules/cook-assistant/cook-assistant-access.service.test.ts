@@ -11,6 +11,7 @@ type UnlockRow = {
   unlockedOn: Date;
   unlockedAt: Date;
   status?: "RESERVED" | "CONSUMED";
+  countsTowardDailyLimit?: boolean;
 };
 
 type WikiRequestRow = {
@@ -44,8 +45,9 @@ class FakePrisma {
   private txQueue = Promise.resolve();
 
   cookAssistantUnlock = {
-    count: async ({ where }: { where: { userId: number; unlockedOn: Date } }) =>
-      this.unlockRows.filter(row => row.userId === where.userId && row.unlockedOn.toISOString() === where.unlockedOn.toISOString()).length,
+    count: async ({ where }: { where: { userId: number; unlockedOn: Date; countsTowardDailyLimit?: boolean } }) =>
+      this.unlockRows.filter(row => row.userId === where.userId && row.unlockedOn.toISOString() === where.unlockedOn.toISOString() &&
+        (where.countsTowardDailyLimit === undefined || (row.countsTowardDailyLimit ?? true) === where.countsTowardDailyLimit)).length,
     findFirst: async ({ where }: { where: { userId: number; recipeVersionId?: number; planItemId?: number; status?: string } }) =>
       this.unlockRows.find(row => {
         if (row.userId !== where.userId) return false;
@@ -53,7 +55,7 @@ class FakePrisma {
         if (where.recipeVersionId !== undefined) return row.recipeVersionId === where.recipeVersionId;
         return row.planItemId === where.planItemId;
       }) ?? null,
-    create: async ({ data }: { data: { userId: number; recipeVersionId?: number; planItemId?: number; unlockedOn: Date; status?: "RESERVED" | "CONSUMED" } }) => {
+    create: async ({ data }: { data: { userId: number; recipeVersionId?: number; planItemId?: number; unlockedOn: Date; status?: "RESERVED" | "CONSUMED"; countsTowardDailyLimit?: boolean } }) => {
       const row: UnlockRow = {
         id: this.nextUnlockId++,
         userId: data.userId,
@@ -61,7 +63,8 @@ class FakePrisma {
         planItemId: data.planItemId ?? null,
         unlockedOn: data.unlockedOn,
         unlockedAt: new Date("2026-09-13T03:00:00.000Z"),
-        status: data.status ?? "CONSUMED"
+        status: data.status ?? "CONSUMED",
+        countsTowardDailyLimit: data.countsTowardDailyLimit ?? true
       };
       this.unlockRows.push(row);
       return row;
@@ -305,4 +308,17 @@ test("does not treat a reserved Wiki request as an unlocked recipe assistant", a
     () => new CookAssistantAccessService(prisma as never).unlockRecipeVersion(7, 100, "2201", now),
     /Wiki 正在制作中/
   );
+});
+
+test("does not count inherited recipe unlocks toward the daily limit", async () => {
+  const prisma = new FakePrisma();
+  const unlockedOn = new Date("2026-09-13T00:00:00.000Z");
+  prisma.unlockRows.push(
+    { id: 1, userId: 7, recipeVersionId: 100, planItemId: null, unlockedOn, unlockedAt: now, status: "CONSUMED" },
+    { id: 2, userId: 7, recipeVersionId: 101, planItemId: null, unlockedOn, unlockedAt: now, status: "CONSUMED", countsTowardDailyLimit: false }
+  );
+
+  const usage = await new CookAssistantAccessService(prisma as never).getUsage(7, now);
+
+  assert.equal(usage.usedCount, 1);
 });

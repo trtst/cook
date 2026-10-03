@@ -237,6 +237,156 @@ test("republishing a published import item returns its linked recipe without cre
   assert.equal(recipeCreateCalls.count, 0);
 });
 
+test("content sync only considers published JSON import records", async () => {
+  const importQueries: Array<Record<string, unknown>> = [];
+  const tx = {
+    $executeRawUnsafe: async () => undefined,
+    idempotencyRecord: {
+      findFirst: async () => null,
+      create: async () => undefined,
+      updateMany: async () => ({ count: 1 })
+    },
+    recipe: {
+      findUnique: async () => ({
+        id: 10000001,
+        isInspiration: true,
+        inspirationCategoryId: 6001,
+        status: "ACTIVE",
+        currentVersionId: 10000002,
+        currentVersion: {}
+      })
+    },
+    recipeImportItem: {
+      findMany: async (query: Record<string, unknown>) => { importQueries.push(query); return []; }
+    },
+    auditEvent: { create: async () => undefined }
+  };
+  const service = createTransactionService(tx);
+
+  const result = await service.syncRecipeContentFromImports([10000001], "202610040001", 1);
+
+  assert.deepEqual(importQueries[0]?.where, {
+    recipeId: 10000001,
+    status: "PUBLISHED",
+    job: { sourceType: "JSON" }
+  });
+  assert.deepEqual(result.items[0]?.status, "SKIPPED");
+});
+
+test("content sync rebuilds automatic tags and carries access without recounting quota", async () => {
+  const tagCreates: Array<Array<Record<string, any>>> = [];
+  const tagDeletes: Array<Record<string, unknown>> = [];
+  const unlockCreates: Array<Array<Record<string, any>>> = [];
+  let recipeQuery: Record<string, any> | null = null;
+  const previousVersion = {
+    id: 10000002,
+    name: "旧菜谱名",
+    story: null,
+    baseServings: 2,
+    difficulty: "EASY",
+    duration: "BETWEEN_15_30",
+    estimatedCalories: null,
+    tips: null,
+    keywordsJson: [],
+    toolsJson: [],
+    ingredientsJson: [{ ingredientId: 1, ingredientName: "旧食材", source: "SYSTEM", categoryId: 1, amount: { kind: "FUZZY", text: "适量" } }],
+    stepsJson: [{ text: "完成烹饪。", imageUrl: null }],
+    versionTags: [
+      { id: 1, recipeVersionId: 10000002, tagCode: "PRIMARY_INGREDIENT", tagValue: "1", source: "AUTO", status: "CONFIRMED", confidence: 0.9, sortOrder: 0, isLocked: false, createdAt: new Date(), updatedAt: new Date() },
+      { id: 2, recipeVersionId: 10000002, tagCode: "DISH_ROLE", tagValue: "MAIN", source: "OPS", status: "CONFIRMED", confidence: 1, sortOrder: 0, isLocked: true, createdAt: new Date(), updatedAt: new Date() }
+    ],
+    cookAssistant: null,
+    cookAssistantUnlocks: [
+      { id: 11, userId: 7, recipeVersionId: 10000002, planItemId: null, unlockedOn: new Date("2026-10-04T00:00:00.000Z"), unlockedAt: new Date("2026-10-04T01:00:00.000Z"), status: "CONSUMED", countsTowardDailyLimit: true },
+      { id: 12, userId: 8, recipeVersionId: 10000002, planItemId: null, unlockedOn: new Date("2026-10-04T00:00:00.000Z"), unlockedAt: new Date("2026-10-04T02:00:00.000Z"), status: "RESERVED", countsTowardDailyLimit: true }
+    ]
+  };
+  const tx = {
+    $executeRawUnsafe: async () => undefined,
+    $queryRaw: async () => [],
+    idempotencyRecord: {
+      findFirst: async () => null,
+      create: async () => undefined,
+      updateMany: async () => ({ count: 1 })
+    },
+    recipe: {
+      findUnique: async (query: Record<string, any>) => {
+        recipeQuery = query;
+        const where = query.include.currentVersion.include.cookAssistantUnlocks.where;
+        return {
+          id: 10000001,
+          title: "旧菜谱名",
+          isInspiration: true,
+          inspirationCategoryId: 6001,
+          status: "ACTIVE",
+          currentVersionId: 10000002,
+          version: 4,
+          coverImageUrl: null,
+          currentVersion: {
+            ...previousVersion,
+            cookAssistantUnlocks: previousVersion.cookAssistantUnlocks.filter(row => row.status === where.status)
+          }
+        };
+      },
+      updateMany: async () => ({ count: 1 })
+    },
+    recipeImportItem: {
+      findMany: async () => [{
+        recipeBodyJson: buildBody({
+          title: "新菜谱名",
+          ingredients: [{ line: "新食材 适量", ingredientName: "新食材", ingredientId: 2, quantity: null, unitText: null, unitId: null, fuzzyText: "适量", note: null }]
+        }),
+        rawBodyJson: buildRawBody()
+      }]
+    },
+    recipeContentVersion: { create: async () => ({ id: 10000003 }) },
+    recipeVersionTag: {
+      createMany: async ({ data }: { data: Array<Record<string, any>> }) => { tagCreates.push(data); },
+      deleteMany: async ({ where }: { where: Record<string, unknown> }) => { tagDeletes.push(where); },
+      findMany: async () => [{ tagCode: "DISH_ROLE", tagValue: "MAIN", source: "OPS" }]
+    },
+    ingredient: {
+      findMany: async () => [{ id: 2, proteinType: null, category: { code: "VEGETABLE" }, isStaple: true, isSpicyIngredient: false, aliases: [] }]
+    },
+    nutrientSourceBatch: { findFirst: async () => null },
+    cookAssistantUnlock: {
+      createMany: async ({ data }: { data: Array<Record<string, any>> }) => { unlockCreates.push(data); }
+    },
+    auditEvent: { create: async () => undefined }
+  };
+  const service = createTransactionService(tx);
+  (service as any).buildAdminRecipeContent = async (_tx: unknown, input: any) => ({
+    name: input.name,
+    story: input.story,
+    baseServings: input.baseServings,
+    difficulty: input.difficulty,
+    duration: input.duration,
+    estimatedCalories: input.estimatedCalories,
+    tips: input.tips,
+    keywords: input.keywords,
+    tools: input.tools,
+    ingredients: input.ingredients.map((item: any) => ({
+      ingredientId: item.ingredientId,
+      ingredientName: "新食材",
+      source: "SYSTEM",
+      categoryId: 1,
+      amount: item.amount
+    })),
+    steps: input.steps.map((step: any) => ({ text: step.text, imageUrl: null, imagePrompt: step.imagePrompt }))
+  });
+  (service as any).assertAdminRecipeContent = () => undefined;
+
+  const result = await service.syncRecipeContentFromImports([10000001], "202610040099", 1);
+
+  assert.equal(result.syncedCount, 1);
+  assert.deepEqual((recipeQuery as any)?.include.currentVersion.include.cookAssistantUnlocks.where, { status: "CONSUMED" });
+  assert.deepEqual(tagDeletes, [{ recipeVersionId: 10000003, source: "AUTO" }]);
+  assert.ok(tagCreates.flat().some(tag => tag.recipeVersionId === 10000003 && tag.tagCode === "PRIMARY_INGREDIENT" && tag.tagValue === "2"));
+  assert.equal(unlockCreates.flat().length, 1);
+  assert.equal(unlockCreates.flat()[0]?.recipeVersionId, 10000003);
+  assert.equal(unlockCreates.flat()[0]?.countsTowardDailyLimit, false);
+});
+
 test("confirming Wiki candidates only confirms Wiki tags and preserves inferred primary ingredients", async () => {
   const updates: Array<Record<string, unknown>> = [];
   const updateData: Array<Record<string, unknown>> = [];
@@ -273,6 +423,7 @@ test("confirming Wiki candidates only confirms Wiki tags and preserves inferred 
   assert.deepEqual(updates.find(item => "status" in item), {
     recipeVersionId: 10000002,
     status: "CANDIDATE",
+    source: { not: "AUTO" },
     tagCode: { in: ["CUISINE", "DISH_STYLE", "MEAL_TYPE", "DISH_ROLE", "MAIN_PROTEIN_TYPE", "FLAVOR_PROFILE", "SPICE_LEVEL"] }
   });
   assert.deepEqual(updateData[0], { status: "CONFIRMED", isLocked: true });

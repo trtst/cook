@@ -32,6 +32,7 @@ import {
   AdminRecipeWikiExportDto,
   AdminRecipeWikiQuickFillDto,
   AdminRecipeWikiConfirmCandidatesDto,
+  AdminRecipeImportContentSyncDto,
   AdminRecipeWikiCandidateUpdateDto,
   DeleteRecipeImportItemDto,
   AdminRecipeWikiQueryDto,
@@ -123,6 +124,7 @@ import {
   AdminResetUserPasswordResultModel,
   AdminRecipeModel,
   AdminRecipeWikiConfirmCandidatesResultModel,
+  AdminRecipeImportContentSyncResultModel,
   AdminRecipeWikiImportResultModel,
   AdminRecipeWikiBatchExportDocumentModel,
   AdminRecipeWikiExportDocumentModel,
@@ -575,6 +577,19 @@ export class AdminController {
     @Body() body: AdminRecipeWikiConfirmCandidatesDto
   ) {
     return this.adminService.confirmRecipeWikiCandidates(body.recipeIds, operationId, request.admin.adminId).then(result => ok(result));
+  }
+
+  @Post("recipes/content/sync-import")
+  @UseGuards(AdminAuthGuard, SuperAdminGuard)
+  @ApiBearerAuth("AdminBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(AdminRecipeImportContentSyncResultModel, "从关联导入 JSON 批量同步系统菜谱正文")
+  syncRecipeContentFromImports(
+    @Req() request: RequestWithAdmin,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: AdminRecipeImportContentSyncDto
+  ) {
+    return this.adminService.syncRecipeContentFromImports(body.recipeIds, operationId, request.admin.adminId).then(result => ok(result));
   }
 
   @Put("recipes/:recipeId/wiki-candidate")

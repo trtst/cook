@@ -1873,6 +1873,18 @@ export interface ConfirmAdminRecipeWikiCandidatesResult {
   assistantNeedsReviewRecipeIds: UUID[];
 }
 
+export interface AdminRecipeImportContentSyncResult {
+  syncedCount: number;
+  skippedCount: number;
+  items: Array<{
+    recipeId: UUID;
+    status: "SYNCED" | "SKIPPED";
+    contentVersionId: UUID | null;
+    nextContentVersionId: UUID | null;
+    message: string | null;
+  }>;
+}
+
 export interface UpdateAdminRecipeWikiCandidateRequest {
   expectedContentVersionId: UUID;
   tags: RecipeImportTagDraft[];

@@ -2915,6 +2915,18 @@ export class AdminRecipeWikiConfirmCandidatesDto {
   recipeIds!: number[];
 }
 
+export class AdminRecipeImportContentSyncDto {
+  @ApiProperty({ type: [Number], minItems: 1, maxItems: 100, example: [10000001] })
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(100)
+  @ArrayUnique()
+  @Type(() => Number)
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  recipeIds!: number[];
+}
+
 export class DeleteRecipeImportItemDto {
   @ApiProperty({ example: 1 })
   @Type(() => Number)

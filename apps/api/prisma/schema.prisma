@@ -2103,6 +2103,7 @@ model CookAssistantUnlock {
   recipeVersionId Int?     @map("recipe_version_id")
   planItemId      Int?     @map("plan_item_id")
   status          CookAssistantUnlockStatus @default(CONSUMED)
+  countsTowardDailyLimit Boolean @default(true) @map("counts_toward_daily_limit")
   unlockedOn      DateTime @map("unlocked_on") @db.Date
   unlockedAt      DateTime @default(now()) @map("unlocked_at") @db.Timestamptz(3)
 

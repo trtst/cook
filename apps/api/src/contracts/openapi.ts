@@ -1449,6 +1449,20 @@ export class AdminRecipeWikiConfirmCandidatesResultModel {
   @ApiProperty({ type: [Number] }) assistantNeedsReviewRecipeIds!: number[];
 }
 
+export class AdminRecipeImportContentSyncItemModel {
+  @ApiProperty({ type: Number, minimum: 1 }) recipeId!: number;
+  @ApiProperty({ type: String, enum: ["SYNCED", "SKIPPED"] }) status!: string;
+  @ApiProperty({ type: Number, nullable: true, minimum: 1 }) contentVersionId!: number | null;
+  @ApiProperty({ type: Number, nullable: true, minimum: 1 }) nextContentVersionId!: number | null;
+  @ApiProperty(nullableString) message!: string | null;
+}
+
+export class AdminRecipeImportContentSyncResultModel {
+  @ApiProperty({ type: Number, minimum: 0 }) syncedCount!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) skippedCount!: number;
+  @ApiProperty({ type: [AdminRecipeImportContentSyncItemModel] }) items!: AdminRecipeImportContentSyncItemModel[];
+}
+
 export class AdminRecipeImagePromptModel {
   @ApiProperty({ type: Number, minimum: 1 }) order!: number;
   @ApiProperty(nullableString) imagePrompt!: string | null;

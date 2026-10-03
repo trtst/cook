@@ -493,9 +493,13 @@ export function rebuildJsonItemState(recipeBody: RecipeImportRecipeBody) {
     }
   });
   if (!recipeBody.steps.length) addIssue(errors, "steps", "至少需要一条制作步骤");
+  const stepPrompts = new Set<string>();
   recipeBody.steps.forEach((item, index) => {
     if (!item.text.trim()) addIssue(errors, `steps.${index}.text`, "制作步骤正文不能为空");
     if (item.imageUrl !== null && item.imageUrl !== undefined) sourceImageUrl(item.imageUrl, `steps.${index}.imageUrl`, errors);
+    const prompt = imagePrompt(item.imagePrompt, `steps.${index}.imagePrompt`, errors);
+    if (prompt && stepPrompts.has(prompt)) addIssue(errors, `steps.${index}.imagePrompt`, "同类步骤图片提示词不能重复");
+    if (prompt) stepPrompts.add(prompt);
   });
   parseTags(recipeBody.tags ?? [], errors);
   parseAssistantSteps({ steps: recipeBody.assistantSteps ?? [] }, errors);

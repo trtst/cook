@@ -86,7 +86,8 @@ export class CookAssistantAccessService {
     const usedCount = await this.prisma.cookAssistantUnlock.count({
       where: {
         userId,
-        unlockedOn
+        unlockedOn,
+        countsTowardDailyLimit: true
       }
     });
     return this.usageFromCount(usedCount, now);
@@ -303,7 +304,8 @@ export class CookAssistantAccessService {
     return tx.cookAssistantUnlock.count({
       where: {
         userId,
-        unlockedOn
+        unlockedOn,
+        countsTowardDailyLimit: true
       }
     });
   }
