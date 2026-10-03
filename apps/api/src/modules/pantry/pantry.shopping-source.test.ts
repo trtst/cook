@@ -61,7 +61,7 @@ test("plan demand summaries retain PLAN source type and a plan-scoped key", () =
   ], "EVENT", "PLAN", "501");
 
   assert.equal(result[0]?.sourceType, "PLAN");
-  assert.equal(result[0]?.sourceKey, "501:ingredient:7:EXACT:1");
+  assert.equal(result[0]?.sourceKey, "501:ingredient:7");
   assert.equal(result[0]?.quantityText, "2个");
 });
 
@@ -91,8 +91,8 @@ test("event-scoped demand summaries keep identical ingredients independent", () 
     }
   ], "EVENT", "EVENT", String(eventId));
 
-  assert.equal(build(501)[0]?.sourceKey, "501:ingredient:7:EXACT:1");
-  assert.equal(build(502)[0]?.sourceKey, "502:ingredient:7:EXACT:1");
+  assert.equal(build(501)[0]?.sourceKey, "501:ingredient:7");
+  assert.equal(build(502)[0]?.sourceKey, "502:ingredient:7");
 });
 
 test("plan demand preview applies current ingredient merge rules to fixed recipe content", async () => {

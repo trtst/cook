@@ -2728,6 +2728,7 @@ export interface MealPlanSummary {
   menuLocked: boolean;
   status: "PLANNED" | "COMPLETED" | "CANCELLED";
   version: number;
+  cookingStartedAt: IsoDateTime | null;
   completedAt: IsoDateTime | null;
   hasDiningEvent: boolean;
   diningEventId: UUID | null;
@@ -3331,6 +3332,7 @@ export interface ShoppingListDetailItem {
   categoryName: string | null;
   imageUrl: string | null;
   quantityText: string | null;
+  amount: RecipeAmountSnapshot | null;
   note: string | null;
   status: ShoppingListItemStatus;
   checkedAt: IsoDateTime | null;

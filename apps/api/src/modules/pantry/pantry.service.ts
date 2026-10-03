@@ -34,6 +34,7 @@ import type {
   OperationId,
   PageResult,
   RecipeContentSnapshot,
+  RecipeAmountSnapshot,
   ShoppingGapResponse,
   ShoppingGapPreviewItem,
   ShoppingGapWindow,
@@ -58,6 +59,26 @@ import { MedalService } from "../user/medal.service";
 
 function toIsoDate(value: Date) {
   return value.toISOString();
+}
+
+function toShoppingItemAmount(value: Prisma.JsonValue | null): RecipeAmountSnapshot | null {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return null;
+  if (value.kind === "FUZZY" && value.text === "适量") return { kind: "FUZZY", text: "适量" };
+  if (
+    value.kind !== "EXACT" ||
+    typeof value.quantity !== "string" ||
+    !/^\d+(?:\.\d+)?$/.test(value.quantity) ||
+    typeof value.unitId !== "number" ||
+    typeof value.unitName !== "string" ||
+    !["WEIGHT", "VOLUME", "COMMON", "PACKAGE"].includes(String(value.unitType))
+  ) return null;
+  return {
+    kind: "EXACT",
+    quantity: value.quantity,
+    unitId: value.unitId,
+    unitName: value.unitName,
+    unitType: value.unitType as Extract<RecipeAmountSnapshot, { kind: "EXACT" }>["unitType"]
+  };
 }
 
 function toPositiveInt(value: number | string | undefined, fallback: number) {
@@ -142,6 +163,7 @@ type EventGapSummaryItem = ShoppingGapPreviewItem & {
   sourceIngredientSort: number | null;
   sourceBatchKey?: string | null;
   sourceFacts?: ShoppingDemandSource[];
+  legacySourceKeys?: string[];
 };
 
 type RecipeShoppingSource = {
@@ -809,7 +831,10 @@ export class PantryService {
         select count(*)::int as "pendingCount"
         from (
           select
-            coalesce(item.ingredient_id::text, 'none') || ':' || lower(trim(item.name)) as group_key,
+            case
+              when item.ingredient_id is not null then item.ingredient_id::text
+              else 'none:' || lower(trim(item.name))
+            end as group_key,
             bool_and(item.status = 'BOUGHT') as is_done
           from shopping_items item
           inner join shopping_lists list on list.id = item.list_id
@@ -1207,14 +1232,25 @@ export class PantryService {
         sourceKey: { in: sourceKeys }
       },
       select: {
+        id: true,
         sourceKey: true,
-        sourceType: true,
         status: true,
-        removedByUserId: true
+        checkedAt: true
       }
     });
     const existingKeys = new Set(existing.map(item => item.sourceKey).filter((key): key is string => key !== null));
     const writes = demandItems.filter(line => !existingKeys.has(line.sourceKey));
+    const removedItems = existing.filter(item => item.status === "DELETED");
+    for (const item of removedItems) {
+      await tx.shoppingItem.update({
+        where: { id: item.id },
+        data: {
+          status: item.checkedAt ? "BOUGHT" : "OPEN",
+          removedAt: null,
+          removedByUserId: null
+        }
+      });
+    }
     const sizeBytes = writes.reduce((total, line) => {
       return total + sizeOfJson({
         userId,
@@ -1259,7 +1295,7 @@ export class PantryService {
       await upsertStorageLedger(tx, userId, "SHOPPING", created.id, sizeOfJson(created));
     }
 
-    if (writes.length) {
+    if (writes.length || removedItems.length) {
       await tx.shoppingList.update({
         where: { id: listId },
         data: { version: { increment: 1 } }
@@ -2259,7 +2295,7 @@ export class PantryService {
         : [item.sourceKey];
       const preparationStatus = event?.ingredientsReadyAt
         ? "READY"
-        : preparedKeys.has(item.sourceKey)
+        : preparedKeys.has(item.sourceKey) || (item.legacySourceKeys ?? []).some(key => preparedKeys.has(key))
           ? "HOME"
           : itemSourceKeys.length && itemSourceKeys.every(key => boughtKeys.has(key))
             ? "BOUGHT"
@@ -2268,8 +2304,45 @@ export class PantryService {
     });
   }
 
-  async previewPlanGap(userId: UUID, planItemId: UUID): Promise<ShoppingGapPreviewItem[]> {
-    return (await this.loadPlanGapSummary(this.prisma, userId, planItemId)).map(item => this.toShoppingGapPreviewItem(item));
+  async previewPlanGap(userId: UUID, planItemId: UUID, tx: Prisma.TransactionClient = this.prisma): Promise<ShoppingGapPreviewItem[]> {
+    const lines = await this.loadPlanGapSummary(tx, userId, planItemId);
+    const sourceKeys = lines.flatMap(line =>
+      line.sourceFacts?.length
+        ? line.sourceFacts.map(source => buildShoppingDemandFactKey(line.sourceKey, source))
+        : [line.sourceKey]
+    );
+    const boughtKeys = new Set(
+      sourceKeys.length
+        ? (await tx.shoppingItem.findMany({
+            where: {
+              userId,
+              sourceType: "PLAN",
+              sourceKey: { in: sourceKeys },
+              status: "BOUGHT"
+            },
+            select: { sourceKey: true }
+          })).map(item => item.sourceKey).filter((key): key is string => key !== null)
+        : []
+    );
+
+    return lines.map(item => {
+      const itemSourceKeys = item.sourceFacts?.length
+        ? item.sourceFacts.map(source => buildShoppingDemandFactKey(item.sourceKey, source))
+        : [item.sourceKey];
+      const preparationStatus = itemSourceKeys.length && itemSourceKeys.every(key => boughtKeys.has(key)) ? "BOUGHT" : "OPEN";
+      return { ...this.toShoppingGapPreviewItem(item), preparationStatus };
+    });
+  }
+
+  async getEventPreparationKeys(
+    tx: Prisma.TransactionClient,
+    userId: UUID,
+    eventId: UUID,
+    sourceKey: string
+  ): Promise<string[]> {
+    const lines = await this.loadEventGapSummary(tx, userId, eventId);
+    const line = lines.find(item => item.sourceKey === sourceKey);
+    return line ? [line.sourceKey, ...(line.legacySourceKeys ?? [])] : [];
   }
 
   private async loadEventGapSummary(
@@ -3352,6 +3425,7 @@ export class PantryService {
       categoryName: item.ingredient?.category.name ?? null,
       imageUrl: item.ingredient ? this.ingredientImageService.buildImageUrl(item.ingredient.imageUrl) : null,
       quantityText: item.quantityText,
+      amount: toShoppingItemAmount(item.amountJson),
       note: item.note,
       status: toListItemStatus(item.status),
       checkedAt: item.checkedAt ? toIsoDate(item.checkedAt) : null,
@@ -3654,7 +3728,8 @@ export class PantryService {
       sourceRecipeTitle: line.recipeTitle,
       sourceBaseServings: line.baseServings,
       sourceIngredientSort: line.ingredientSort,
-      sourceFacts: line.sourceFacts
+      sourceFacts: line.sourceFacts,
+      legacySourceKeys: line.legacySourceKeys
     }));
   }
 
@@ -3713,8 +3788,10 @@ export class PantryService {
   }
 
   private toShoppingGapPreviewItem(item: EventGapSummaryItem): ShoppingGapPreviewItem {
+    const previewItem = { ...item };
+    delete previewItem.legacySourceKeys;
     return {
-      ...item,
+      ...previewItem,
       ingredientId: item.ingredientId
     };
   }

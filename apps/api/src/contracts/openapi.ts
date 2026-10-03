@@ -2169,6 +2169,7 @@ export class MealPlanModel {
   @ApiProperty({ type: Boolean }) menuLocked!: boolean;
   @ApiProperty({ type: String, enum: ["PLANNED", "COMPLETED", "CANCELLED"] }) status!: string;
   @ApiProperty({ type: Number, minimum: 1 }) version!: number;
+  @ApiProperty({ ...dateTime, nullable: true }) cookingStartedAt!: string | null;
   @ApiProperty({ ...dateTime, nullable: true }) completedAt!: string | null;
   @ApiProperty({ type: Boolean }) hasDiningEvent!: boolean;
   @ApiProperty({ ...uuid, nullable: true }) diningEventId!: string | null;
@@ -2804,6 +2805,7 @@ export class ShoppingListDetailItemModel {
   @ApiProperty(nullableString) categoryName!: string | null;
   @ApiProperty(nullableString) imageUrl!: string | null;
   @ApiProperty(nullableString) quantityText!: string | null;
+  @ApiProperty({ type: RecipeAmountModel, nullable: true }) amount!: RecipeAmountModel | null;
   @ApiProperty(nullableString) note!: string | null;
   @ApiProperty({ type: String, enum: ["OPEN", "CHECKED", "REMOVED"] }) status!: string;
   @ApiProperty({ ...dateTime, nullable: true }) checkedAt!: string | null;

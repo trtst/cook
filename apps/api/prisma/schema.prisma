@@ -2030,6 +2030,7 @@ model MealPlanItem {
   menuSnapshot Json           @map("menu_snapshot")
   note         String?        @db.VarChar(255)
   menuLockedAt DateTime?      @map("menu_locked_at") @db.Timestamptz(3)
+  cookingStartedAt DateTime?  @map("cooking_started_at") @db.Timestamptz(3)
   status       MealPlanStatus @default(PLANNED)
   completedAt  DateTime?      @map("completed_at") @db.Timestamptz(3)
   cancelledAt  DateTime?      @map("cancelled_at") @db.Timestamptz(3)

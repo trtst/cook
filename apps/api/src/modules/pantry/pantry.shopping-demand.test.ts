@@ -57,7 +57,7 @@ test("full shopping demand merges same ingredient and unit without reading inven
     sourceTitles: line.sourceTitles
   })), [
     {
-      sourceKey: "ingredient:7:EXACT:1",
+      sourceKey: "ingredient:7",
       ingredientId: 7,
       ingredientName: "鸡蛋",
       quantityText: "3个",
@@ -65,7 +65,7 @@ test("full shopping demand merges same ingredient and unit without reading inven
       sourceTitles: ["番茄炒蛋", "紫菜蛋花汤"]
     },
     {
-      sourceKey: "ingredient:8:FUZZY:适量:501:v2002:3",
+      sourceKey: "ingredient:8",
       ingredientId: 8,
       ingredientName: "盐",
       quantityText: "适量",
@@ -136,11 +136,11 @@ test("scoped demand source keys keep plan and event writes independent", () => {
     amount: { kind: "EXACT" as const, quantity: "2", unitId: 1, unitName: "个", unitType: "COMMON" as const }
   };
 
-  assert.equal(buildShoppingDemandLines([source], "501")[0]?.sourceKey, "501:ingredient:7:EXACT:1");
-  assert.equal(buildShoppingDemandLines([source], "502")[0]?.sourceKey, "502:ingredient:7:EXACT:1");
+  assert.equal(buildShoppingDemandLines([source], "501")[0]?.sourceKey, "501:ingredient:7");
+  assert.equal(buildShoppingDemandLines([source], "502")[0]?.sourceKey, "502:ingredient:7");
 });
 
-test("shopping demand preserves decimal precision, separates units, and keeps fuzzy text", () => {
+test("shopping demand preserves decimal precision and uses fuzzy text for mixed units", () => {
   const base = {
     sourceId: 501,
     sourceTitle: "周三晚餐",
@@ -163,13 +163,12 @@ test("shopping demand preserves decimal precision, separates units, and keeps fu
   ]);
 
   assert.deepEqual(lines.map(line => [line.ingredientName, line.quantityText]), [
-    ["番茄", "0.12千克"],
-    ["番茄", "1个"],
+    ["番茄", "适量"],
     ["盐", "适量"]
   ]);
 });
 
-test("fuzzy demand keeps same-text amounts separate across recipe sources", () => {
+test("fuzzy demand combines same ingredients across recipe sources", () => {
   const base = {
     sourceId: 501,
     sourceTitle: "周三晚餐",
@@ -187,6 +186,6 @@ test("fuzzy demand keeps same-text amounts separate across recipe sources", () =
     { ...base, recipeTitle: "紫菜蛋花汤", sourceVersionId: 2002, ingredientSort: 1 }
   ]);
 
-  assert.equal(lines.length, 2);
-  assert.deepEqual(lines.map(line => line.sourceTitles), [["番茄炒蛋"], ["紫菜蛋花汤"]]);
+  assert.equal(lines.length, 1);
+  assert.deepEqual(lines[0]?.sourceTitles, ["番茄炒蛋", "紫菜蛋花汤"]);
 });

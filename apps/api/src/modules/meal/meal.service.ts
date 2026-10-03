@@ -1636,6 +1636,9 @@ export class MealService {
       if (current.diningEvent && current.diningEvent.status !== "COMPLETED") {
         throw new ConflictException("关联饭局需由发起人确认完成用餐");
       }
+      if (current.status !== "COMPLETED" && !current.cookingStartedAt && current.diningEvent?.status !== "COMPLETED") {
+        throw new ConflictException("请先开始做饭再完成计划");
+      }
 
       const item =
         current.status === "COMPLETED"
@@ -1657,6 +1660,46 @@ export class MealService {
 
       const result = this.toMealPlanSummary(item);
       await completeIdempotentOperation(tx, operationId, "meal-plan:complete", userId, null, requestHash, result);
+      return result;
+    }, { maxWait: 15_000, timeout: 20_000 });
+  }
+
+  async startMealPlanCooking(userId: UUID, planItemId: UUID, operationId: OperationId) {
+    const requestHash = String(planItemId);
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getIdempotentResult<MealPlanSummary>(tx, operationId, "meal-plan:start-cooking", userId, null, requestHash);
+      if (repeated) return repeated;
+      await startIdempotentOperation(tx, operationId, "meal-plan:start-cooking", userId, null, requestHash);
+
+      await tx.$queryRaw`SELECT "id" FROM "meal_plan_items" WHERE "id" = ${planItemId} FOR UPDATE`;
+      const current = await tx.mealPlanItem.findUnique({
+        where: { id: planItemId },
+        include: mealPlanInclude
+      });
+      if (!current || current.userId !== userId) throw new NotFoundException("计划不存在");
+      if (current.status === "CANCELLED") throw new ConflictException("已取消计划不能开始做饭");
+      if (current.status === "COMPLETED") throw new ConflictException("已完成计划不能开始做饭");
+      if (current.diningEvent) throw new ConflictException("请在饭局详情开始做饭");
+      if (!current.menuLockedAt) throw new ConflictException("请先确认菜单");
+
+      let plan = current;
+      if (!current.cookingStartedAt) {
+        const preparationItems = await this.pantryService.previewPlanGap(userId, planItemId, tx);
+        if (preparationItems.some(item => item.preparationStatus === "OPEN")) {
+          throw new ConflictException("请先将所有所需食材标记为已买");
+        }
+        plan = await tx.mealPlanItem.update({
+          where: { id: current.id },
+          data: {
+            cookingStartedAt: new Date(),
+            version: { increment: 1 }
+          },
+          include: mealPlanInclude
+        });
+      }
+
+      const result = this.toMealPlanSummary(plan);
+      await completeIdempotentOperation(tx, operationId, "meal-plan:start-cooking", userId, null, requestHash, result);
       return result;
     }, { maxWait: 15_000, timeout: 20_000 });
   }
@@ -3032,23 +3075,27 @@ export class MealService {
       const current = await this.loadDiningEventRow(tx, eventId);
       if (!current || current.userId !== userId) throw new NotFoundException("饭局不存在");
       this.assertDiningEventPreparationOpen(current);
-      const currentItems = await this.pantryService.previewEventGap(userId, eventId);
-      if (!currentItems.some(item => item.sourceKey === sourceKey)) {
+      const preparationKeys = await this.pantryService.getEventPreparationKeys(tx, userId, eventId, sourceKey);
+      if (!preparationKeys.length) {
         throw new BadRequestException("食材已不在当前菜单中，请刷新后重试");
       }
 
-      const existing = await tx.diningEventPreparation.findUnique({
-        where: { diningEventId_sourceKey: { diningEventId: eventId, sourceKey } },
-        select: { id: true }
+      const existing = await tx.diningEventPreparation.findMany({
+        where: { diningEventId: eventId, sourceKey: { in: preparationKeys } },
+        select: { sourceKey: true }
       });
-      const changed = isPresent ? !existing : Boolean(existing);
+      const existingKeys = new Set(existing.map(item => item.sourceKey));
+      const changed = isPresent
+        ? existingKeys.size !== 1 || !existingKeys.has(sourceKey)
+        : existingKeys.size > 0;
+      if (changed) {
+        await tx.diningEventPreparation.deleteMany({
+          where: { diningEventId: eventId, sourceKey: { in: preparationKeys } }
+        });
+      }
       if (changed && isPresent) {
         await tx.diningEventPreparation.create({
           data: { diningEventId: eventId, sourceKey, confirmedByUserId: userId }
-        });
-      } else if (changed) {
-        await tx.diningEventPreparation.delete({
-          where: { diningEventId_sourceKey: { diningEventId: eventId, sourceKey } }
         });
       }
       if (changed) {
@@ -3776,6 +3823,7 @@ export class MealService {
       menuLocked: isMealPlanMenuLocked(item),
       status: item.status,
       version: item.version,
+      cookingStartedAt: item.cookingStartedAt ? toIsoDate(item.cookingStartedAt) : null,
       completedAt: item.completedAt ? toIsoDate(item.completedAt) : null,
       hasDiningEvent: Boolean(item.diningEvent),
       diningEventId: item.diningEvent?.id ?? null,

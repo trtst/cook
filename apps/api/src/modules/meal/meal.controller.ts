@@ -344,6 +344,19 @@ export class MealController {
     return this.mealService.completeMealPlan(request.user.userId, planItemId, operationId).then(result => ok(result));
   }
 
+  @Post("meal-plans/:planItemId/start-cooking")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(MealPlanModel, "计划 owner 在所需食材已准备后开始做饭")
+  startMealPlanCooking(
+    @Req() request: RequestWithUser,
+    @Param("planItemId", ParseIntPipe) planItemId: number,
+    @ReadIdempotencyKey() operationId: string
+  ) {
+    return this.mealService.startMealPlanCooking(request.user.userId, planItemId, operationId).then(result => ok(result));
+  }
+
   @Post("meal-plans/:planItemId/cancel")
   @UseGuards(UserAuthGuard)
   @ApiBearerAuth("UserBearerAuth")

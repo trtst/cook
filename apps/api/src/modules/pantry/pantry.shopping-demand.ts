@@ -24,6 +24,7 @@ export interface ShoppingDemandEvent {
 
 export interface ShoppingDemandLine {
   sourceKey: string;
+  legacySourceKeys: string[];
   ingredientId: number | null;
   ingredientName: string;
   amount: RecipeAmountSnapshot;
@@ -50,10 +51,9 @@ export function parseShoppingSourceId(sourceKey: string | null | undefined): num
 }
 
 export function buildShoppingDemandFactKey(lineSourceKey: string, source: ShoppingDemandSource) {
-  const scopedKey = lineSourceKey.startsWith(`${source.sourceId}:`)
-    ? lineSourceKey
-    : `${source.sourceId}:${lineSourceKey}`;
-  return `${scopedKey}:r${source.recipeId ?? "x"}:v${source.sourceVersionId}:i${source.ingredientSort}`;
+  const sourceScope = parseShoppingSourceId(lineSourceKey) ?? source.sourceId;
+  const legacyLineKey = buildShoppingDemandLineKey(source, String(sourceScope));
+  return `${legacyLineKey}:r${source.recipeId ?? "x"}:v${source.sourceVersionId}:i${source.ingredientSort}`;
 }
 
 function decimal(value: string) {
@@ -86,6 +86,13 @@ function ingredientKey(source: ShoppingDemandSource) {
     : `ingredient:${source.ingredientId}`;
 }
 
+function buildShoppingDemandLineKey(source: ShoppingDemandSource, scopeKey?: string) {
+  const keyBase = `${scopeKey ? `${scopeKey}:` : ""}${ingredientKey(source)}`;
+  return source.amount.kind === "EXACT"
+    ? `${keyBase}:EXACT:${source.amount.unitId}`
+    : `${keyBase}:FUZZY:${source.amount.text}:${source.sourceId}:v${source.sourceVersionId}:${source.ingredientSort}`;
+}
+
 function appendSource(line: ShoppingDemandLine, source: ShoppingDemandSource) {
   line.sourceFacts.push(source);
   line.sourceCount += 1;
@@ -109,23 +116,28 @@ function appendSource(line: ShoppingDemandLine, source: ShoppingDemandSource) {
 
 export function buildShoppingDemandLines(sources: ShoppingDemandSource[], scopeKey?: string): ShoppingDemandLine[] {
   const groups = new Map<string, ShoppingDemandLine>();
-  const prefix = scopeKey ? `${scopeKey}:` : "";
 
   for (const source of sources) {
-    const keyBase = `${prefix}${ingredientKey(source)}`;
-    const sourceKey = source.amount.kind === "EXACT"
-      ? `${keyBase}:EXACT:${source.amount.unitId}`
-      : `${keyBase}:FUZZY:${source.amount.text}:${source.sourceId}:v${source.sourceVersionId}:${source.ingredientSort}`;
+    const sourceKey = `${scopeKey ? `${scopeKey}:` : ""}${ingredientKey(source)}`;
+    const legacySourceKey = buildShoppingDemandLineKey(source, scopeKey);
     const current = groups.get(sourceKey);
     if (current) {
-      if (current.amount.kind === "EXACT" && source.amount.kind === "EXACT") {
+      if (
+        current.amount.kind === "EXACT" &&
+        source.amount.kind === "EXACT" &&
+        current.amount.unitId === source.amount.unitId
+      ) {
         current.amount = {
           ...current.amount,
           quantity: addDecimal(current.amount.quantity, source.amount.quantity)
         };
         current.quantityText = formatAmount(current.amount);
+      } else {
+        current.amount = { kind: "FUZZY", text: "适量" };
+        current.quantityText = "适量";
       }
       appendSource(current, source);
+      if (!current.legacySourceKeys.includes(legacySourceKey)) current.legacySourceKeys.push(legacySourceKey);
       if (source.updatedAt > current.updatedAt) current.updatedAt = source.updatedAt;
       continue;
     }
@@ -153,7 +165,8 @@ export function buildShoppingDemandLines(sources: ShoppingDemandSource[], scopeK
       recipeTitle: source.recipeTitle,
       baseServings: source.baseServings,
       ingredientSort: source.ingredientSort,
-      sourceFacts: [source]
+      sourceFacts: [source],
+      legacySourceKeys: [legacySourceKey]
     };
     groups.set(sourceKey, line);
   }

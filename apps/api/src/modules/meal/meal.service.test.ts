@@ -1010,10 +1010,10 @@ test("dining event schedule update moves the linked plan to the scheduled time r
     rescheduleEventReminder: async () => {}
   } as never);
 
-  await service.updateDiningEventSchedule({}, 9, 901, "2001", 1, "2026-10-01T15:10:00.000Z", null);
+  await service.updateDiningEventSchedule({}, 9, 901, "2001", 1, "2099-10-01T15:10:00.000Z", null);
 
   assert.equal(prisma.plan.mealSlot, "LATE_NIGHT");
-  assert.equal(planDateText(prisma.plan.planDate), "2026-10-01");
+  assert.equal(planDateText(prisma.plan.planDate), "2099-10-01");
   assert.equal(prisma.plan.title, "夜宵饮食计划");
   assert.equal(prisma.planUpdates.length, 1);
 });
@@ -1022,13 +1022,14 @@ test("dining event schedule update rejects a slot that already has another plan"
   const prisma = new FakeDiningSchedulePrisma();
   prisma.conflictPlan = diningSchedulePlan({
     id: 777,
+    planDate: new Date("2099-10-01T00:00:00.000Z"),
     mealSlot: "LATE_NIGHT",
     title: "已有夜宵"
   });
   const service = new MealService(prisma as never, {} as never, {} as never, {} as never, {} as never, {} as never, {} as never);
 
   await assert.rejects(
-    () => service.updateDiningEventSchedule({}, 9, 901, "2002", 1, "2026-10-01T15:10:00.000Z", null),
+    () => service.updateDiningEventSchedule({}, 9, 901, "2002", 1, "2099-10-01T15:10:00.000Z", null),
     error => error instanceof Error && error.message === "该时间对应的餐次已有安排"
   );
 
