@@ -35,7 +35,7 @@
     <view class="condition-group">
       <view class="toggle-row" :class="{ 'toggle-row--disabled': loading }" @click="toggleFridgePreferred">
         <view class="toggle-row__head">
-          <text class="condition-group__title">优先消耗冰箱食材</text>
+          <text class="condition-group__title">优先用家里食材</text>
           <view class="toggle-row__check">
             <text class="toggle-row__state">{{ fridgePreferred ? "这轮优先" : "暂不优先" }}</text>
             <text
@@ -44,7 +44,7 @@
             />
           </view>
         </view>
-        <text class="condition-group__description">只影响这一次随机和换菜，不会改动平时偏好。</text>
+        <text class="condition-group__description">搭配时优先考虑标记为“家里有”的食材，只影响本次。</text>
       </view>
     </view>
 

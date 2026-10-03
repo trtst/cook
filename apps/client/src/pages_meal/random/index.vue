@@ -554,10 +554,12 @@ async function openPlanSheet() {
   planSheetVisible.value = true;
 }
 
-function handlePlanSuccess() {
+function handlePlanSuccess(payload: { planItemId: UUID; planDate: string }) {
   state.value.pageStatus = "COMPLETED";
   planSheetVisible.value = false;
-  void uniPlatform.navigation.navigateTo("/pages_meal/plan/index");
+  void uniPlatform.navigation.navigateTo(
+    `/pages_meal/detail/index?planItemId=${encodeURIComponent(String(payload.planItemId))}&planDate=${encodeURIComponent(payload.planDate)}`
+  );
 }
 
 function buildCurrentItems(targetSlotId: string) {
