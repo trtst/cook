@@ -14,12 +14,12 @@
 - 替换/删除候选不删除旧发布图片；固定版本和历史引用仍可能使用旧 URL。
 - 方舟请求由 API 设置 1K 分辨率和 JPEG 输出，比例按目标位置确定：食材 1:1，系统菜谱封面 4:3，制作步骤图和 Wiki 步骤图默认 16:9。候选图由 API 自动处理：食材 500×500 且 ≤250 KB；菜谱图片 ≤500 KB；封面裁切为 4:3；步骤图不裁切并保留 16:9。
 - 生图请求必须带数字字符串 `Idempotency-Key`；API 按管理员以数据库记录执行每分钟最多 10 次的限流。同键重复请求返回首次候选结果，失败请求需使用新键重试。
-- 缺图菜谱筛选由 SQL 在数据库侧判断并分页，应用层只加载当前页菜谱正文/Wiki；候选行通过白名单字段映射后返回。
+- 缺图菜谱筛选由 SQL 在数据库侧判断并分页，应用层只加载当前页菜谱正文/Wiki；候选行通过白名单字段映射后返回。 菜谱列表筛选为 `ALL/ANY/COVER/STEP/WIKI_STEP`，除 `ALL` 外均按对应适用图片槽的缺失状态在数据库侧计数并分页。
 - 候选替换以独立幂等记录覆盖目标写入和候选行删除，重复请求返回首次替换结果。
 
 ## Provider 边界
 
-Admin 只调用 `/admin/image-generation/*`。生图页下拉选择的服务作为跨管理员共享默认值保存，API 通过 `ImageGenerationProvider` 将生成请求路由到 Ark Seedream 或火山视觉智能通用 3.0；凭据和协议适配都留在 API，不改变 Admin 页面其余候选和目标回填契约。Ark 使用 `ARK_API_KEY`、`ARK_IMAGE_MODEL`、可选 `ARK_IMAGE_ENDPOINT`、`ARK_IMAGE_RESOLUTION`、`ARK_IMAGE_OUTPUT_FORMAT` 和 `ARK_IMAGE_WATERMARK`；视觉智能使用 API Key 方式，凭据放在 API 环境变量 `VOLCENGINE_CV_API_KEY`，固定请求 `https://openapi.cv.volces.com/api/common/v3/process`，`req_key=high_aes_general_v30l_zt2i`。视觉智能 Provider 在进程内排队，并通过同一 PostgreSQL 数据库上的会话级 advisory lock 在多个 API 进程间串行；数据库不可用或排队超过 10 分钟时拒绝请求。锁持有期间不打开数据库事务。两者都返回短期 URL，由 API 下载后存入现有候选临时 OSS。
+Admin 只调用 `/admin/image-generation/*`。生图页下拉选择的服务作为跨管理员共享默认值保存，API 通过 `ImageGenerationProvider` 将生成请求路由到 Ark Seedream 或火山视觉智能通用 3.0；凭据和协议适配都留在 API，不改变 Admin 页面其余候选和目标回填契约。Ark 使用 `ARK_API_KEY`、`ARK_IMAGE_MODEL`、可选 `ARK_IMAGE_ENDPOINT`、`ARK_IMAGE_RESOLUTION`、`ARK_IMAGE_OUTPUT_FORMAT` 和 `ARK_IMAGE_WATERMARK`；视觉智能使用 API Key 方式，凭据放在 API 环境变量 `VOLCENGINE_CV_API_KEY`，固定请求 `https://openapi.cv.volces.com/api/common/v3/process`，`req_key=high_aes_general_v30l_zt2i`。 `logo_info` 使用 `add_logo=true` 并将 `logo_text_content` 设为“炊火记”。视觉智能 Provider 在进程内排队，并通过同一 PostgreSQL 数据库上的会话级 advisory lock 在多个 API 进程间串行；数据库不可用或排队超过 10 分钟时拒绝请求。锁持有期间不打开数据库事务。两者都返回短期 URL，由 API 下载后存入现有候选临时 OSS。
 
 ## 持久化和临时数据
 
