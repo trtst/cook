@@ -124,7 +124,7 @@ const assistantStatusLabel: Record<AdminRecipeDetail["assistantState"]["status"]
   FAILED: "生成失败"
 };
 const hasWikiCandidate = computed(() => Boolean(
-  detail.value && (detail.value.assistantState.hasCandidate || detail.value.wiki.tags.some(tag => tag.status === "CANDIDATE"))
+  detail.value && (detail.value.assistantState.hasCandidate || detail.value.wiki.tags.some(tag => tag.status === "CANDIDATE" && tag.source !== "AUTO"))
 ));
 const wikiQualityStatusText: Record<string, string> = { COMPLETE: "已完成", INCOMPLETE: "待补充" };
 const wikiNutritionStatusText: Record<string, string> = {

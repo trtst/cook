@@ -20,6 +20,18 @@ export interface ConfirmAdminRecipeWikiCandidatesResult {
   assistantNeedsReviewRecipeIds: UUID[];
 }
 
+export interface AdminRecipeImportContentSyncResult {
+  syncedCount: number;
+  skippedCount: number;
+  items: Array<{
+    recipeId: UUID;
+    status: "SYNCED" | "SKIPPED";
+    contentVersionId: UUID | null;
+    nextContentVersionId: UUID | null;
+    message: string | null;
+  }>;
+}
+
 export interface UpdateAdminRecipeWikiCandidatePayload {
   expectedContentVersionId: UUID;
   tags: Array<{ tagCode: string; tagValue: string }>;
@@ -540,6 +552,13 @@ export const recipeApi = {
   },
   confirmWikiCandidates(recipeIds: UUID[], operationId: OperationId) {
     return requestData<ConfirmAdminRecipeWikiCandidatesResult>("/admin/recipes/wiki/confirm-candidates", {
+      method: "POST",
+      body: { recipeIds },
+      idempotencyKey: operationId
+    });
+  },
+  syncContentFromImports(recipeIds: UUID[], operationId: OperationId) {
+    return requestData<AdminRecipeImportContentSyncResult>("/admin/recipes/content/sync-import", {
       method: "POST",
       body: { recipeIds },
       idempotencyKey: operationId

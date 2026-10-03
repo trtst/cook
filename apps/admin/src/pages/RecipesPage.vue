@@ -21,6 +21,7 @@ const blockedRecipeCount = ref(0);
 const blockedView = ref(false);
 const exporting = ref(false);
 const confirmingCandidates = ref(false);
+const syncingImportedContent = ref(false);
 let requestId = 0;
 
 const query = reactive({
@@ -151,6 +152,49 @@ async function confirmSelectedCandidates() {
     ElMessage.error(error instanceof Error ? error.message : "批量确认 Wiki 候选失败");
   } finally {
     confirmingCandidates.value = false;
+  }
+}
+
+async function syncSelectedImportedContent() {
+  const recipeIds = Array.from(selectedRecipes.value);
+  if (!recipeIds.length || syncingImportedContent.value) return;
+  if (recipeIds.length > 100) {
+    ElMessage.warning("一次最多同步 100 道菜谱，请减少勾选数量");
+    return;
+  }
+  try {
+    await ElMessageBox.confirm(
+      `将从每道菜谱唯一关联的已发布导入 JSON 同步正文，创建新版本。当前封面图、步骤图、Wiki 和分类会保留；关联不明确或步骤图片无法安全对位的菜谱会跳过。确认同步 ${recipeIds.length} 道菜谱？`,
+      "批量同步导入正文",
+      { type: "warning", confirmButtonText: "开始同步", cancelButtonText: "取消" }
+    );
+  } catch (error) {
+    if (error !== "cancel" && error !== "close") ElMessage.error(error instanceof Error ? error.message : "同步失败");
+    return;
+  }
+  syncingImportedContent.value = true;
+  try {
+    const result = await recipeApi.syncContentFromImports(recipeIds, createOperationId());
+    selectedRecipes.value.clear();
+    selectedCandidateRecipes.value.clear();
+    await loadRecipes();
+    if (result.skippedCount) {
+      const skipped = result.items
+        .filter(item => item.status === "SKIPPED")
+        .map(item => `${item.recipeId}：${item.message || "未同步"}`)
+        .join("\n");
+      await ElMessageBox.alert(
+        `成功同步 ${result.syncedCount} 道，跳过 ${result.skippedCount} 道。\n\n${skipped}`,
+        "导入正文同步结果",
+        { confirmButtonText: "知道了", customClass: "recipe-import-sync-result" }
+      );
+    } else {
+      ElMessage.success(`已从导入 JSON 同步 ${result.syncedCount} 道菜谱正文`);
+    }
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : "批量同步导入正文失败");
+  } finally {
+    syncingImportedContent.value = false;
   }
 }
 
@@ -320,10 +364,18 @@ onMounted(() => {
         <el-button
           type="success"
           :loading="confirmingCandidates"
-          :disabled="selectedCandidateRecipes.size === 0 || exporting"
+          :disabled="selectedCandidateRecipes.size === 0 || exporting || syncingImportedContent"
           @click="confirmSelectedCandidates"
         >
           一键确认候选（{{ selectedCandidateRecipes.size }}）
+        </el-button>
+        <el-button
+          type="warning"
+          :loading="syncingImportedContent"
+          :disabled="selectedRecipes.size === 0 || confirmingCandidates || exporting"
+          @click="syncSelectedImportedContent"
+        >
+          批量同步导入正文（{{ selectedRecipes.size }}）
         </el-button>
         <el-button text @click="toggleCurrentPageSelection">
           {{ allCurrentPageRecipesSelected ? "取消本页全选" : "全选当前页" }}
