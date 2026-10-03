@@ -88,7 +88,7 @@ export class VolcengineVisualImageGenerationProvider implements ImageGenerationP
             width,
             height,
             return_url: true,
-            logo_info: { add_logo: true, position: 0, language: 0, opacity: 1 }
+            logo_info: { add_logo: true, position: 0, language: 0, opacity: 1, logo_text_content: "炊火记" }
           }),
           signal: AbortSignal.timeout(120_000)
         });

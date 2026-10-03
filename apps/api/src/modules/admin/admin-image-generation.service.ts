@@ -89,7 +89,7 @@ export class AdminImageGenerationService {
     });
   }
 
-  async listTargets(input: { type: ImageType; categoryId?: number; missingOnly?: boolean; page?: number; pageSize?: number }) {
+  async listTargets(input: { type: ImageType; categoryId?: number; missingOnly?: boolean; recipeImageFilter?: "ALL" | "ANY" | "COVER" | "STEP" | "WIKI_STEP"; page?: number; pageSize?: number }) {
     const page = input.page ?? 1;
     const pageSize = input.pageSize ?? 20;
     const skip = (page - 1) * pageSize;
@@ -107,33 +107,39 @@ export class AdminImageGenerationService {
     const where = { status: "ACTIVE" as const, ...(input.categoryId ? { inspirationCategoryId: input.categoryId } : {}) };
     let rows: RecipeImageTargetRow[];
     let totalRecords: number;
-    if (input.missingOnly) {
+    const recipeImageFilter = input.recipeImageFilter ?? (input.missingOnly === false ? "ALL" : "ANY");
+    if (recipeImageFilter !== "ALL") {
       const categoryFilter = input.categoryId ? Prisma.sql`AND recipe."inspiration_category_id" = ${input.categoryId}` : Prisma.empty;
-      const missingPredicate = Prisma.sql`(
-        (recipe."is_inspiration" AND recipe."inspiration_category_id" IS NOT NULL AND EXISTS (
+      const publicPoolSystemRecipe = Prisma.sql`(
+        recipe."is_inspiration" AND recipe."inspiration_category_id" IS NOT NULL AND EXISTS (
           SELECT 1 FROM "public_content_user_pool_members" AS pool_member WHERE pool_member."user_id" = recipe."owner_id"
-        ) AND (
-          NULLIF(recipe."cover_image_url", '') IS NULL
-          OR EXISTS (
-            SELECT 1
-            FROM jsonb_array_elements(CASE WHEN jsonb_typeof(version."steps_json") = 'array' THEN version."steps_json" ELSE '[]'::jsonb END) AS content_step(step)
-            WHERE NULLIF(content_step.step->>'imageUrl', '') IS NULL
-          )
-        ))
-        OR EXISTS (
-          SELECT 1
-          FROM "recipe_cook_assistants" AS assistant
-          CROSS JOIN LATERAL jsonb_array_elements(
-            CASE
-              WHEN assistant."status" = 'READY' AND jsonb_typeof(assistant."snapshot_json"->'steps') = 'array'
-                THEN assistant."snapshot_json"->'steps'
-              ELSE '[]'::jsonb
-            END
-          ) AS wiki_steps(step)
-          WHERE assistant."recipe_version_id" = version."id"
-            AND NULLIF(wiki_steps.step->>'imageUrl', '') IS NULL
         )
       )`;
+      const missingCover = Prisma.sql`${publicPoolSystemRecipe} AND NULLIF(recipe."cover_image_url", '') IS NULL`;
+      const missingRecipeStep = Prisma.sql`${publicPoolSystemRecipe} AND EXISTS (
+        SELECT 1
+        FROM jsonb_array_elements(CASE WHEN jsonb_typeof(version."steps_json") = 'array' THEN version."steps_json" ELSE '[]'::jsonb END) AS content_step(step)
+        WHERE NULLIF(content_step.step->>'imageUrl', '') IS NULL
+      )`;
+      const missingWikiStep = Prisma.sql`EXISTS (
+        SELECT 1
+        FROM "recipe_cook_assistants" AS assistant
+        CROSS JOIN LATERAL jsonb_array_elements(
+          CASE
+            WHEN assistant."status" = 'READY' AND jsonb_typeof(assistant."snapshot_json"->'steps') = 'array'
+              THEN assistant."snapshot_json"->'steps'
+            ELSE '[]'::jsonb
+          END
+        ) AS wiki_steps(step)
+        WHERE assistant."recipe_version_id" = version."id"
+          AND NULLIF(wiki_steps.step->>'imageUrl', '') IS NULL
+      )`;
+      const missingPredicate = {
+        ANY: Prisma.sql`(${missingCover} OR ${missingRecipeStep} OR ${missingWikiStep})`,
+        COVER: missingCover,
+        STEP: missingRecipeStep,
+        WIKI_STEP: missingWikiStep
+      }[recipeImageFilter];
       const [{ total }] = await this.prisma.$queryRaw<Array<{ total: bigint }>>(Prisma.sql`
         SELECT COUNT(*)::bigint AS total
         FROM "recipes" AS recipe
@@ -189,7 +195,7 @@ export class AdminImageGenerationService {
       wikiSteps.forEach((step, index) => addSlot("WIKI_STEP", Number(step.order) || index + 1, step.imageUrl, step.imagePrompt ?? step.detail ?? step.title, `Wiki 步骤 ${Number(step.order) || index + 1}`));
       const missingCount = slots.filter(slot => !slot.imageUrl).length;
       return { id: recipe.id, title: recipe.title, categoryId: recipe.inspirationCategoryId, categoryName: recipe.inspirationCategory?.name ?? "个人菜谱", missingCount, slots };
-    }).filter(row => !input.missingOnly || row.missingCount > 0);
+    });
     const total = totalRecords;
     const items = matchedItems;
     return { items, page, pageSize, total, hasNext: skip + items.length < total };

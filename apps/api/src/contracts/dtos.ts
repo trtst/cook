@@ -2831,6 +2831,11 @@ export class AdminImageGenerationQueryDto extends PageQueryDto {
   @Transform(({ value }) => value === true || value === "true")
   @IsBoolean()
   missingOnly?: boolean;
+
+  @ApiPropertyOptional({ enum: ["ALL", "ANY", "COVER", "STEP", "WIKI_STEP"], default: "ANY" })
+  @IsOptional()
+  @IsIn(["ALL", "ANY", "COVER", "STEP", "WIKI_STEP"])
+  recipeImageFilter?: "ALL" | "ANY" | "COVER" | "STEP" | "WIKI_STEP";
 }
 
 export class AdminImageGenerationTargetDto {
