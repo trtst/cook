@@ -48,8 +48,8 @@ export function buildPantrySummaryHint(summary: PantrySummaryState) {
   }
   if (summary.ingredientCount > 0) {
     return summary.activeListCount > 0
-      ? `冰箱和 ${summary.activeListCount} 张清单的数据都在这里`
-      : "冰箱里已经有食材记录了";
+      ? `家里的食材和 ${summary.activeListCount} 张清单都在这里`
+      : "家里的食材已经记下了";
   }
   if (summary.activeListCount > 0) {
     return `${summary.activeListCount} 张清单还在整理中`;

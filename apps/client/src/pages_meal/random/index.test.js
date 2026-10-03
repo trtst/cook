@@ -120,9 +120,9 @@ describe("pages_meal/random/index", () => {
     expect(await page.path).toBe("pages_meal/random/index");
 
     const texts = await collectTexts(page);
-    expect(texts).toContain("帮我决定");
-    expect(texts).toContain("先生成一桌，再慢慢挑合适的");
-    expect(texts).toContain("会先给你一桌参考菜单，喜欢的留着，不合适的再换一道，不用一下子做完决定。");
+    expect(texts).toContain("炊火智厨");
+    expect(texts).toContain("根据这顿饭，为你搭配合适的菜品");
+    expect(texts).toContain("结合餐次、人数和家里已有食材，为你提供搭配建议；不合适的菜可以单独更换。");
   });
 
   it("随机页生成结果会在菜位卡片里展示菜名、理由和来源", async () => {
@@ -144,7 +144,7 @@ describe("pages_meal/random/index", () => {
         mainProteinType: "BEEF",
         fridgeFit: "HIGH",
         matchedIngredients: ["牛腩"],
-        recommendationReason: "冰箱里有"
+        recommendationReason: "家里已有食材可用"
       }
     ]);
 
@@ -154,7 +154,7 @@ describe("pages_meal/random/index", () => {
       {
         slotType: "MEAT",
         title: "番茄牛腩",
-        recommendationReason: "冰箱里有",
+        recommendationReason: "家里已有食材可用",
         sourceType: "MY",
         fridgeFit: "HIGH",
         durationText: "45分钟",
@@ -166,7 +166,7 @@ describe("pages_meal/random/index", () => {
     ]);
   });
 
-  it("游客点生成一桌时，会先打开登录弹窗", async () => {
+  it("游客点开始搭配时，会先打开登录弹窗", async () => {
     const guestPage = await openRandomPageWithSession(session);
     await guestPage.callMethod("automatorClearSession");
     await guestPage.waitFor(300);
@@ -181,7 +181,7 @@ describe("pages_meal/random/index", () => {
     expect(state.loginVisible).toBe(true);
   });
 
-  it("游客点冰箱优先勾选时，会先打开登录弹窗且不改本地状态", async () => {
+  it("游客点家里食材优先选项时，会先打开登录弹窗且不改本地状态", async () => {
     const guestPage = await openRandomPageWithSession(session);
     await guestPage.callMethod("automatorClearSession");
     await guestPage.waitFor(300);

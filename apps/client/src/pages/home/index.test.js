@@ -375,7 +375,7 @@ function resolveRecentArrangementFocus(status) {
 }
 
 describe("pages/home/index", () => {
-  it("未登录点击首页随机一桌快捷入口时只呼起登录，不直接跳随机页", async () => {
+  it("未登录点击首页智能搭配快捷入口时只呼起登录，不直接跳搭配页", async () => {
     await clearSession();
     const page = await program.reLaunch("/pages/home/index");
     await page.callMethod("automatorClearSession");
@@ -447,7 +447,7 @@ describe("pages/home/index", () => {
     expect(((await heroTitle.text()) || "").trim().length > 0).toBe(true);
 
     const quickTitles = await collectTexts(await page.$$(".dock-action__title"));
-    expect(quickTitles).toEqual(["安排下一顿", "看看食材", "随机一桌", "补缺食材"]);
+    expect(quickTitles).toEqual(["安排下一顿", "看看食材", "智能搭配", "补缺食材"]);
   });
 
   it("首页可以展示真实最近安排卡并更新主动作", async () => {

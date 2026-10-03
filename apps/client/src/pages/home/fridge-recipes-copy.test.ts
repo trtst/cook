@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 
 const source = readFileSync(resolve(__dirname, "index.vue"), "utf8");
 
-assert.ok(source.includes("按冰箱食材"), "Expected fridge recipe section to explain the ingredient source.");
+assert.ok(source.includes("按家里已有食材"), "Expected recipe section to explain the ingredient source.");
 assert.ok(source.includes("先看看能做的菜"), "Expected fridge recipe section to use the confirmed title.");
 assert.ok(source.includes("换一换"), "Expected fridge recipe section action to be the refresh action.");
 assert.ok(
@@ -15,7 +15,7 @@ assert.ok(
   !source.includes('<text class="section-heading__action" @click="openRandomEntry">更多推荐</text>'),
   "Expected fridge recipe section action not to jump to random menu as 更多推荐."
 );
-assert.ok(source.includes("登录后看看能做什么"), "Expected guest empty state to explain login-gated fridge matching.");
+assert.ok(source.includes("登录后看看能做什么"), "Expected guest empty state to explain login-gated ingredient matching.");
 assert.ok(!source.includes("去登录"), "Expected guest empty state not to render an extra login action.");
 assert.ok(!source.includes(':art="emptyStateArt"'), "Expected home fridge empty state to keep the original text-only presentation.");
 assert.ok(!source.includes("useLoginEmptyState"), "Expected home fridge empty state not to use the shared login empty-state composable.");
@@ -25,14 +25,14 @@ assert.ok(
   source.includes('<view v-if="sessionStore.isLoggedIn" class="fridge-empty__actions">'),
   "Expected fridge recipe empty actions to render only for logged-in users."
 );
-assert.ok(source.includes("冰箱里还没记下食材"), "Expected a warm empty state for logged-in users without fridge ingredients.");
+assert.ok(source.includes("家里还没记下食材"), "Expected a warm empty state for logged-in users without recorded home ingredients.");
 assert.ok(source.includes("这次还没找到合适的菜"), "Expected a warm empty state for logged-in users with unmatched ingredients.");
 assert.ok(source.includes(".fridge-recipes-content {\n  min-height: 286rpx;"), "Expected loading and empty content to keep the same height.");
 assert.ok(source.includes('uniPlatform.navigation.switchTab("/pages/recipe/index")'), "Expected recipe tab actions to use tab navigation.");
 assert.ok(source.includes(".section-heading__eyebrow"), "Expected fridge recipe section eyebrow to have local styling.");
 assert.ok(source.includes(".fridge-empty__actions"), "Expected fridge recipe empty actions to have local styling.");
 assert.ok(source.includes(".fridge-empty__button--primary"), "Expected fridge recipe empty primary action to have local styling.");
-assert.ok(source.includes(".fridge-empty__button--secondary"), "Expected fridge recipe empty secondary action to have local styling.");
+assert.ok(!source.includes("fridge-empty__button--secondary"), "Expected empty state to keep only its primary action.");
 assert.ok(source.includes("family-recipe--skeleton"), "Expected fridge recipe skeleton items to use a dedicated spacing class.");
 assert.ok(
   source.includes(".family-recipe--skeleton:not(:last-child)") && source.includes("margin-right: 44rpx;"),

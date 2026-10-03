@@ -157,7 +157,7 @@
           <view class="table-section table-section--recipes">
             <view class="section-heading">
               <view class="section-heading__copy">
-                <text class="section-heading__eyebrow">按冰箱食材</text>
+                <text class="section-heading__eyebrow">按家里已有食材</text>
                 <text class="section-heading__title">先看看能做的菜</text>
               </view>
               <view class="section-heading__actions">
@@ -208,9 +208,6 @@
                 <view v-if="sessionStore.isLoggedIn" class="fridge-empty__actions">
                   <view class="fridge-empty__button fridge-empty__button--primary" @click="openFridgeEmptyPrimaryAction">
                     <text>{{ fridgeRecipesEmptyPrimaryActionText }}</text>
-                  </view>
-                  <view class="fridge-empty__button fridge-empty__button--secondary" @click="openRandomEntry">
-                    <text>随机一桌</text>
                   </view>
                 </view>
               </view>
@@ -453,12 +450,12 @@ const pantrySummaryHintText = computed(() => {
 const hasFridgeIngredients = computed(() => pantryIngredientCount.value > 0);
 const fridgeRecipesEmptyTitle = computed(() => {
   if (!sessionStore.isLoggedIn) return "登录后看看能做什么";
-  return hasFridgeIngredients.value ? "这次还没找到合适的菜" : "冰箱里还没记下食材";
+  return hasFridgeIngredients.value ? "这次还没找到合适的菜" : "家里还没记下食材";
 });
 const fridgeRecipesEmptyDescription = computed(() => {
-  if (!sessionStore.isLoggedIn) return "记下冰箱里的食材后，这里会按已有食材匹配菜谱。";
-  if (hasFridgeIngredients.value) return "没关系，可以逛逛菜谱，或者换个思路再随机一桌。";
-  return "先记下几样家里现有的食材，我来帮你看看能做什么。";
+  if (!sessionStore.isLoggedIn) return "记下家里已有的食材后，这里会按食材匹配菜谱。";
+  if (hasFridgeIngredients.value) return "没关系，可以逛逛菜谱，或者试试智能搭配。";
+  return "先记下几样家里已有的食材，我来帮你看看能做什么。";
 });
 const fridgeRecipesEmptyPrimaryActionText = computed(() => (hasFridgeIngredients.value ? "去看食谱" : "去记食材"));
 const homeNextStatus = computed<HomeNextMealStatus>(() => nextMealState.value?.status ?? "NO_ARRANGEMENT");
@@ -739,7 +736,7 @@ function resolveQuickEntryClass(placement: HomeEntryPlacement) {
 function resolveQuickEntryTitle(item: HomeEntryItem) {
   if (item.placement === "QUICK_1") return "安排下一顿";
   if (item.placement === "QUICK_2") return "看看食材";
-  if (item.placement === "QUICK_3") return "随机一桌";
+  if (item.placement === "QUICK_3") return "智能搭配";
   return "补缺食材";
 }
 
@@ -2380,11 +2377,6 @@ defineExpose({
 .fridge-empty__button--primary {
   background: var(--button-primary-bg);
   color: var(--button-primary-text);
-}
-
-.fridge-empty__button--secondary {
-  background: var(--button-secondary-bg);
-  color: var(--button-secondary-text);
 }
 
 .family-recipe {

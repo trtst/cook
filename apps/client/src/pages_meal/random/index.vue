@@ -1,6 +1,6 @@
 <template>
   <page-meta :page-style="themePageStyle" />
-  <Layout :class="themeClasses" title="随机一下" full-screen :navbar-placeholder="false" navbar-transparent>
+  <Layout :class="themeClasses" title="智能搭配" full-screen :navbar-placeholder="false" navbar-transparent>
     <template #global-loading>
       <CookAssistantThinkingLoading :visible="generateLoading" />
     </template>
@@ -8,7 +8,7 @@
     <scroll-view class="random-scroll" scroll-y :show-scrollbar="false" @scroll="handleRandomScroll">
       <view class="random-page">
         <view class="random-hero" :style="heroStyle">
-          <text class="random-hero__eyebrow">帮我决定</text>
+          <text class="random-hero__eyebrow">炊火智厨</text>
           <text class="random-hero__title">{{ heroTitle }}</text>
           <text class="random-hero__description">{{ heroDescription }}</text>
         </view>
@@ -34,7 +34,7 @@
             <view class="board-card">
               <view class="board-card__head">
                 <view>
-                  <text class="board-card__eyebrow">当前这一桌</text>
+                  <text class="board-card__eyebrow">智能搭配结果</text>
                   <text class="board-card__title">{{ boardTitle }}</text>
                 </view>
                 <text class="board-card__badge">{{ boardBadge }}</text>
@@ -42,8 +42,8 @@
               <text class="board-card__description">{{ boardDescription }}</text>
 
               <view class="board-card__summary">
-                <text class="board-card__summary-item">当前 {{ activeSlots.length }} 道</text>
-                <text class="board-card__summary-item">已划掉 {{ removedCount }} 道</text>
+                <text class="board-card__summary-item">搭配 {{ activeSlots.length }} 道</text>
+                <text class="board-card__summary-item">已略过 {{ removedCount }} 道</text>
               </view>
 
               <view class="slot-list">
@@ -81,7 +81,7 @@
           class="random-generate-bar__button random-generate-bar__button--primary"
           @click="generateMenu"
         >
-          {{ conditionLoading ? "处理中..." : hasMenu ? "再来一桌" : "生成一桌" }}
+          {{ conditionLoading ? "搭配中..." : hasMenu ? "重新搭配" : "开始搭配" }}
         </button>
       </view>
     </view>
@@ -204,15 +204,15 @@ const boardSlots = computed(() => {
 });
 
 const heroTitle = computed(() => {
-  if (!state.value.conditions.mealSlot) return "想轻松定下这顿饭，先选个餐次吧";
-  if (!hasMenu.value) return "先生成一桌，再慢慢挑合适的";
-  return "先看看这一桌合不合适，再决定下一步";
+  if (!state.value.conditions.mealSlot) return "选好条件，让我帮你搭配这顿饭";
+  if (!hasMenu.value) return "根据这顿饭，为你搭配合适的菜品";
+  return "这桌搭配好了，看看是否合适";
 });
 
 const heroDescription = computed(() => {
-  if (!state.value.conditions.mealSlot) return "先选餐次、人数和是否优先用冰箱食材，我再按这顿饭的节奏帮你搭一桌菜单。";
-  if (!hasMenu.value) return "会先给你一桌参考菜单，喜欢的留着，不合适的再换一道，不用一下子做完决定。";
-  return "把想保留的和想更换的先定下来，再决定要不要写进计划。";
+  if (!state.value.conditions.mealSlot) return "选择餐次、人数和家里已有食材偏好，获取适合这顿饭的菜品搭配。";
+  if (!hasMenu.value) return "结合餐次、人数和家里已有食材，为你提供搭配建议；不合适的菜可以单独更换。";
+  return "留下喜欢的菜，调整不合适的搭配，再加入计划。";
 });
 
 const boardTitle = computed(() => {
@@ -222,27 +222,27 @@ const boardTitle = computed(() => {
 });
 
 const boardBadge = computed(() => {
-  if (!state.value.conditions.fridgePreferred) return "不强制清冰箱";
-  return "优先用冰箱";
+  if (!state.value.conditions.fridgePreferred) return "按常规食材搭配";
+  return "优先考虑家里食材";
 });
 
 const quotaText = computed(() => {
-  if (!sessionStore.isLoggedIn) return "登录后查看本周生成次数";
-  if (quotaLoading.value) return "正在同步生成次数";
-  if (!quota.value) return "生成次数以后台为准";
-  return `本周还可生成 ${quota.value.remainingCount}/${quota.value.limitCount} 次`;
+  if (!sessionStore.isLoggedIn) return "登录后查看本周搭配次数";
+  if (quotaLoading.value) return "正在同步搭配次数";
+  if (!quota.value) return "搭配次数暂不可用";
+  return `本周还可搭配 ${quota.value.remainingCount}/${quota.value.limitCount} 次`;
 });
 
 const boardDescription = computed(() => {
-  return "不合适的直接划掉，想换口味就换一道；喜欢这桌，再安排进计划。";
+  return "可以单独更换菜品，确认合适后加入计划。";
 });
 
 const bottomTitle = computed(() => {
-  return "这桌可以加入计划";
+  return "这份搭配可以加入计划";
 });
 
 const bottomDescription = computed(() => {
-  return "喜欢这桌的话，直接加入计划，后续在计划里继续处理食材。";
+  return "将搭配好的菜品加入计划，之后可继续安排食材和烹饪。";
 });
 
 const navProgress = computed(() => Math.min(1, Math.max(0, randomScrollTop.value / RANDOM_NAV_FADE_DISTANCE)));
@@ -340,7 +340,7 @@ async function loadRandomQuota() {
     quota.value = await randomMealApi.getQuota();
   } catch (error) {
     if (!quota.value) {
-      errorText.value = error instanceof Error ? error.message : "生成次数同步失败";
+      errorText.value = error instanceof Error ? error.message : "搭配次数同步失败";
     }
   } finally {
     quotaLoading.value = false;

@@ -83,7 +83,7 @@
         { "path": "assistant/index", "style": { "navigationBarTitleText": "做饭助手", "navigationStyle": "custom" } },
         { "path": "cook-mode/index", "style": { "navigationBarTitleText": "做饭模式", "navigationStyle": "custom" } },
         { "path": "event/index", "style": { "navigationBarTitleText": "饭局", "navigationStyle": "custom" } },
-        { "path": "random/index", "style": { "navigationBarTitleText": "随机一下", "navigationStyle": "custom" } }
+        { "path": "random/index", "style": { "navigationBarTitleText": "智能搭配", "navigationStyle": "custom" } }
       ]
     },
     {

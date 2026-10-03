@@ -70,7 +70,7 @@ expectIncludes(randomPageSource, 'purchaseState: "READY"');
 expectIncludes(randomPageSource, "暂时没有更多可换的菜了");
 expectIncludes(randomPageSource, "if (isReroll) {");
 expectIncludes(randomPageSource, "if (result.items.length === 0) {");
-expectIncludes(randomEmptySlotCardSource, "暂无符合当前条件的可用菜谱");
+expectIncludes(randomEmptySlotCardSource, "当前条件下暂时没有合适的菜品，可以调整后再搭配");
 expectExcludes(randomEmptySlotCardSource, "换一道");
 
 expectSelectorIncludes(randomPageSource, ".random-generate-bar", [
@@ -88,13 +88,13 @@ expectSelectorIncludes(randomPageSource, ".random-generate-bar__button--primary"
   "background: var(--button-primary-bg);",
   "color: var(--button-primary-text);"
 ]);
-expectSelectorExcludes(randomPageSource, ".random-generate-bar__button--primary", ["再生成一桌"]);
+expectSelectorExcludes(randomPageSource, ".random-generate-bar__button--primary", ["再来一桌", "生成一桌"]);
 expectSelectorIncludes(randomPageSource, ".board-card__description", ["color: var(--color-text);"]);
 expectSelectorIncludes(randomPageSource, ".board-card__summary-item", ["color: var(--color-text);"]);
 expectSelectorExcludes(randomPageSource, ".board-card__summary-item", ["color: var(--color-text-secondary);"]);
 
-expectIncludes(randomConditionBarSource, "优先消耗冰箱食材");
-expectIncludes(randomConditionBarSource, "只影响这一次随机和换菜，不会改动平时偏好。");
+expectIncludes(randomConditionBarSource, "优先用家里食材");
+expectIncludes(randomConditionBarSource, "搭配时优先考虑标记为“家里有”的食材，只影响本次。");
 expectIncludes(randomConditionBarSource, "toggle-row__head");
 expectIncludes(randomConditionBarSource, "condition-group__description");
 expectExcludes(randomConditionBarSource, 'class="action-row"');
@@ -136,11 +136,11 @@ expectExcludes(randomSlotCardSource, 'class="constraint-row"');
 expectExcludes(randomSlotCardSource, 'class="constraint-chip');
 expectExcludes(randomSlotCardSource, 'label: "15分钟"');
 expectExcludes(randomSlotCardSource, 'label: "30-60分钟"');
-expectExcludes(randomSlotCardSource, 'label: "优先用冰箱"');
+expectExcludes(randomSlotCardSource, 'label: "优先用家里食材"');
 expectIncludes(randomSlotCardSource, "metaTags");
 expectIncludes(randomSlotCardSource, "fridgeNote");
 expectIncludes(randomSlotCardSource, "props.item.matchedIngredients");
-expectIncludes(randomSlotCardSource, 'return `已有：${names}${suffix}`;');
+expectIncludes(randomSlotCardSource, 'return `家里已有食材：${names}${suffix}`;');
 expectIncludes(randomSlotCardSource, 'MILD: "微辣"');
 expectExcludes(randomSlotCardSource, 'v-for="tag in item.flavorTags"');
 expectIncludes(randomSlotCardSource, 'v-for="tag in metaTags"');

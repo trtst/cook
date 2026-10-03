@@ -1,7 +1,7 @@
 <template>
   <view class="empty-slot-card">
     <text class="empty-slot-card__slot">{{ slotLabel }}</text>
-    <text class="empty-slot-card__message">暂无符合当前条件的可用菜谱</text>
+    <text class="empty-slot-card__message">当前条件下暂时没有合适的菜品，可以调整后再搭配</text>
   </view>
 </template>
 

@@ -117,13 +117,13 @@ const slotTypeLabel = computed(() => {
 const fridgeFitLabel = computed(() => {
   switch (props.item.fridgeFit) {
     case "HIGH":
-      return "冰箱匹配高";
+      return "家里食材匹配高";
     case "MEDIUM":
-      return "冰箱匹配中";
+      return "家里食材匹配中";
     case "LOW":
-      return "冰箱匹配低";
+      return "家里食材匹配低";
     default:
-      return "库存未知";
+      return "家里食材情况待确认";
   }
 });
 
@@ -169,13 +169,13 @@ const fridgeNote = computed(() => {
   if (props.item.matchedIngredients.length) {
     const names = props.item.matchedIngredients.slice(0, 2).join("、");
     const suffix = props.item.matchedIngredients.length > 2 ? "等" : "";
-    return `已有：${names}${suffix}`;
+    return `家里已有食材：${names}${suffix}`;
   }
   switch (props.item.fridgeFit) {
     case "HIGH":
-      return "冰箱里主料基本都有";
+      return "家里已有食材基本齐全";
     case "MEDIUM":
-      return "有一部分食材可直接用";
+      return "家里已有部分食材可用";
     default:
       return "";
   }
