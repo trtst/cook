@@ -1091,6 +1091,7 @@ GET  /meal-plans/{planItemId}/cook-assistant
 POST /meal-plans/{planItemId}/cook-assistant/unlock
 POST /meal-plans
 POST /meal-plans/{planItemId}/complete
+POST /meal-plans/{planItemId}/start-cooking
 POST /meal-plans/{planItemId}/cancel
 POST /meal-plans/{planItemId}/confirm-menu
 POST /meal-plans/{planItemId}/cooking-complete
@@ -1193,6 +1194,7 @@ interface MealPlanSummary {
   menuLocked: boolean;
   status: MealPlanStatus;
   version: number;
+  cookingStartedAt: IsoDateTime | null;
   completedAt: IsoDateTime | null;
   hasDiningEvent: boolean;
   diningEventId: UUID | null;
@@ -1834,6 +1836,7 @@ interface ShoppingListDetailItem {
   categoryName: string | null;
   imageUrl: string | null;
   quantityText: string | null;
+  amount: RecipeAmountSnapshot | null;
   note: string | null;
   status: "OPEN" | "CHECKED" | "REMOVED";
   checkedAt: IsoDateTime | null;
@@ -1905,9 +1908,11 @@ interface CreateShoppingListRequest {
 食材项按创建时间倒序返回；勾选状态更新不改变清单顺序。客户端按该顺序聚合展示，不按已购/未购状态移动食材行。
 
 1. `categoryName`、`imageUrl`：供食材卡片直接展示分类和封面；没有图片时客户端显示占位图。
-2. `quantityText` 是菜谱需求量；手动添加项为空并由页面显示“按需购买”。勾选“已买”不改写需求量，也不扣减库存。
+2. `quantityText` 是展示用需求量；`amount` 是可精确汇总的结构化用量快照，单位以 `unitId` 判断。手动添加项的 `amount` 为空；其文本仅在数量与单位文字均可解析且单位文字相同时汇总，勾选“已买”不改写需求量，也不扣减库存。
 3. `categoryName`、`imageUrl` 用于展示食材分类和封面，没有图片时显示占位图。
 4. 清单摘要里的 `progressDoneCount / progressTotalCount` 按食材项统计；已勾选项计入完成数。
+
+同食材的多个结构化来源仅在全部为精确用量且 `unitId` 相同时累加；只要有模糊用量或单位不同，分组行统一显示“适量”。手动文本无法解析或单位文字不同，也显示“适量”。
 
 `POST /shopping-lists/{listId}/rename` 只允许清单创建者调用：
 
@@ -1952,7 +1957,7 @@ interface AddPlanToShoppingListRequest {
 }
 ```
 
-服务端必须校验该计划属于当前用户，并读取当前固定菜谱版本生成完整需求：不读取或扣除冰箱库存；同食材且同单位合并数量，`适量` 保留原文字；已有来源键和用户移除来源墓碑跳过，手动来源项不被修改。任一菜谱版本或当前食材状态校验失败时整单回滚，不允许留下部分成功的购物项。
+服务端必须校验该计划属于当前用户，并读取当前固定菜谱版本生成完整需求：不读取或扣除冰箱库存；同食材合并为一项，同单位的精确数量相加；单位不一致或任一来源为 `适量` 时，该项显示 `适量`，不做单位换算；底层仍按各菜谱食材来源保存，未移除来源跳过，计划来源的移除墓碑恢复为移除前的 `OPEN / BOUGHT` 状态，手动来源项不被修改。重新打开关联计划清单时会执行本接口以同步和恢复来源项。任一菜谱版本或当前食材状态校验失败时整单回滚，不允许留下部分成功的购物项。
 写入成功后，服务端会把这顿餐次绑定到当前采购清单，并在后续 `MealPlanSummary / DiningEventSummary` 里回传 `shoppingListId / shoppingListName / shoppingListStatus`，供前台优先回跳到已绑定清单。若该餐次已绑定别的采购清单，则返回冲突；若已绑定当前清单，则只补当前来源键尚不存在的需求，不重复累计已有来源。来源键以计划 ID 为前缀，详情读取仍可反查计划来源。
 
 `POST /shopping-lists/{listId}/items/from-gap` 用于把需求页当前选中的食材写入指定购物清单：
@@ -2124,14 +2129,16 @@ interface ShoppingSharePreview {
 
 `handledAt` 在 `ACCEPTED / DECLINED` 时返回处理时间，否则为 `null`。`POST /shopping-list-invites/{inviteId}/accept` 由被邀请人确认加入；若用户已经通过好友链接先加入同一张清单，服务端会把这条待确认邀请同步结清为 `ACCEPTED`，避免首页继续残留旧卡片。`POST /shopping-list-invites/{inviteId}/decline` 只把当前邀请标记为 `DECLINED`，不影响该清单后续重新发起新邀请。
 
-`GET /shopping-gap` 当前只汇总“当前用户待处理饭局”的时间分层菜单需求，不再要求先选某一场饭局。它不读取冰箱食材状态、不计算库存差额；是否购买由用户自行决定，只有显式加入后才写入清单。响应固定分成 `NEXT_48_HOURS / NEXT_7_DAYS / LATER` 三段，每段按食材平铺，单条食材需求只在“同食材且同精确单位”下合并数量，并返回：
+`GET /shopping-gap` 当前只汇总“当前用户待处理饭局”的时间分层菜单需求，不再要求先选某一场饭局。它不读取冰箱食材状态、不计算库存差额；是否购买由用户自行决定，只有显式加入后才写入清单。响应固定分成 `NEXT_48_HOURS / NEXT_7_DAYS / LATER` 三段，每段按食材平铺。同食材合并为一项；所有来源用量都是同一精确单位时相加，否则显示 `适量`，不做单位换算，并返回：
 
 1. `key`：当前时间层内该条需求的稳定键，供后续 `from-gap` 写入使用。
 2. `ingredientId / name / quantityText`：食材主视角摘要。
 3. `sourceCount / eventCount`：当前条目覆盖了几道菜、几场饭局。
 4. `events[]`：每场来源饭局的 `eventId / title / scheduledAt / recipeTitles[]`，用于页面展示“这条需求对应哪些饭局、哪些菜谱”。
 
-`GET /meal-plans/{planItemId}/shopping-gap` 只预览当前用户指定计划餐次的完整准备需求，不写入购物清单。服务端校验计划归属，读取该餐次固定菜谱版本生成完整需求；不读取或扣除冰箱库存。响应为 `ShoppingGapPreviewItem[]`，数组长度就是该餐次当前需要准备的食材项数量，供计划详情页展示准备数量。没有需求时返回空数组。
+`GET /meal-plans/{planItemId}/shopping-gap` 只预览当前用户指定计划餐次的完整准备需求，不写入购物清单。服务端校验计划归属，读取该餐次固定菜谱版本生成完整需求，并按对应计划来源购物项是否已买返回 `preparationStatus = OPEN / BOUGHT`；不读取或扣除冰箱库存。响应为 `ShoppingGapPreviewItem[]`，供计划详情页展示准备状态和剩余待准备数量。没有需求时返回空数组。
+
+`POST /meal-plans/{planItemId}/start-cooking` 只允许计划 owner 对已确认菜单且没有关联饭局的计划调用；服务端校验计划需求均已标记为已买后写入 `cookingStartedAt`，并增加计划 `version`。重复调用返回已经记录的计划状态。`POST /meal-plans/{planItemId}/complete` 只允许计划 owner 在开始做饭后确认计划完成；关联饭局的计划仍由饭局完成流程推进。两个写接口均接受数字字符串幂等键。
 
 `POST /dining-events/{eventId}/preparations` 只允许饭局发起人在已确认菜单、尚未“已备齐”或开始做饭前，按当前预览返回的 `sourceKey` 设置或撤销本顿“家里有”；该确认只属于当前饭局，不写入长期食材状态。`POST /dining-events/{eventId}/prepare` 由发起人确认整顿已备齐，服务端写入 `ingredientsReadyAt`；`POST /dining-events/{eventId}/start-cooking` 仅在整顿已备齐或所有需求都已买/家里有时成功，并写入 `cookingStartedAt`。两者均要求菜单已确认并接受数字字符串幂等键。饭局完成接口在开始做饭后允许无接受参与人的饭局结束。
 
@@ -2140,9 +2147,9 @@ interface ShoppingSharePreview {
 准备需求合并规则当前保持：
 
 1. 只围绕固定菜谱版本生成需求，不以冰箱库存判断是否需要购买。
-2. 相同食材只有在相同精确单位下才自动合并数量。
+2. 同种食材自动合并为一项；全部来源用量为同一精确单位时相加，单位不一致或任一来源为 `适量` 时显示 `适量`。
 3. `sourceCount` 返回该条需求实际覆盖了几道菜。
-4. 模糊用量保持文字提示，不自动相加成虚假的精确数量。
+4. 来源菜谱事实仍分别保留；模糊或混合单位只影响合并项的数量提示，不做虚假单位换算。
 
 共享清单当前不要求实时协同。详情页使用“操作后刷新 + 页面重进刷新 + 下拉刷新 + 轻轮询”即可；所有写接口必须提交 `version`，冲突时返回业务 `code=409`，提示客户端刷新后重试。
 

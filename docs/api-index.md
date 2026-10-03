@@ -170,6 +170,7 @@
 | Meal | GET/POST | `/meal-plans` | 查询或创建个人计划，支持当前餐次的空白计划壳子 |
 | Meal | POST | `/meal-plans/{planItemId}/title` | 更新一个计划餐次标题 |
 | Meal | POST | `/meal-plans/{planItemId}/complete` | 完成一个计划餐次 |
+| Meal | POST | `/meal-plans/{planItemId}/start-cooking` | 计划食材备齐后记录开始做饭 |
 | Meal | POST | `/meal-plans/{planItemId}/cancel` | 保留计划与菜单并取消计划餐次 |
 | MealReminder | GET/POST | `/meal-plans/{planItemId}/reminder` | 读取或预约当前用户的计划微信提醒 |
 | Meal | POST | `/meal-plans/{planItemId}/title` | 单独修改一个计划餐次标题 |

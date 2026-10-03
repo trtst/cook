@@ -1,5 +1,23 @@
 # 项目变更记录
 
+| 2026-10-03 | 修复计划来源采购项被移出后无法开做：再次打开已关联计划清单时先同步，恢复该来源原有的待买/已买状态；购物清单详情返回结构化用量供客户端按 unitId 汇总，首页待采购计数改为与清单分组一致。 | `apps/api/src/modules/pantry/pantry.service.ts`、`apps/api/src/contracts/types.ts`、`apps/api/src/contracts/openapi.ts`、`apps/client/src/pages_meal/detail/index.vue`、`apps/client/src/pages_meal/plan/index.vue`、`apps/client/src/pages_pantry/apis/shopping.ts`、`apps/client/src/pages_pantry/list-detail/index.vue`、`docs/api-contract.md`、`docs/plans/meal-shopping-preparation-execution.md`、`docs/plans/minor_change_log.md` | `pnpm type-check`、`pnpm build:api`、`pnpm build:client:prod`、Prisma schema validate、OpenAPI 340 operations / 299 response schemas、`git diff --check` 通过；Client 全仓 lint 失败（1421 errors / 1575 warnings），目标文件 lint 错误位于未改动代码；未运行测试，未做目标环境迁移或微信开发者工具/真机验收。 |
+
+| 2026-10-03 | 全部 8 组、40 枚勋章的获取条件统一替换为已确认的温馨步骤文案，移除每日/每周上限、单场去重和“记 1 次”等计数说明；通过前向 migration 更新，不改写历史 migration。 | `apps/api/prisma/migrations/20261003180000_medal_template_conditions_copy/migration.sql`、`docs/plans/minor_change_log.md` | 本机 `next_meal` 数据库已执行 SQL 并读回核对 40/40 条、8 组文案；未运行测试或应用其余待执行 migration；未更新测试/线上数据库。 |
+
+| 2026-10-03 | 新饭局/计划首次加入采购时，先让用户选择采购中清单或新建空白清单，再把当前饭局/计划食材加入所选清单并建立关联；已有有效关联时直接打开关联清单，不自动选择第一张清单。 | `apps/client/src/pages_meal/detail/index.vue`、`apps/client/src/pages_meal/plan/index.vue`、`docs/plans/minor_change_log.md` | 核对饭局/计划选择、创建、确认加入和已有绑定直达流程，并执行 `git diff --check`；未运行测试或微信开发者工具/真机验收。 |
+
+| 2026-10-03 | 勋章墙图片改用 `ImageLoader` 显示加载动画；组件增加可选 `aspectFit` 模式，默认继续使用 `aspectFill`，菜谱封面显示不变。 | `apps/client/src/components/ImageLoader.vue`、`apps/client/src/pages_me/medal/index.vue`、`docs/plans/minor_change_log.md` | `git diff --check` 通过；未新增或运行测试，未做微信开发者工具/真机视觉验收。 |
+
+| 2026-10-03 | 购物清单合并行按菜谱来源保留各自原始用量，只在分组展示时汇总；任一来源模糊或单位不同时显示“适量”，移除来源后可按剩余来源重新计算。 | `apps/api/src/modules/pantry/pantry.service.ts`、`docs/plans/minor_change_log.md` | API/Client type-check 与 `git diff --check` 通过；未运行测试或小程序端验收。 |
+
+| 2026-10-03 | 采购准备按同食材合并：所有来源均为同一精确单位时相加；单位不同、出现“适量”或缺少用量时显示“适量”，不换算单位；购物项仍按菜谱食材来源保存，饭局旧“家里有”来源键继续兼容。 | `apps/api/src/modules/pantry/pantry.shopping-demand.ts`、`apps/api/src/modules/pantry/pantry.service.ts`、`apps/api/src/modules/meal/meal.service.ts`、`apps/api/src/modules/pantry/pantry.shopping-demand.test.ts`、`apps/api/src/modules/pantry/pantry.shopping-source.test.ts`、`apps/client/src/pages_pantry/list-detail/index.vue`、`docs/api-contract.md`、`docs/recipe.md`、`docs/superpowers/specs/2026-09-24-shopping-fridge-low-maintenance-v1-design.md`、`docs/plans/minor_change_log.md` | API/Client type-check 与 `git diff --check` 通过；未运行测试，未做微信开发者工具/真机或测试环境数据验收。 |
+
+| 2026-10-03 | 普通计划菜单未锁定时，只要已有选中菜谱也计算并展示采购准备；保留空菜单、已结束计划和无待准备食材时的隐藏条件。 | `apps/client/src/pages_meal/detail/index.vue`、`docs/plans/minor_change_log.md` | 已核对普通计划与饭局的显示分支，并检查 `git diff --check`；未运行测试或微信开发者工具/真机验收。 |
+
+| 2026-10-03 | 统一饭局与普通计划采购准备行结构和样式：普通计划移除饭局行内没有的 `menu-confirm__item` 外层包装，两边均由 `menu-confirm__item-main` 负责行内布局和内边距，预览行本身不加内边距。 | `apps/client/src/pages_meal/detail/index.vue`、`docs/plans/minor_change_log.md` | 检查两边模板结构与对应选择器，执行 `git diff --check`；未运行测试或微信开发者工具/真机视觉验收。 |
+
+| 2026-10-03 | 菜谱确认前，饭局与普通计划的采购准备模块继续展示当前菜单食材，但隐藏右上角全部清单操作；菜单确认后才显示“去采购”或“查看清单”。 | `apps/client/src/pages_meal/detail/index.vue`、`docs/plans/minor_change_log.md` | 检查饭局/计划的确认态与两个入口绑定，执行 `git diff --check`；未运行测试或微信开发者工具/真机验收。 |
+
 | 2026-10-02 | 我的页「账号设置」入口在手机号未绑定或密码未设置时显示高亮圆点；账号设置页分别提示未完成的手机号绑定和密码设置，完成后随登录态/用户资料状态隐藏。 | `apps/client/src/pages/me/index.vue`、`apps/client/src/pages_me/account/index.vue`、`docs/plans/minor_change_log.md` | 已检查状态来源与绑定/设密流程均更新对应 store；执行 `git diff --check`。未运行测试或构建，未做微信开发者工具或真机验收。 |
 
 | 2026-10-02 | 首页冰箱菜谱区的“智能搭配”前使用炊火智厨图标，“换一换”前新增 E6F5 字体图标；两个入口继续分别复用随机页与菜谱刷新行为。 | `apps/client/src/pages/home/index.vue`、`apps/client/src/assets/fonts/font.scss`、`docs/plans/minor_change_log.md` | 已核对图标映射为炊火智厨 `E70E` 与换一换 `E6F5`，点击仍分别调用 `openRandomEntry` 和 `refreshFridgeRecipeRecommendations`；未运行测试或构建，未做微信开发者工具/真机验收。 |
@@ -2526,3 +2544,4 @@
 | 2026-10-03 | 修正家里食材列表首屏较短时无法触发滚动分页的问题：分页入口改为可点击，同时显示当前已加载的“很久没记录”数量；保留超过 30 天记录默认折叠。 | `apps/client/src/pages_pantry/index/index.vue`、`docs/plans/minor_change_log.md` | `pnpm build:client:prod` 成功；微信开发者工具已显示新版“点击加载更多食材”入口，当前电脑控制会话无法点击模拟器（`noWindowsAvailable`），追加分页交互未完成验证；未做真机验收。 |
 | 2026-10-03 | 旧“家里没有”状态曾被摘要计数但页面隐藏，导致总数与卡片数不一致。列表和摘要现在忽略最新状态为 `MANUAL_EMPTY` 的身份，并新增前向迁移删除这类身份下的全部旧痕迹；当前“家里没有了”写操作继续删除整组痕迹。 | `apps/api/prisma/migrations/20261003150000_remove_legacy_manual_empty_fridge_traces/migration.sql`、`apps/api/src/modules/pantry/pantry.service.ts`、`docs/api-contract.md`、`docs/plans/minor_change_log.md` | API type-check 通过；食材痕迹定向测试 14/14；OpenAPI 339 operations / 299 response schemas 通过；目标文件 `git diff --check` 通过；迁移未应用，未操作生产数据库。 |
 | 2026-10-03 | 修复随机搭配页添加计划成功回调的 `MealSlot` 类型冲突；该回调只读取计划 ID 和日期，因此移除未使用的餐次字段类型。 | `apps/client/src/pages_meal/random/index.vue`、`docs/plans/minor_change_log.md` | Client 与全仓 type-check 通过；未运行测试，未做微信小程序端验收。 |
+| 2026-10-03 | 计划采购预览按来源购物项已买状态计算待准备数；全部买齐后可记录开始做饭，再以“完成计划”结束。计划确认菜单增加二次确认，食材状态与用量同行展示；饭局完成按钮文案调整为“完成用餐”。 | `apps/api/prisma/schema.prisma`、`apps/api/prisma/migrations/20261003170000_meal_plan_cooking_started_at/migration.sql`、`apps/api/src/modules/meal/meal.controller.ts`、`apps/api/src/modules/meal/meal.service.ts`、`apps/api/src/modules/pantry/pantry.service.ts`、`apps/api/src/contracts/types.ts`、`apps/api/src/contracts/openapi.ts`、`apps/client/src/pages_meal/apis/meal.ts`、`apps/client/src/pages_meal/detail/index.vue`、`apps/client/src/apis/meal.ts`、`docs/api-contract.md`、`docs/api-index.md`、`docs/plans/meal-shopping-preparation-execution.md`、`docs/plans/minor_change_log.md` | API/Client type-check、API build、微信小程序生产 build、Prisma schema validate、`git diff --check` 通过；未运行测试，migration 未应用；未做微信开发者工具/真机验收。 |
