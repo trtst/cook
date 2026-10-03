@@ -11,7 +11,7 @@
         class="image-loader__image"
         :class="{ 'image-loader__image--loaded': stage === 'loaded' }"
         :src="imageSrc"
-        mode="aspectFill"
+        :mode="mode"
         @load="markLoaded"
       />
     </template>
@@ -25,8 +25,10 @@ import { imageStage } from "./image-stage";
 
 const props = withDefaults(defineProps<{
   src?: string | null;
+  mode?: "aspectFill" | "aspectFit";
 }>(), {
-  src: ""
+  src: "",
+  mode: "aspectFill"
 });
 
 const loadedSrc = ref("");

@@ -80,7 +80,7 @@
               >
                 <view class="medal-card__badge-shell">
                   <view class="medal-card__badge">
-                    <image v-if="resolveMedalImageUrl(item)" class="medal-card__image" :src="resolveMedalImageUrl(item) || ''" mode="aspectFit" />
+                    <ImageLoader v-if="resolveMedalImageUrl(item)" class="medal-card__image" :src="resolveMedalImageUrl(item) || ''" mode="aspectFit" />
                     <text v-else class="cookfont medal-card__icon" :class="getMedalIconClass(item.iconKey)" />
                   </view>
                 </view>
@@ -107,6 +107,7 @@ import { computed, ref } from "vue";
 import { onShow } from "@dcloudio/uni-app";
 import { medalApi, type MedalWallResponse } from "../apis/medal";
 import Layout from "@/components/Layout/Layout.vue";
+import ImageLoader from "@/components/ImageLoader.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { buildThemePageStyle } from "@/composables/theme-page-style";
 import { useTheme } from "@/composables/useTheme";
