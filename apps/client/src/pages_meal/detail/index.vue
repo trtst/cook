@@ -321,6 +321,7 @@
                   <text class="meal-panel__title">{{ shoppingPanelTitle }}</text>
                   <view class="meal-panel__head-actions">
                     <view
+                      v-if="shoppingActionVisible"
                       class="meal-inline-action meal-inline-action--ghost meal-menu__add-action"
                       :class="{ 'meal-inline-action--disabled': shoppingActionDisabled }"
                       @click="openShoppingPage"
@@ -357,18 +358,15 @@
                         <text class="menu-confirm__item-name">{{ row.item.name }}</text>
                         <text v-if="row.item.preparationStatus !== 'OPEN'" class="cookfont icon-done meal-shopping-preview__prepared-icon" />
                       </view>
-                      <text class="menu-confirm__item-meta">{{ row.item.quantityText || "未填数量" }}</text>
+                      <text class="menu-confirm__item-meta">
+                        {{ eventDetail.status === "CONFIRMED" ? `${preparationStatusText(row.item.preparationStatus)} · ` : "" }}{{ row.item.quantityText || "未填数量" }}
+                      </text>
                     </view>
                     <view
-                      v-if="eventDetail.status === 'CONFIRMED'"
+                      v-if="eventDetail.status === 'CONFIRMED' && row.item.preparationStatus !== 'READY' && row.item.preparationStatus !== 'BOUGHT' && !eventDetail.ingredientsReadyAt && !eventDetail.cookingStartedAt"
                       class="meal-shopping-preview__state"
-                      :class="{
-                        'meal-shopping-preview__state--status-only': row.item.preparationStatus === 'READY' || row.item.preparationStatus === 'BOUGHT' || eventDetail.ingredientsReadyAt || eventDetail.cookingStartedAt
-                      }"
                     >
-                      <text>{{ preparationStatusText(row.item.preparationStatus) }}</text>
                       <view
-                        v-if="row.item.preparationStatus !== 'READY' && row.item.preparationStatus !== 'BOUGHT' && !eventDetail.ingredientsReadyAt && !eventDetail.cookingStartedAt"
                         class="meal-shopping-preview__home"
                         @click="toggleEventPreparation(row.item)"
                       >
@@ -398,6 +396,7 @@
                 <view class="meal-panel__head meal-panel__head--row">
                   <text class="meal-panel__title">{{ shoppingPanelTitle }}</text>
                   <view
+                    v-if="shoppingActionVisible"
                     class="meal-inline-action meal-inline-action--ghost meal-menu__add-action"
                     :class="{ 'meal-inline-action--disabled': shoppingActionDisabled }"
                     @click="openShoppingPage"
@@ -419,11 +418,11 @@
                       'meal-shopping-preview__row--extra-expanded': planShoppingDisplay.expanded && row.extra
                     }"
                   >
-                    <view class="menu-confirm__item">
-                      <view class="menu-confirm__item-main">
-                        <text class="menu-confirm__item-name">{{ row.item.name }}</text>
-                        <text class="menu-confirm__item-meta">{{ row.item.quantityText || "未填数量" }}</text>
-                      </view>
+                    <view class="menu-confirm__item-main">
+                      <text class="menu-confirm__item-name">{{ row.item.name }}</text>
+                      <text class="menu-confirm__item-meta">
+                        {{ planDetail?.menuLocked ? `${preparationStatusText(row.item.preparationStatus)} · ` : "" }}{{ row.item.quantityText || "未填数量" }}
+                      </text>
                     </view>
                   </view>
                   <view
@@ -910,6 +909,23 @@
           </template>
         </SheetShell>
 
+        <ShoppingListPickerSheet
+          :visible="shoppingSheetVisible"
+          :loading="shoppingListLoading"
+          :error-text="shoppingListError"
+          :items="shoppingLists"
+          :selected-id="selectedShoppingListId"
+          :create-name="shoppingCreateName"
+          :submitting="shoppingWriting"
+          @close="closeShoppingSheet"
+          @after-close="handleShoppingSheetAfterClose"
+          @retry="loadShoppingLists(true)"
+          @create="createShoppingList"
+          @confirm="confirmAddToShoppingList"
+          @update:selected-id="selectedShoppingListId = $event"
+          @update:create-name="shoppingCreateName = $event"
+        />
+
       </template>
     </view>
   </Layout>
@@ -925,6 +941,7 @@ import { recipeApi, type MyRecipeSummary } from "@/apis/recipe";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import LoadMore from "@/components/LoadMore.vue";
+import ShoppingListPickerSheet from "@/components/Shopping/ShoppingListPickerSheet.vue";
 import CookAssistantUnlockSheet from "@/components/CookAssistantUnlockSheet.vue";
 import CookAssistantThinkingLoading from "@/components/CookAssistantThinkingLoading.vue";
 import EventScheduleSheet from "@/components/Meal/EventScheduleSheet.vue";
@@ -943,7 +960,8 @@ import { useTheme } from "@/composables/useTheme";
 import { useSystemInfo } from "@/composables/useSystemInfo";
 import {
   shoppingApi,
-  type ShoppingGapPreviewItem
+  type ShoppingGapPreviewItem,
+  type ShoppingListSummary
 } from "@/apis/shopping";
 import { userApi, type CookAssistantUsageResponse, type TasteProfileResponse } from "@/apis/user";
 import { authApi } from "@/apis/auth";
@@ -1037,6 +1055,7 @@ type FooterActionKey =
   | "bring"
   | "create-event"
   | "confirm-menu"
+  | "start-plan-cooking"
   | "complete-plan"
   | "complete-event"
   | "start-cooking"
@@ -1076,6 +1095,12 @@ const { navBarTotalHeight } = useSystemInfo();
 const loading = ref(false);
 const submitting = ref(false);
 const shoppingWriting = ref(false);
+const shoppingSheetVisible = ref(false);
+const shoppingListLoading = ref(false);
+const shoppingListError = ref("");
+const shoppingLists = ref<ShoppingListSummary[]>([]);
+const selectedShoppingListId = ref<UUID | "">("");
+const shoppingCreateName = ref("");
 const planItemId = ref<UUID | "">("");
 const planDate = ref("");
 const eventId = ref<UUID | "">("");
@@ -1248,15 +1273,22 @@ watch(
   }
 );
 const addedRecipeIds = computed(() => new Set(currentMenuItems.value.map(item => item.recipeId).filter((value): value is UUID => value !== null)));
-const currentPlanShoppingCount = computed(() => (eventDetail.value ? 0 : planGapItems.value.length));
+const currentPlanShoppingCount = computed(() => (eventDetail.value ? 0 : planGapItems.value.filter(item => item.preparationStatus === "OPEN").length));
 const shoppingLinkTarget = computed(() => eventDetail.value ?? planDetail.value ?? null);
 const linkedShoppingListId = computed(() => shoppingLinkTarget.value?.shoppingListId ?? null);
 const linkedShoppingListName = computed(() => shoppingLinkTarget.value?.shoppingListName?.trim() || "");
 const hasLinkedShoppingList = computed(() => hasActiveShoppingListLink(shoppingLinkTarget.value));
-const shoppingActionDisabled = computed(() => !hasLinkedShoppingList.value && (shoppingWriting.value || gapLoading.value));
+const shoppingActionVisible = computed(() => (
+  eventDetail.value
+    ? eventDetail.value.status === "CONFIRMED"
+    : Boolean(planDetail.value?.menuLocked && (currentPlanShoppingCount.value > 0 || hasLinkedShoppingList.value))
+));
+const shoppingActionDisabled = computed(() => shoppingWriting.value || (!hasLinkedShoppingList.value && (shoppingListLoading.value || gapLoading.value)));
 const shoppingActionText = computed(() => {
+  if (shoppingWriting.value && planDetail.value && !eventDetail.value && hasLinkedShoppingList.value) return "同步中...";
   if (hasLinkedShoppingList.value) return "查看清单";
   if (gapLoading.value) return "计算中";
+  if (shoppingListLoading.value) return "清单加载中...";
   if (shoppingWriting.value) return "写入中";
   return "去采购";
 });
@@ -1584,7 +1616,13 @@ watch(
 );
 const showShoppingPanel = computed(() => {
   if (eventDetail.value) return isEventOrganizer.value && !eventClosed.value;
-  return Boolean(planDetail.value?.menuLocked && !planClosed.value && currentPlanShoppingCount.value > 0);
+  return Boolean(
+      planDetail.value &&
+      !planClosed.value &&
+      currentMenuItems.value.length > 0 &&
+      currentPlanGapItems.value.length > 0 &&
+      !planDetail.value.cookingStartedAt
+  );
 });
 const footerStage = computed<FooterStage>(() => {
   if (eventDetail.value?.status === "CANCELLED") return "CANCELLED";
@@ -1691,6 +1729,12 @@ const footerStatusMeta = computed(() => {
   if (footerStage.value === "READY_TO_START" && !eventDetail.value && currentPlanShoppingCount.value > 0) {
     return `这顿饭需要准备 ${currentPlanShoppingCount.value} 样食材，下一步去采购。`;
   }
+  if (footerStage.value === "READY_TO_START" && !eventDetail.value && planDetail.value?.cookingStartedAt) {
+    return "已经开做，完成后可以结束计划。";
+  }
+  if (footerStage.value === "READY_TO_START" && !eventDetail.value && planGapReady.value) {
+    return "食材已备齐，可以开始做饭。";
+  }
   if (footerStage.value === "MENU_EDITING" && eventDetail.value && isEventOrganizer.value && currentMenuItems.value.length) {
     if (gapLoading.value) return "需要准备的食材会跟着菜单实时更新。";
     if (currentEventGapCount.value > 0) return `按当前菜单看，需要准备 ${currentEventGapCount.value} 样食材。`;
@@ -1750,18 +1794,19 @@ const footerPrimaryAction = computed<FooterAction | null>(() => {
       }
       if (!eventGapReady.value) return null;
       if (!eventDetail.value.cookingStartedAt) return { key: "start-cooking", label: "开始做饭" };
-      if (canCompleteEvent.value) return { key: "complete-event", label: "结束饭局" };
+      if (canCompleteEvent.value) return { key: "complete-event", label: "完成用餐" };
       return null;
     }
     if (!eventDetail.value && currentPlanShoppingCount.value > 0) {
       return {
         key: "shopping",
-        label: hasLinkedShoppingList.value ? "查看采购清单" : "去采购",
-        disabled: hasLinkedShoppingList.value ? false : shoppingWriting.value
+        label: shoppingWriting.value && hasLinkedShoppingList.value ? "同步中..." : hasLinkedShoppingList.value ? "查看采购清单" : "去采购",
+        disabled: shoppingWriting.value
       };
     }
     if (!eventDetail.value && !planGapReady.value) return null;
-    if (!eventDetail.value) return { key: "complete-plan", label: "完成用餐" };
+    if (!eventDetail.value && !planDetail.value?.cookingStartedAt) return { key: "start-plan-cooking", label: "开始做饭" };
+    if (!eventDetail.value) return { key: "complete-plan", label: "完成计划" };
     return canChooseBring.value ? { key: "bring", label: "我带菜" } : null;
   }
   return null;
@@ -1970,6 +2015,7 @@ const shoppingPanelText = computed(() => {
     return isEventOrganizer.value ? "菜单定好后，再看需要准备什么。" : "主家定好菜单后，食材准备的进度会显示在这里。";
   }
   if (!eventDetail.value) {
+    if (planDetail.value?.cookingStartedAt) return "已经开始做饭，完成后可以结束计划。";
     if (hasLinkedShoppingList.value && linkedShoppingListName.value) {
       if (currentPlanShoppingCount.value > 0) {
         return `清单已列，还有 ${currentPlanShoppingCount.value} 样食材需要准备，去「${linkedShoppingListName.value}」继续采购。`;
@@ -2286,6 +2332,13 @@ function handleDetailDockAction(action: DetailDockActionKey) {
 function clearPageState() {
   loading.value = false;
   submitting.value = false;
+  shoppingWriting.value = false;
+  shoppingSheetVisible.value = false;
+  shoppingListLoading.value = false;
+  shoppingListError.value = "";
+  shoppingLists.value = [];
+  selectedShoppingListId.value = "";
+  shoppingCreateName.value = "";
   uploadingCover.value = false;
   inviteSharing.value = false;
   scrollTop.value = 0;
@@ -3381,15 +3434,14 @@ async function handleConfirmMenuAction() {
   if (!planDetail.value || !canManageMenu.value || submitting.value) return;
   submitting.value = true;
   try {
-    if (eventDetail.value) {
-      const confirmed = await uniPlatform.feedback.confirm({
-        title: "确认菜单",
-        content: "确认后菜单将固定，不能再调整。要继续吗？",
-        confirmText: "确认并固定",
-        cancelText: "再看看"
-      });
-      if (!confirmed) return;
-    }
+    const confirmed = await uniPlatform.feedback.confirm({
+      title: "确认菜单",
+      content: "确认后菜单将固定，不能再调整。要继续吗？",
+      confirmText: "确认并固定",
+      cancelText: "再看看"
+    });
+    if (!confirmed) return;
+
     planDetail.value = await mealApi.confirmPlanMenu(planDetail.value.id, {
       operationId: createOperationId(),
       expectedVersion: planDetail.value.version
@@ -3502,19 +3554,32 @@ async function removeSelectedCompletedIngredients() {
 }
 
 async function handleCompletePlanAction() {
-  if (!planDetail.value || eventDetail.value || !planGapReady.value || currentPlanShoppingCount.value > 0 || planClosed.value || submitting.value) return;
+  if (!planDetail.value || eventDetail.value || !planDetail.value.cookingStartedAt || !planGapReady.value || currentPlanShoppingCount.value > 0 || planClosed.value || submitting.value) return;
   const confirmed = await uniPlatform.feedback.confirm({
-    title: "确认完成用餐",
-    content: "仅在这顿饭确实已经完成后确认。确认后这条计划将结束，不能再发起饭局。确定吗？"
+    title: "确认完成计划",
+    content: "确认这顿饭已经完成？确认后计划将结束。"
   });
   if (!confirmed) return;
 
   submitting.value = true;
   try {
     planDetail.value = await mealApi.completePlan(planDetail.value.id, createOperationId());
-    await uniPlatform.feedback.toast({ title: "已完成用餐", icon: "success" });
+    await uniPlatform.feedback.toast({ title: "计划已完成", icon: "success" });
   } catch (error) {
-    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "确认用餐失败", icon: "none" });
+    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "完成计划失败", icon: "none" });
+  } finally {
+    submitting.value = false;
+  }
+}
+
+async function handleStartPlanCookingAction() {
+  if (!planDetail.value || eventDetail.value || !planGapReady.value || currentPlanShoppingCount.value > 0 || planDetail.value.cookingStartedAt || planClosed.value || submitting.value) return;
+  submitting.value = true;
+  try {
+    planDetail.value = await mealApi.startPlanCooking(planDetail.value.id, createOperationId());
+    await uniPlatform.feedback.toast({ title: "开始做饭", icon: "success" });
+  } catch (error) {
+    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "开始做饭失败", icon: "none" });
   } finally {
     submitting.value = false;
   }
@@ -3636,7 +3701,7 @@ async function loadGapPreview() {
     planGapItems.value = [];
     return;
   }
-  if (!eventDetail.value && (!planDetail.value || !planDetail.value.menuLocked || !currentMenuItems.value.length)) {
+  if (!eventDetail.value && (!planDetail.value || !currentMenuItems.value.length)) {
     gapLoading.value = false;
     gapErrorText.value = "";
     eventGapItems.value = null;
@@ -3678,15 +3743,30 @@ function buildShoppingDraftName() {
   );
 }
 
-function openLinkedShoppingList() {
-  if (!linkedShoppingListId.value) return;
-  void uniPlatform.navigation.navigateTo(buildShoppingListDetailPath(linkedShoppingListId.value));
+async function openLinkedShoppingList() {
+  const listId = linkedShoppingListId.value;
+  if (!listId || shoppingWriting.value) return;
+  if (planDetail.value && !eventDetail.value) {
+    shoppingWriting.value = true;
+    try {
+      await shoppingApi.addPlanToList(listId, {
+        operationId: createOperationId(),
+        planItemId: planDetail.value.id
+      });
+    } catch (error) {
+      await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "采购清单同步失败", icon: "none" });
+      return;
+    } finally {
+      shoppingWriting.value = false;
+    }
+  }
+  void uniPlatform.navigation.navigateTo(buildShoppingListDetailPath(listId));
 }
 
 async function openShoppingPage() {
-  if ((!planDetail.value && !eventDetail.value) || planClosed.value || shoppingWriting.value) return;
+  if ((!planDetail.value && !eventDetail.value) || planClosed.value || shoppingWriting.value || shoppingListLoading.value) return;
   if (hasLinkedShoppingList.value) {
-    openLinkedShoppingList();
+    await openLinkedShoppingList();
     return;
   }
   if (eventDetail.value && gapLoading.value) return;
@@ -3694,14 +3774,52 @@ async function openShoppingPage() {
     await uniPlatform.feedback.toast({ title: "这顿饭当前没有可采购的菜谱", icon: "none" });
     return;
   }
+  selectedShoppingListId.value = "";
+  shoppingCreateName.value = buildShoppingDraftName();
+  shoppingSheetVisible.value = true;
+  await loadShoppingLists(true);
+}
+
+async function loadShoppingLists(force = false) {
+  if (shoppingListLoading.value && !force) return;
+  shoppingListLoading.value = true;
+  shoppingListError.value = "";
+  try {
+    const response = await shoppingApi.listLists("ACTIVE");
+    shoppingLists.value = response.items;
+    if (selectedShoppingListId.value && !response.items.some(item => item.id === selectedShoppingListId.value)) {
+      selectedShoppingListId.value = "";
+    }
+  } catch (error) {
+    shoppingListError.value = error instanceof Error ? error.message : "清单加载失败";
+  } finally {
+    shoppingListLoading.value = false;
+  }
+}
+
+async function createShoppingList() {
+  if (shoppingWriting.value) return;
   shoppingWriting.value = true;
   try {
-    const activeLists = await shoppingApi.listLists("ACTIVE");
-    const currentList = activeLists.items[0] ?? await shoppingApi.createList({
+    const created = await shoppingApi.createList({
       operationId: createOperationId(),
-      name: buildShoppingDraftName()
+      name: shoppingCreateName.value.trim() || null
     });
-    const listId = currentList.id;
+    shoppingLists.value = [created, ...shoppingLists.value.filter(item => item.id !== created.id)];
+    selectedShoppingListId.value = created.id;
+    await uniPlatform.feedback.toast({ title: "已新建清单", icon: "success" });
+  } catch (error) {
+    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "创建清单失败", icon: "none" });
+  } finally {
+    shoppingWriting.value = false;
+  }
+}
+
+async function confirmAddToShoppingList() {
+  const listId = selectedShoppingListId.value;
+  if (!listId || shoppingWriting.value || shoppingListLoading.value) return;
+  shoppingWriting.value = true;
+  try {
     if (eventDetail.value) {
       if (!eventGapItems.value) {
         await loadGapPreview();
@@ -3723,13 +3841,26 @@ async function openShoppingPage() {
         planItemId: currentPlan.id
       });
     }
+    shoppingSheetVisible.value = false;
     await uniPlatform.feedback.toast({ title: "已加入采购清单", icon: "success" });
-    void uniPlatform.navigation.navigateTo(`/pages_pantry/list-detail/index?id=${encodeURIComponent(String(listId))}`);
+    void uniPlatform.navigation.navigateTo(buildShoppingListDetailPath(listId));
   } catch (error) {
     await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "加入采购清单失败", icon: "none" });
   } finally {
     shoppingWriting.value = false;
   }
+}
+
+function closeShoppingSheet() {
+  if (shoppingWriting.value) return;
+  shoppingSheetVisible.value = false;
+}
+
+function handleShoppingSheetAfterClose() {
+  shoppingListError.value = "";
+  shoppingLists.value = [];
+  selectedShoppingListId.value = "";
+  shoppingCreateName.value = "";
 }
 
 function goBack() {
@@ -3766,6 +3897,10 @@ function handleFooterAction(action: FooterActionKey) {
   }
   if (action === "confirm-menu") {
     void handleConfirmMenuAction();
+    return;
+  }
+  if (action === "start-plan-cooking") {
+    void handleStartPlanCookingAction();
     return;
   }
   if (action === "complete-plan") {
@@ -5574,14 +5709,10 @@ function clearFocusedSection() {
 .meal-shopping-preview__state {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 12rpx 24rpx;
+  justify-content: flex-end;
+  padding: 0 24rpx 12rpx;
   color: var(--color-text-tertiary);
   font-size: 22rpx;
-}
-
-.meal-shopping-preview__state--status-only {
-  justify-content: flex-end;
 }
 
 .meal-shopping-preview__home {

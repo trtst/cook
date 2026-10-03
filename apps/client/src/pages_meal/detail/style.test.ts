@@ -63,10 +63,8 @@ expectIncludes('class="cookfont icon-done meal-shopping-preview__prepared-icon"'
 assert.ok(fontSource.includes('.icon-done::before {\n    content: "\\e614";\n}'));
 expectExcludes("meal-shopping-preview__prepared-mark");
 expectIncludes(".meal-shopping-preview__row {\n  position: relative;");
-expectSelectorIncludes(".meal-shopping-preview__state--status-only", [
-  "justify-content: flex-end;"
-]);
 expectSelectorIncludes(".meal-shopping-preview__state", [
+  "justify-content: flex-end;",
   "color: var(--color-text-tertiary);"
 ]);
 expectSelectorIncludes(".meal-shopping-preview__item-title", [

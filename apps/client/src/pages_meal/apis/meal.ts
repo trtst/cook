@@ -25,6 +25,7 @@ export interface MealPlanSummary {
   menuLocked: boolean;
   status: "PLANNED" | "COMPLETED" | "CANCELLED";
   version: number;
+  cookingStartedAt: IsoDateTime | null;
   completedAt: IsoDateTime | null;
   hasDiningEvent: boolean;
   diningEventId: UUID | null;
@@ -403,6 +404,13 @@ export const mealApi = {
   completePlan(planItemId: UUID, operationId: OperationId) {
     return post<MealPlanSummary>(
       `${cfg.domain}/api/meal-plans/${encodeURIComponent(planItemId)}/complete`,
+      undefined,
+      { idempotencyKey: operationId }
+    );
+  },
+  startPlanCooking(planItemId: UUID, operationId: OperationId) {
+    return post<MealPlanSummary>(
+      `${cfg.domain}/api/meal-plans/${encodeURIComponent(planItemId)}/start-cooking`,
       undefined,
       { idempotencyKey: operationId }
     );

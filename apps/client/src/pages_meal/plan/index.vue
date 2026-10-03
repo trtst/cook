@@ -151,7 +151,7 @@
                         <view class="meal-card__actions">
                           <button
                             class="action-pill action-pill--primary meal-card__action-button"
-                            :class="{ 'meal-card__action-button--disabled': shoppingSubmitting && shoppingPlan?.id === plan.id && !hasActiveShoppingListLink(plan) }"
+                            :class="{ 'meal-card__action-button--disabled': (shoppingListLoading || shoppingSubmitting) && shoppingPlan?.id === plan.id }"
                             @click.stop="handlePlanShoppingAction(plan)"
                           >
                             {{ planShoppingActionText(plan) }}
@@ -243,6 +243,23 @@
         </template>
       </SheetShell>
 
+      <ShoppingListPickerSheet
+        :visible="shoppingSheetVisible"
+        :loading="shoppingListLoading"
+        :error-text="shoppingListError"
+        :items="shoppingLists"
+        :selected-id="selectedShoppingListId"
+        :create-name="shoppingCreateName"
+        :submitting="shoppingSubmitting"
+        @close="closeShoppingSheet"
+        @after-close="handleShoppingSheetAfterClose"
+        @retry="loadShoppingLists(true)"
+        @create="createShoppingList"
+        @confirm="confirmAddPlanToShoppingList"
+        @update:selected-id="selectedShoppingListId = $event"
+        @update:create-name="shoppingCreateName = $event"
+      />
+
   </Layout>
 </template>
 
@@ -251,11 +268,12 @@ import { onHide, onLoad, onShow, onUnload } from "@dcloudio/uni-app";
 import { computed, nextTick, ref, watch } from "vue";
 import { type UUID } from "@/apis/http";
 import emptyStateArt from "@/assets/empty.png";
-import { shoppingListApi } from "../apis/shopping-list";
+import { shoppingListApi, type ShoppingListSummary } from "../apis/shopping-list";
 import { recipeApi, type RecipeDuration } from "@/apis/recipe";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import RecipeSearchLoading from "@/components/Recipe/RecipeSearchLoading.vue";
+import ShoppingListPickerSheet from "@/components/Shopping/ShoppingListPickerSheet.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
 import { useCustomRefresher } from "@/composables/useCustomRefresher";
 import { useLoginEmptyState } from "../composables/useLoginEmptyState";
@@ -347,6 +365,12 @@ const monthTransition = ref<{
 } | null>(null);
 const shoppingSubmitting = ref(false);
 const shoppingPlan = ref<MealPlanSummary | null>(null);
+const shoppingSheetVisible = ref(false);
+const shoppingListLoading = ref(false);
+const shoppingListError = ref("");
+const shoppingLists = ref<ShoppingListSummary[]>([]);
+const selectedShoppingListId = ref<UUID | "">("");
+const shoppingCreateName = ref("");
 const emptyDockOpen = ref(false);
 const createPlanSheetVisible = ref(false);
 const creatingPlan = ref(false);
@@ -770,51 +794,118 @@ async function confirmCreatePlan() {
 }
 
 async function addPlanToShoppingList(plan: MealPlanSummary) {
-  if (shoppingSubmitting.value) return;
+  if (shoppingSubmitting.value || shoppingListLoading.value) return;
   if (isPlanExpired(plan, nowMs.value) || plan.status === "COMPLETED") {
     await uniPlatform.feedback.toast({ title: "这条计划已经结束，不能再加入采购清单", icon: "none" });
     return;
   }
+  if (!plan.menuLocked) return;
   if (!hasPlanShoppingRecipes(plan)) {
     await uniPlatform.feedback.toast({ title: "当前餐次没有可加入采购清单的菜谱", icon: "none" });
     return;
   }
   shoppingPlan.value = plan;
+  shoppingSheetVisible.value = true;
+  selectedShoppingListId.value = "";
+  shoppingCreateName.value = buildShoppingDraftName(plan);
+  await loadShoppingLists(true);
+}
+
+async function loadShoppingLists(force = false) {
+  if (shoppingListLoading.value && !force) return;
+  shoppingListLoading.value = true;
+  shoppingListError.value = "";
+  try {
+    shoppingLists.value = await shoppingListApi.listActive();
+    if (selectedShoppingListId.value && !shoppingLists.value.some(item => item.id === selectedShoppingListId.value)) {
+      selectedShoppingListId.value = "";
+    }
+  } catch (error) {
+    shoppingListError.value = error instanceof Error ? error.message : "清单加载失败";
+  } finally {
+    shoppingListLoading.value = false;
+  }
+}
+
+async function createShoppingList() {
+  if (shoppingSubmitting.value) return;
   shoppingSubmitting.value = true;
   try {
-    const activeLists = await shoppingListApi.listActive();
-    const currentList = activeLists[0] ?? await shoppingListApi.createList({
+    const created = await shoppingListApi.createList({
       operationId: createOperationId(),
-      name: buildShoppingDraftName(plan)
+      name: shoppingCreateName.value.trim() || null
     });
-    await shoppingListApi.addPlanToList(currentList.id, {
+    shoppingLists.value = [created, ...shoppingLists.value.filter(item => item.id !== created.id)];
+    selectedShoppingListId.value = created.id;
+    await uniPlatform.feedback.toast({ title: "已新建清单", icon: "success" });
+  } catch (error) {
+    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "创建清单失败", icon: "none" });
+  } finally {
+    shoppingSubmitting.value = false;
+  }
+}
+
+async function confirmAddPlanToShoppingList() {
+  const plan = shoppingPlan.value;
+  const listId = selectedShoppingListId.value;
+  if (!plan || !listId || shoppingSubmitting.value) return;
+  shoppingSubmitting.value = true;
+  try {
+    await shoppingListApi.addPlanToList(listId, {
       operationId: createOperationId(),
       planItemId: plan.id
     });
+    shoppingSheetVisible.value = false;
     await loadWeekPlans();
-    await uniPlatform.feedback.toast({ title: "已加入当前采购清单", icon: "success" });
-    void uniPlatform.navigation.navigateTo(buildShoppingListDetailPath(currentList.id));
+    await uniPlatform.feedback.toast({ title: "已加入采购清单", icon: "success" });
+    void uniPlatform.navigation.navigateTo(buildShoppingListDetailPath(listId));
   } catch (error) {
     await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "加入采购清单失败", icon: "none" });
   } finally {
     shoppingSubmitting.value = false;
-    shoppingPlan.value = null;
   }
 }
 
+function closeShoppingSheet() {
+  if (shoppingSubmitting.value) return;
+  shoppingSheetVisible.value = false;
+}
+
+function handleShoppingSheetAfterClose() {
+  shoppingListError.value = "";
+  shoppingLists.value = [];
+  selectedShoppingListId.value = "";
+  shoppingCreateName.value = "";
+  shoppingPlan.value = null;
+}
+
 function planShoppingActionText(plan: MealPlanSummary) {
+  if (shoppingSubmitting.value && shoppingPlan.value?.id === plan.id) return "同步中...";
   if (hasActiveShoppingListLink(plan)) return "查看采购清单";
+  if (shoppingListLoading.value && shoppingPlan.value?.id === plan.id) return "清单加载中...";
   return shoppingSubmitting.value && shoppingPlan.value?.id === plan.id ? "加入中..." : "加入采购清单";
 }
 
-function openLinkedShoppingList(plan: MealPlanSummary) {
-  if (!plan.shoppingListId) return;
-  void uniPlatform.navigation.navigateTo(buildShoppingListDetailPath(plan.shoppingListId));
+async function openLinkedShoppingList(plan: MealPlanSummary) {
+  if (!plan.shoppingListId || shoppingSubmitting.value) return;
+  shoppingPlan.value = plan;
+  shoppingSubmitting.value = true;
+  try {
+    await shoppingListApi.addPlanToList(plan.shoppingListId, {
+      operationId: createOperationId(),
+      planItemId: plan.id
+    });
+    void uniPlatform.navigation.navigateTo(buildShoppingListDetailPath(plan.shoppingListId));
+  } catch (error) {
+    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "采购清单同步失败", icon: "none" });
+  } finally {
+    shoppingSubmitting.value = false;
+  }
 }
 
 function handlePlanShoppingAction(plan: MealPlanSummary) {
   if (hasActiveShoppingListLink(plan)) {
-    openLinkedShoppingList(plan);
+    void openLinkedShoppingList(plan);
     return;
   }
   void addPlanToShoppingList(plan);
@@ -920,7 +1011,7 @@ function hasPlanShoppingRecipes(plan: MealPlanSummary) {
 }
 
 function canShowShoppingAction(plan: MealPlanSummary) {
-  return !isPlanExpired(plan, nowMs.value) && plan.status === "PLANNED";
+  return !isPlanExpired(plan, nowMs.value) && plan.status === "PLANNED" && plan.menuLocked;
 }
 
 function resolvePlanDeadlineMs(plan: Pick<MealPlanSummary, "planDate" | "mealSlot">) {

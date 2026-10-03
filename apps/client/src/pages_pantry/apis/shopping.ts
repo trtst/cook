@@ -1,5 +1,6 @@
 import { cfg } from "@/config";
 import { get, post, type IsoDateTime, type OperationId, type UUID } from "@/apis/http";
+import type { RecipeAmountSnapshot } from "@/apis/recipe";
 
 export type ShoppingGapWindow = "NEXT_48_HOURS" | "NEXT_7_DAYS" | "LATER";
 
@@ -120,6 +121,7 @@ export interface ShoppingListDetailItem {
   categoryName: string | null;
   imageUrl: string | null;
   quantityText: string | null;
+  amount: RecipeAmountSnapshot | null;
   note: string | null;
   status: ShoppingListItemStatus;
   checkedAt: IsoDateTime | null;

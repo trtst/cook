@@ -20,6 +20,7 @@ export interface MealPlanSummary {
   menuLocked: boolean;
   status: "PLANNED" | "COMPLETED" | "CANCELLED";
   version: number;
+  cookingStartedAt: string | null;
   hasDiningEvent: boolean;
   diningEventId: UUID | null;
   shoppingListId: UUID | null;

@@ -972,7 +972,9 @@ function closeAddSheet() {
 }
 
 function buildGroupKey(item: Pick<ShoppingListDetailItem, "ingredientId" | "name" | "sources">) {
-  return `${item.ingredientId || "none"}:${item.name.trim().toLowerCase()}`;
+  return item.ingredientId
+    ? `ingredient:${item.ingredientId}`
+    : `name:${item.name.trim().toLowerCase()}`;
 }
 
 function buildGroupView(key: string, items: ShoppingListDetailItem[]): GroupView {
@@ -1126,62 +1128,50 @@ function manageActionStyle(index: number) {
 
 function buildGroupQuantityText(items: ShoppingListDetailItem[]) {
   if (!items.length) return "按需购买";
-  const lines = collectDistinctQuantityLines(items.map(item => item.quantityText));
-  if (lines.length !== 1 || !parseExactQuantityText(lines[0] ?? "")) return "按需购买";
-  return `本次约需 ${lines[0]}`;
-}
+  if (items.length === 1) return items[0]!.quantityText?.trim() || "按需购买";
 
-function parseExactQuantityText(value: string) {
-  const match = value.trim().match(/^([+-]?\d+(?:\.\d+)?)\s*(.+)$/);
-  if (!match) return null;
-  const amount = Number(match[1]);
-  const unitText = match[2]?.trim();
-  if (!Number.isFinite(amount) || !unitText) return null;
-  return {
-    amount,
-    unitText,
-    unitKey: unitText.toLowerCase()
-  };
-}
-
-function formatQuantityNumber(value: number) {
-  const normalized = Math.round((value + Number.EPSILON) * 1000) / 1000;
-  return normalized.toFixed(3).replace(/\.?0+$/, "");
-}
-
-function collectDistinctQuantityLines(values: Array<string | null | undefined>) {
-  const exactOrder: string[] = [];
-  const exactMap = new Map<string, { unit: string; total: number }>();
-  const seen = new Set<string>();
-  const lines: string[] = [];
-  for (const value of values) {
-    const text = value?.trim();
-    if (!text) continue;
-    const parsed = parseExactQuantityText(text);
-    if (parsed) {
-      const current = exactMap.get(parsed.unitKey);
-      if (!current) {
-        exactOrder.push(parsed.unitKey);
-        exactMap.set(parsed.unitKey, {
-          unit: parsed.unitText,
-          total: parsed.amount
-        });
-      } else {
-        current.total += parsed.amount;
-      }
-      continue;
+  const amounts = items.map(item => item.amount);
+  if (amounts.every(amount => amount === null)) {
+    const quantities = items.map(item => parseManualExactQuantity(item.quantityText?.trim() ?? ""));
+    if (quantities.every(quantity => quantity === null)) {
+      return items.every(item => !item.quantityText?.trim()) ? "按需购买" : "适量";
     }
-    const lineKey = `text:${text}`;
-    if (seen.has(lineKey)) continue;
-    seen.add(lineKey);
-    lines.push(text);
+    if (quantities.some(quantity => quantity === null)) return "适量";
+    const first = quantities[0]!;
+    if (quantities.some(quantity => quantity!.unitKey !== first.unitKey)) return "适量";
+    return `本次约需 ${addExactQuantities(quantities.map(quantity => quantity!.quantity))} ${first.unitText}`;
   }
-  return exactOrder
-    .map(unitKey => {
-      const current = exactMap.get(unitKey)!;
-      return `${formatQuantityNumber(current.total)} ${current.unit}`.trim();
-    })
-    .concat(lines);
+  if (amounts.some(amount => !amount || amount.kind !== "EXACT")) return "适量";
+
+  const exact = amounts.filter((amount): amount is Extract<ShoppingListDetailItem["amount"], { kind: "EXACT" }> => amount?.kind === "EXACT");
+  if (!exact.length || exact.some(amount => amount.unitId !== exact[0]!.unitId)) return "适量";
+  return `本次约需 ${addExactQuantities(exact.map(amount => amount.quantity))} ${exact[0]!.unitName}`;
+}
+
+function parseManualExactQuantity(value: string) {
+  const match = value.match(/^(\d+(?:\.\d+)?)\s*(.+)$/);
+  const unitText = match?.[2]?.trim();
+  if (!match || !unitText) return null;
+  return { quantity: match[1]!, unitText, unitKey: unitText.toLowerCase() };
+}
+
+function addExactQuantities(values: string[]) {
+  const scale = Math.max(...values.map(value => value.split(".")[1]?.length ?? 0));
+  const factor = 10n ** BigInt(scale);
+  const toScaled = (value: string) => {
+    const negative = value.startsWith("-");
+    const unsigned = value.replace(/^[+-]/, "");
+    const [integer, fraction = ""] = unsigned.split(".");
+    const result = BigInt(integer!) * factor + BigInt(fraction.padEnd(scale, "0") || "0");
+    return negative ? -result : result;
+  };
+  const total = values.reduce((sum, value) => sum + toScaled(value), 0n);
+  const negative = total < 0n;
+  const absolute = negative ? -total : total;
+  if (!scale) return `${negative ? "-" : ""}${absolute}`;
+  const padded = absolute.toString().padStart(scale + 1, "0");
+  const fraction = padded.slice(-scale).replace(/0+$/, "");
+  return `${negative ? "-" : ""}${padded.slice(0, -scale)}${fraction ? `.${fraction}` : ""}`;
 }
 
 function getCurrentGroupItems(groupKey: string) {
