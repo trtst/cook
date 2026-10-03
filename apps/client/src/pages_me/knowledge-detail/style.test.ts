@@ -35,6 +35,7 @@ function expectSelectorIncludes(source: string, selector: string, snippets: stri
 }
 
 const pageSource = readFile("index.vue");
+const sheetSource = readFile("../../components/Sheet/SheetShell.vue");
 const articleBodySource = readFile("../components/ArticleBody.vue");
 const fontSource = readFile("../../assets/fonts/font.scss");
 const bannedProcessName = ["norm", "alize"].join("");
@@ -49,6 +50,12 @@ expectIncludes(pageSource, 'class="detail-meta__icon cookfont icon-read"');
 expectIncludes(pageSource, 'class="detail-meta__icon cookfont icon-like"');
 expectIncludes(pageSource, 'class="detail-bottom-like"');
 expectIncludes(pageSource, 'class="detail-bottom-like__button"');
+expectIncludes(pageSource, 'class="detail-share-actions"');
+expectIncludes(pageSource, '<SharePillButton label="分享文章" />');
+expectIncludes(pageSource, '@click="copyArticleLink"');
+expectIncludes(pageSource, "onShareAppMessage(() => ({");
+expectIncludes(pageSource, "imageUrl: detail.value?.coverImageUrl || undefined");
+expectIncludes(pageSource, "await uniPlatform.clipboard.set(buildKnowledgeDetailPath(articleId.value))");
 expectIncludes(pageSource, "import ArticleBody from");
 expectIncludes(pageSource, "<ArticleBody :html=\"detail.bodyHtml\" />");
 expectIncludes(pageSource, "if (!detail.value || viewRecorded.value || !sessionStore.isLoggedIn) return;");
@@ -76,6 +83,9 @@ assert.ok(summaryIndex > metaIndex, "Expected summary after meta");
 assert.ok(keywordsIndex > summaryIndex, "Expected keywords after summary");
 assert.ok(articleIndex > keywordsIndex, "Expected article body after keywords");
 assert.ok(bottomLikeIndex > articleIndex, "Expected centered bottom like after article body");
+
+expectSelectorIncludes(sheetSource, ".sheet-shell__close", ["padding: 20rpx;", "margin: -20rpx;"]);
+expectIncludes(sheetSource, "padding-bottom: calc(20rpx + env(safe-area-inset-bottom));");
 
 expectSelectorExcludes(pageSource, ".detail-article", [
   "border-radius:",

@@ -211,6 +211,8 @@ function handlePanelTransitionEnd(event: Event) {
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
+  padding: 20rpx;
+  margin: -20rpx;
   background: transparent;
   color: var(--color-text-secondary);
   font-size: 30rpx;
@@ -241,7 +243,7 @@ function handlePanelTransitionEnd(event: Event) {
 .sheet-shell__footer {
   flex: 0 0 auto;
   padding-top: 30rpx;
-  padding-bottom: calc(42rpx + env(safe-area-inset-bottom));
+  padding-bottom: calc(20rpx + env(safe-area-inset-bottom));
 }
 
 .sheet-shell__header + .sheet-shell__body {

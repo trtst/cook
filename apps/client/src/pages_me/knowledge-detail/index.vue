@@ -71,6 +71,13 @@
               <ArticleBody :html="detail.bodyHtml" />
             </view>
 
+            <view class="detail-share-actions">
+              <SharePillButton label="分享文章" />
+              <view class="detail-share-actions__copy" hover-class="detail-share-actions__copy--hover" @click="copyArticleLink">
+                复制链接
+              </view>
+            </view>
+
             <view class="detail-bottom-like">
               <view
                 class="detail-bottom-like__button"
@@ -97,15 +104,17 @@
 
 <script setup lang="ts">
 import { computed, ref } from "vue";
-import { onLoad } from "@dcloudio/uni-app";
+import { onLoad, onShareAppMessage } from "@dcloudio/uni-app";
 import Layout from "@/components/Layout/Layout.vue";
 import ImageEmpty from "@/components/ImageEmpty.vue";
+import SharePillButton from "@/components/Share/SharePillButton.vue";
 import Skeleton from "@/components/Skeleton/Skeleton.vue";
 import ArticleBody from "../components/ArticleBody.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { buildThemePageStyle } from "@/composables/theme-page-style";
 import { useTheme } from "@/composables/useTheme";
 import { useSystemInfo } from "@/composables/useSystemInfo";
+import { buildKnowledgeDetailPath } from "@/config/knowledge-articles";
 import { createOperationId } from "@/utils/operation-id";
 import { uniPlatform } from "@/platform/uni";
 import { useLoginModalStore } from "@/stores/login-modal";
@@ -146,6 +155,12 @@ const pageBodyStyle = computed(() => ({
   paddingTop: `calc(${navBarTotalHeight.value}px + 24rpx)`
 }));
 const showSkeleton = computed(() => loading.value && !loaded.value);
+
+onShareAppMessage(() => ({
+  title: detail.value?.title || "厨房知识 | 炊火记",
+  path: articleId.value ? buildKnowledgeDetailPath(articleId.value) : "/pages/me/index",
+  imageUrl: detail.value?.coverImageUrl || undefined
+}));
 
 onLoad((query) => {
   const rawArticleId = Array.isArray(query?.articleId) ? query.articleId[0] : query?.articleId;
@@ -224,6 +239,16 @@ async function toggleLike() {
     }).catch(() => undefined);
   } finally {
     likeSubmitting.value = false;
+  }
+}
+
+async function copyArticleLink() {
+  if (!articleId.value) return;
+  try {
+    await uniPlatform.clipboard.set(buildKnowledgeDetailPath(articleId.value));
+    await uniPlatform.feedback.toast({ title: "链接已复制", icon: "none" });
+  } catch (error) {
+    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "复制失败", icon: "none" }).catch(() => undefined);
   }
 }
 
@@ -449,6 +474,31 @@ defineExpose({
 
 .detail-article {
   padding-top: 12rpx;
+}
+
+.detail-share-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16rpx;
+  padding-top: 28rpx;
+}
+
+.detail-share-actions__copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 52rpx;
+  padding: 0 18rpx;
+  border-radius: var(--radius-xs);
+  background: var(--color-surface-soft-panel);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  line-height: 1;
+}
+
+.detail-share-actions__copy--hover {
+  opacity: 0.72;
 }
 
 .detail-bottom-like {
