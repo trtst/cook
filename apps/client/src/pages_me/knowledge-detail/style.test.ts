@@ -115,6 +115,9 @@ expectSelectorIncludes(pageSource, ".detail-bottom-like__button--active", [
   "border-color: var(--color-border-active);",
   "color: var(--color-support-action);"
 ]);
+expectSelectorIncludes(pageSource, ".detail-bottom-like__label", [
+  "top: -24rpx;"
+]);
 expectSelectorIncludes(pageSource, ".detail-navbar__title", [
   "display: block;",
   "width: 100%;",

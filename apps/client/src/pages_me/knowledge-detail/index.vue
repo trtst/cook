@@ -76,13 +76,16 @@
                 class="detail-bottom-like__button"
                 :class="{
                   'detail-bottom-like__button--active': detail.viewerHasLiked,
-                  'detail-bottom-like__button--disabled': likeSubmitting
+                  'detail-bottom-like__button--disabled': likeSubmitting,
+                  'detail-bottom-like__button--just-liked': likeJustLiked
                 }"
                 hover-class="detail-bottom-like__button--hover"
                 hover-stay-time="100"
                 @click="toggleLike"
               >
+                <view class="detail-bottom-like__fill" />
                 <text class="cookfont icon-like detail-bottom-like__icon" />
+                <text class="detail-bottom-like__label">喜欢</text>
               </view>
             </view>
           </view>
@@ -124,6 +127,7 @@ const loaded = ref(false);
 const errorText = ref("");
 const scrollTop = ref(0);
 const likeSubmitting = ref(false);
+const likeJustLiked = ref(false);
 const viewRecorded = ref(false);
 
 const NAV_FADE_DISTANCE = 100;
@@ -150,6 +154,7 @@ onLoad((query) => {
 });
 
 async function loadDetail() {
+  likeJustLiked.value = false;
   if (!articleId.value) {
     loading.value = false;
     loaded.value = true;
@@ -204,6 +209,7 @@ async function toggleLike() {
     if (detail.value && result.articleId === detail.value.id) {
       detail.value.likeCount = result.likeCount;
       detail.value.viewerHasLiked = result.viewerHasLiked;
+      likeJustLiked.value = result.viewerHasLiked;
     }
   } catch (error) {
     if (error instanceof UnauthorizedError) {
@@ -453,6 +459,7 @@ defineExpose({
 }
 
 .detail-bottom-like__button {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -467,7 +474,11 @@ defineExpose({
 .detail-bottom-like__button--active {
   border-color: var(--color-border-active);
   color: var(--color-support-action);
-  background: var(--color-tag-primary-bg);
+  background: transparent;
+}
+
+.detail-bottom-like__button--just-liked .detail-bottom-like__fill {
+  animation: detail-like-fill 260ms ease-out both;
 }
 
 .detail-bottom-like__button--disabled {
@@ -479,8 +490,52 @@ defineExpose({
 }
 
 .detail-bottom-like__icon {
+  position: relative;
+  z-index: 2;
   color: inherit;
   font-size: 38rpx;
   line-height: 1;
+  transition: color 200ms ease;
+}
+
+.detail-bottom-like__fill {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--color-tag-primary-bg);
+  transform: scale(0);
+}
+
+.detail-bottom-like__button--active .detail-bottom-like__fill {
+  transform: scale(1);
+}
+
+.detail-bottom-like__label {
+  position: absolute;
+  top: -24rpx;
+  right: 0;
+  left: 0;
+  z-index: 1;
+  color: var(--color-support-action);
+  font-size: 24rpx;
+  line-height: 1;
+  opacity: 0;
+  text-align: center;
+  transform: translateY(0);
+}
+
+.detail-bottom-like__button--just-liked .detail-bottom-like__label {
+  animation: detail-like-label-up 600ms ease-out both;
+}
+
+@keyframes detail-like-fill {
+  from { transform: scale(0); }
+  to { transform: scale(1); }
+}
+
+@keyframes detail-like-label-up {
+  0% { opacity: 0; transform: translateY(0); }
+  20% { opacity: 1; transform: translateY(-4rpx); }
+  100% { opacity: 0; transform: translateY(-24rpx); }
 }
 </style>
