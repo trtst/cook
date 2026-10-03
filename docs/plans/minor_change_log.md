@@ -1,5 +1,13 @@
 # 项目变更记录
 
+| 2026-10-04 | 修复批量同步导入正文时自动食材标签沿用旧内容、已解锁记录被重复计入每日额度的问题：按新正文重建 AUTO 标签，复制已消费访问权但标记为不计额度，未完成预约不复制。 | `apps/api/prisma/schema.prisma`、`apps/api/prisma/migrations/20261004100000_recipe_unlock_quota_inheritance/migration.sql`、`apps/api/src/modules/admin/admin.service.ts`、`apps/api/src/modules/cook-assistant/cook-assistant-access.service.ts`、`apps/api/src/modules/admin/admin.recipe-import.service.test.ts`、`apps/api/src/modules/cook-assistant/cook-assistant-access.service.test.ts`、`docs/api-contract.md`、`docs/plans/recipe-import-content-sync-execution.md`、`docs/plans/minor_change_log.md` | 两个 API 定向测试文件 52/52、API/Admin type-check、API OpenAPI 校验（345 个操作、304 个响应 schema）、Prisma schema validate、`git diff --check` 通过；未应用数据库迁移，未做后台登录态验收。 |
+
+| 2026-10-04 | 批量同步导入正文时只查询状态为 `PUBLISHED` 且来源类型为 `JSON` 的导入记录，避免其他格式的旧导入记录干扰来源唯一性判断。 | `apps/api/src/modules/admin/admin.service.ts`、`apps/api/src/modules/admin/admin.recipe-import.service.test.ts`、`docs/plans/minor_change_log.md` | API 定向测试 41/41、API type-check 与 `git diff --check` 通过。 |
+
+| 2026-10-04 | 系统菜谱列表新增独立的“批量同步导入正文”：从唯一关联的已发布导入 JSON 恢复正文并创建新版本，保留分类、现有图片、Wiki 和历史固定引用；来源、结构化数据或步骤图片对位不安全时逐条跳过并报告。同步操作独立于 Wiki 候选确认。 | `apps/admin/src/apis/recipe.ts`、`apps/admin/src/pages/RecipesPage.vue`、`apps/api/src/contracts/dtos.ts`、`apps/api/src/contracts/openapi.ts`、`apps/api/src/contracts/types.ts`、`apps/api/src/modules/admin/admin.service.ts`、`apps/api/src/modules/auth/admin.controller.ts`、`docs/api-contract.md`、`docs/plans/recipe-import-content-sync-execution.md`、`docs/plans/minor_change_log.md` | API/Admin type-check、API OpenAPI 校验（345 个操作、304 个响应 schema）与 `git diff --check` 通过；未运行测试，未执行数据回填或登录态浏览器验收。 |
+
+| 2026-10-04 | 修复菜谱 JSON 导入提示词保存：保存空提示词时沿用草稿或同步骤原始 JSON 提示词，缺少提示词的条目标记为需修正并禁止发布；Wiki 候选筛选与详情判定忽略 AUTO 自动标签，批量确认也不再确认 AUTO 标签。 | `apps/api/src/modules/admin/admin.service.ts`、`apps/api/src/modules/admin/recipe-import-json.ts`、`apps/admin/src/pages/RecipeDetailPage.vue`、`docs/plans/minor_change_log.md` | API/Admin type-check、`git diff --check` 通过；未运行测试，未修改测试库或线上数据。 |
+
 | 2026-10-04 | 调整系统菜谱列表：状态筛选宽 100px、搜索框宽 250px；移除右上角批量上传及页面专用上传流程；新增只作用于当前页的全选/取消本页全选，保留跨页选择、批量导出和一键确认候选。共享图片回填服务保留，仍供生图候选替换使用。 | `apps/admin/src/pages/RecipesPage.vue`、`apps/admin/src/apis/recipe.ts`、`docs/plans/minor_change_log.md` | 已执行：Admin type-check 与目标 diff 检查；未运行测试或登录态浏览器验收。 |
 
 | 2026-10-03 | 启用本地测试环境的系统数据同步：API 环境标识设为 `TEST` 并重启本地 API，支持预览来自线上 `ONLINE` 的同步包。 | `apps/api/.env`（本地忽略配置）、`docs/plans/minor_change_log.md` | API 在 3100 端口启动，Nest 日志显示启动完成，`GET /api/app-config` 返回 HTTP 200；尚未重新预览或导入数据包。 |

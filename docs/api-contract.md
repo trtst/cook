@@ -1021,6 +1021,7 @@ POST /admin/recipes/{recipeId}/block
 POST /admin/recipes/{recipeId}/unblock
 DELETE /admin/recipes/{recipeId}
 POST /admin/recipes/wiki/confirm-candidates
+POST /admin/recipes/content/sync-import
 PUT /admin/recipes/{recipeId}/wiki-candidate
 POST /admin/recipe-reports/{reportId}/resolve
 POST /admin/recipe-import-jobs/json
@@ -1044,6 +1045,8 @@ POST /admin/recipe-wiki/{recipeId}/reject
 `DELETE /admin/recipe-import-items/{itemId}` 接收 `expectedVersion`，只删除一条 JSON 导入记录，保留关联的正式菜谱，并更新任务统计与审计。已关联正式菜谱的导入条目不可再编辑；重复发布返回该条目及原 `recipeId`，不得重复创建菜谱。导入菜谱只有完整 Wiki 才能发布。
 
 `GET /admin/recipes` 的菜谱摘要增加 `hasWikiCandidate`。`POST /admin/recipes/wiki/confirm-candidates` 最多接收 100 个已勾选菜谱 ID，批量确认当前版本候选标签并锁定；完整助理步骤同时发布为 `READY`，不完整助理步骤保留待复核。系统菜谱详情返回 `assistantCandidate`；`PUT /admin/recipes/{recipeId}/wiki-candidate` 可编辑当前版本候选标签与助理步骤，要求 `expectedContentVersionId` 与当前正文版本一致，编辑只替换候选标签并保留已确认及自动推导标签，编辑后仍为候选。写入要求 `SUPER_ADMIN` 和数字字符串 `Idempotency-Key`。
+
+`POST /admin/recipes/content/sync-import` 最多接收 100 个已勾选系统菜谱 ID，从各菜谱唯一关联且状态为 `PUBLISHED` 的导入 JSON 同步名称、故事、结构化食材与用量、厨具、关键词、步骤正文和步骤图片提示词；保留现有分类、基准人数、难度、时长、小贴士、封面图、正文步骤图及完整 Wiki（人工标签、重算后的自动标签、助理候选/快照、Wiki 步骤图、已消费解锁权），并重新计算新版本营养快照。复制的解锁权不重复计入每日额度，未完成的预约不复制。成功项创建新的不可变 `RecipeContentVersion`，历史版本和固定版本引用不变。只有步骤数量相同，且有图片的步骤文字仍与相同序号对应时才同步；找不到唯一导入来源、结构化匹配不完整或图片不能安全对位的项目返回 `SKIPPED + message`，其他菜谱继续处理。响应包含 `syncedCount / skippedCount / items[{recipeId,status,contentVersionId,nextContentVersionId,message}]`。接口要求 `SUPER_ADMIN` 和数字字符串 `Idempotency-Key`，每批最多 100 项。
 
 `GET /admin/inspiration-categories` 返回后台系统菜谱分类列表，摘要包含 `id / name / iconKey / version / recipeCount / updatedAt`；`POST /admin/inspiration-categories`、`PUT /admin/inspiration-categories/{categoryId}` 和 `POST /admin/inspiration-categories/reorder` 分别用于新增、编辑和重排，`DELETE /admin/inspiration-categories/{categoryId}` 仅允许删除没有菜谱和待审核推荐引用的分类。请求头统一使用 `Idempotency-Key`，重排请求提交完整的 `id + expectedVersion` 集合。`GET /admin/recipes` 只返回后台系统菜谱列表最小摘要，查询参数固定为 `page`、`pageSize`，并支持 `categoryId`、`keyword`、`status` 过滤；系统菜谱口径固定为 `isInspiration = true` 且 `inspirationCategoryId != null`，列表摘要补充 `inspirationCategoryId / inspirationCategoryName / version`，排序统一按 `updatedAt desc`；后台页面将 `BLOCKED` 菜谱集中展示为“下架”视图。`POST /admin/recipe-images` 是后台系统菜谱临时图片上传入口，只允许 `SUPER_ADMIN` 使用，只接受单张 JPG、PNG 或 WEBP 图片，原图上限为 `10 MB`、解码像素不超过 `4000 万`；封面校验 `4:3`，步骤图不限制长宽比例。服务端应用 EXIF 方向并重新编码移除元数据，临时和正式图片成品均不超过 `500 KB`。接口返回处理后临时图片的 `tempKey + 图片元信息`；后台 JSON 导入的远程图片和批量回填图片也使用相同的原图与成品限制。
 
