@@ -32,6 +32,7 @@ import {
   ApiOkPage,
   FridgeTraceIngredientModel,
   FridgeTraceModel,
+  FridgeTraceRemovalResultModel,
   FridgeTraceSummaryResponseModel,
   ShoppingGapPreviewItemModel,
   ShoppingGapResponseModel,
@@ -97,14 +98,14 @@ export class PantryController {
 
   @Post("fridge-traces/empty/batch")
   @ApiIdempotencyKey()
-  @ApiOkArray(FridgeTraceModel, "在单个事务中标记多项食材已没有")
-  markFridgeTracesEmpty(
+  @ApiOkModel(FridgeTraceRemovalResultModel, "在单个事务中删除多项家里食材记录")
+  removeFridgeTraces(
     @Req() request: RequestWithUser,
     @ReadIdempotencyKey() operationId: string,
     @Body() body: CreateFridgeTraceBatchDto
   ) {
     return this.pantryService
-      .markFridgeTracesEmpty(request.user.userId, operationId, body.items.map(item => ({
+      .removeFridgeTraces(request.user.userId, operationId, body.items.map(item => ({
         ingredientId: item.ingredientId ?? null,
         name: item.name,
         categoryName: item.categoryName ?? null
@@ -114,14 +115,14 @@ export class PantryController {
 
   @Post("fridge-traces/empty")
   @ApiIdempotencyKey()
-  @ApiOkModel(FridgeTraceModel, "手动标记食材用完")
-  markFridgeTraceEmpty(
+  @ApiOkModel(FridgeTraceRemovalResultModel, "删除一项家里食材记录")
+  removeFridgeTrace(
     @Req() request: RequestWithUser,
     @ReadIdempotencyKey() operationId: string,
     @Body() body: CreateFridgeTraceDto
   ) {
     return this.pantryService
-      .markFridgeTraceEmpty(request.user.userId, operationId, body.ingredientId ?? null, body.name, body.categoryName ?? null)
+      .removeFridgeTrace(request.user.userId, operationId, body.ingredientId ?? null, body.name, body.categoryName ?? null)
       .then(result => ok(result));
   }
 

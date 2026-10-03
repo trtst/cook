@@ -35,12 +35,24 @@ test("new food status keeps only the latest status, purchase, and use trace", as
         return created;
       },
       findMany: async () => [...rows].sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime() || right.id - left.id),
-      deleteMany: async ({ where }: { where: { id: { in: number[] } } }) => {
-        removedIds.push(...where.id.in);
-        for (let index = rows.length - 1; index >= 0; index -= 1) {
-          if (where.id.in.includes(rows[index].id)) rows.splice(index, 1);
+      deleteMany: async ({ where }: { where: { id?: { in: number[] }; userId?: number; OR?: Array<{ ingredientId?: number; name?: { equals: string; mode: string } }> } }) => {
+        if (where.id) {
+          removedIds.push(...where.id.in);
+          for (let index = rows.length - 1; index >= 0; index -= 1) {
+            if (where.id.in.includes(rows[index].id)) rows.splice(index, 1);
+          }
+          return { count: where.id.in.length };
         }
-        return { count: where.id.in.length };
+        const matches = rows.filter(row => row.userId === where.userId && where.OR?.some(identity =>
+          identity.ingredientId !== undefined
+            ? row.ingredientId === identity.ingredientId
+            : row.ingredientId === null && String(row.name).toLocaleLowerCase() === identity.name?.equals.toLocaleLowerCase()
+        ));
+        removedIds.push(...matches.map(row => row.id));
+        for (let index = rows.length - 1; index >= 0; index -= 1) {
+          if (matches.some(row => row.id === rows[index].id)) rows.splice(index, 1);
+        }
+        return { count: matches.length };
       }
     },
     fridgeMaintenanceEvent: {
@@ -54,14 +66,11 @@ test("new food status keeps only the latest status, purchase, and use trace", as
     $transaction: async (run: (client: typeof tx) => Promise<unknown>) => run(tx)
   } as never, {} as never, {} as never, { awardFridgeMaintenance: async () => { medalAwardCount += 1; } } as never);
 
-  await service.markFridgeTraceEmpty(9, "123456", 7, "芹菜", "蔬果菌菇");
+  const result = await service.removeFridgeTrace(9, "123456", 7, "芹菜", "蔬果菌菇");
 
-  assert.deepEqual(removedIds, [1]);
-  assert.deepEqual(rows.map(row => [row.id, row.kind]), [
-    [2, "PURCHASED"],
-    [3, "USED"],
-    [4, "MANUAL_EMPTY"]
-  ]);
+  assert.deepEqual(result, { deletedCount: 3 });
+  assert.deepEqual(removedIds, [1, 2, 3]);
+  assert.deepEqual(rows, []);
   assert.equal(maintenanceEvents.length, 0);
   assert.equal(medalAwardCount, 0);
 });

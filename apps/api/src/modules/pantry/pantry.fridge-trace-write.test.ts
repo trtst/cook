@@ -40,35 +40,38 @@ function createEmptyTraceFixture() {
   return { service, traceRows, maintenanceRows, get medalAwardCount() { return medalAwardCount; } };
 }
 
-test("未知食材标记为没有时只记录状态，不计入食材维护勋章", async () => {
+test("未知食材标记家里没有时不创建食材状态或维护勋章", async () => {
   const fixture = createEmptyTraceFixture();
 
-  await fixture.service.markFridgeTraceEmpty(9, "123459", null, "香菜");
+  const result = await fixture.service.removeFridgeTrace(9, "123459", null, "香菜");
 
-  assert.equal(fixture.traceRows.length, 1);
+  assert.deepEqual(result, { deletedCount: 0 });
+  assert.equal(fixture.traceRows.length, 0);
   assert.equal(fixture.maintenanceRows.length, 0);
   assert.equal(fixture.medalAwardCount, 0);
 });
 
-test("批量将未知食材标记为没有时不创建食材维护勋章事实", async () => {
+test("批量标记未知食材家里没有时不创建食材状态或维护勋章事实", async () => {
   const fixture = createEmptyTraceFixture();
 
-  await fixture.service.markFridgeTracesEmpty(9, "123460", [{ ingredientId: null, name: "香菜", categoryName: null }]);
+  const result = await fixture.service.removeFridgeTraces(9, "123460", [{ ingredientId: null, name: "香菜", categoryName: null }]);
 
-  assert.equal(fixture.traceRows.length, 1);
+  assert.deepEqual(result, { deletedCount: 0 });
+  assert.equal(fixture.traceRows.length, 0);
   assert.equal(fixture.maintenanceRows.length, 0);
   assert.equal(fixture.medalAwardCount, 0);
 });
 
-test("已有食材从有更新为没有时仍计入食材维护", async () => {
+test("标记家里没有时不会新增空状态记录", async () => {
   const fixture = createEmptyTraceFixture();
 
   await fixture.service.markFridgeTracePresent(9, "123461", null, "香菜", null);
-  await fixture.service.markFridgeTraceEmpty(9, "123462", null, "香菜");
+  const result = await fixture.service.removeFridgeTrace(9, "123462", null, "香菜");
 
-  assert.equal(fixture.maintenanceRows.length, 2);
-  assert.equal(fixture.medalAwardCount, 2);
-  assert.equal(fixture.traceRows.at(-1)?.kind, "MANUAL_EMPTY");
+  assert.deepEqual(result, { deletedCount: 0 });
+  assert.equal(fixture.traceRows.filter(row => row.kind === "MANUAL_EMPTY").length, 0);
+  assert.equal(fixture.maintenanceRows.length, 1);
+  assert.equal(fixture.medalAwardCount, 1);
 });
 
 test("批量确认食材有状态使用单个幂等事务并按食材去重", async () => {
@@ -100,11 +103,16 @@ test("批量确认食材有状态使用单个幂等事务并按食材去重", as
       findMany: async () => [...createdRows].sort((left, right) =>
         (right.createdAt as Date).getTime() - (left.createdAt as Date).getTime() || Number(right.id) - Number(left.id)
       ),
-      deleteMany: async ({ where }: { where: { id: { in: number[] } } }) => {
+      deleteMany: async ({ where }: { where: { id?: { in: number[] }; OR?: Array<{ ingredientId?: number; name?: { equals: string; mode: string } }> } }) => {
+        const matched = createdRows.filter(row => where.id
+          ? where.id.in.includes(Number(row.id))
+          : where.OR?.some(identity => identity.ingredientId !== undefined
+            ? row.ingredientId === identity.ingredientId
+            : row.ingredientId === null && row.name === identity.name?.equals));
         for (let index = createdRows.length - 1; index >= 0; index -= 1) {
-          if (where.id.in.includes(Number(createdRows[index].id))) createdRows.splice(index, 1);
+          if (matched.some(row => row.id === createdRows[index].id)) createdRows.splice(index, 1);
         }
-        return { count: where.id.in.length };
+        return { count: matched.length };
       }
     },
     fridgeMaintenanceEvent: { create: async ({ data }: { data: Record<string, unknown> }) => { maintenanceRows.push(data); return data; } }
@@ -133,9 +141,9 @@ test("批量确认食材有状态使用单个幂等事务并按食材去重", as
   assert.deepEqual(result.map(item => item.windowDays), [7, 15]);
 
   const singlePresent = await service.markFridgeTracePresent(9, "123457", 7, "芹菜", "肉禽蛋");
-  const singleEmpty = await service.markFridgeTraceEmpty(9, "123458", 7, "芹菜", "肉禽蛋");
+  const singleRemoval = await service.removeFridgeTrace(9, "123458", 7, "芹菜", "肉禽蛋");
   assert.equal(singlePresent.windowDays, 7);
-  assert.equal(singleEmpty.windowDays, 7);
+  assert.deepEqual(singleRemoval, { deletedCount: 1 });
   assert.equal(maintenanceRows.length, 2);
   assert.equal(medalAwardCount, 2);
 });

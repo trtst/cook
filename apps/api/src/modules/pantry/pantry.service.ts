@@ -38,6 +38,7 @@ import type {
   ShoppingGapPreviewItem,
   ShoppingGapWindow,
   FridgeTraceIngredientSummary,
+  FridgeTraceRemovalResult,
   FridgeTraceSummary,
   FridgeTraceSummaryResponse,
   UUID
@@ -326,6 +327,7 @@ export class PantryService {
           COALESCE(CURRENT_TIMESTAMP - purchase."recordedAt" < INTERVAL '3 days', FALSE) AS "recentlyPurchased"
         FROM latest_state state
         LEFT JOIN latest_purchase purchase USING ("identityKey")
+        WHERE state.kind <> 'MANUAL_EMPTY'
       )
       SELECT calculated.id, calculated."ingredientId", calculated.name, calculated."categoryName",
         calculated.kind,
@@ -442,11 +444,11 @@ export class PantryService {
     });
   }
 
-  async markFridgeTracesEmpty(
+  async removeFridgeTraces(
     userId: UUID,
     operationId: OperationId,
     items: Array<{ ingredientId: UUID | null; name: string; categoryName: string | null }>
-  ): Promise<FridgeTraceSummary[]> {
+  ): Promise<FridgeTraceRemovalResult> {
     const uniqueItems = new Map<string, { ingredientId: UUID | null; name: string; categoryName: string | null }>();
     for (const item of items) {
       const name = item.name.trim();
@@ -457,92 +459,65 @@ export class PantryService {
     }
     const normalizedItems = [...uniqueItems.values()];
     if (!normalizedItems.length || normalizedItems.length > 100) {
-      throw new BadRequestException("一次需要标记 1 到 100 项食材");
+      throw new BadRequestException("一次需要删除 1 到 100 项食材记录");
     }
     const requestHash = JSON.stringify(normalizedItems);
     return this.prisma.$transaction(async tx => {
-      const repeated = await getIdempotentResult<FridgeTraceSummary[]>(tx, operationId, "fridge-trace:empty:batch", userId, null, requestHash);
+      const repeated = await getIdempotentResult<FridgeTraceRemovalResult>(tx, operationId, "fridge-trace:remove:batch", userId, null, requestHash);
       if (repeated) return repeated;
-      await startIdempotentOperation(tx, operationId, "fridge-trace:empty:batch", userId, null, requestHash);
+      await startIdempotentOperation(tx, operationId, "fridge-trace:remove:batch", userId, null, requestHash);
       await tx.$queryRaw`SELECT "id" FROM "users" WHERE "id" = ${userId} FOR UPDATE`;
       const now = new Date();
       const mutations = await this.getFridgeManualChanges(tx, userId, normalizedItems, "EMPTY", now);
-      const result: FridgeTraceSummary[] = [];
-      const changedItems: Array<{ ingredientId: UUID | null; name: string }> = [];
-      let hasMaintenanceChange = false;
-      for (const item of mutations) {
-        if (!item.changed && item.previous) {
-          result.push(this.toFridgeTraceSummary(item.previous));
-          continue;
-        }
-        const created = await tx.fridgeTrace.create({
-          data: {
-            userId,
-            ingredientId: item.ingredientId,
-            kind: "MANUAL_EMPTY",
-            name: item.name,
-            categoryName: item.category?.name ?? null,
-            categoryCode: item.category?.code ?? null,
-            createdAt: now
-          }
-        });
-        result.push(this.toFridgeTraceSummary(created));
-        changedItems.push({ ingredientId: item.ingredientId, name: item.name });
-        hasMaintenanceChange ||= item.maintenanceEligible;
-      }
-      if (changedItems.length) {
-        await this.compactFridgeTraceHistory(tx, userId, changedItems);
-      }
-      if (hasMaintenanceChange) {
+      const deletedCount = await this.deleteFridgeTraceItems(tx, userId, mutations);
+      if (deletedCount && mutations.some(item => item.maintenanceEligible)) {
         await this.recordFridgeMaintenance(tx, userId, operationId, "REMOVED", now);
       }
-      await completeIdempotentOperation(tx, operationId, "fridge-trace:empty:batch", userId, null, requestHash, result);
+      const result = { deletedCount };
+      await completeIdempotentOperation(tx, operationId, "fridge-trace:remove:batch", userId, null, requestHash, result);
       return result;
     });
   }
 
-  async markFridgeTraceEmpty(
+  async removeFridgeTrace(
     userId: UUID,
     operationId: OperationId,
     ingredientId: UUID | null,
     name: string,
     categoryName: string | null = null
-  ): Promise<FridgeTraceSummary> {
+  ): Promise<FridgeTraceRemovalResult> {
     const normalizedName = name.trim();
     if (!normalizedName) throw new BadRequestException("食材名称不能为空");
     const requestHash = JSON.stringify({ ingredientId, name: normalizedName, categoryName: categoryName?.trim() || null });
     return this.prisma.$transaction(async tx => {
-      const repeated = await getIdempotentResult<FridgeTraceSummary>(tx, operationId, "fridge-trace:empty", userId, null, requestHash);
+      const repeated = await getIdempotentResult<FridgeTraceRemovalResult>(tx, operationId, "fridge-trace:remove", userId, null, requestHash);
       if (repeated) return repeated;
-      await startIdempotentOperation(tx, operationId, "fridge-trace:empty", userId, null, requestHash);
+      await startIdempotentOperation(tx, operationId, "fridge-trace:remove", userId, null, requestHash);
       await tx.$queryRaw`SELECT "id" FROM "users" WHERE "id" = ${userId} FOR UPDATE`;
       const now = new Date();
       const item = (await this.getFridgeManualChanges(tx, userId, [{ ingredientId, name: normalizedName }], "EMPTY", now))[0];
       if (!item) throw new BadRequestException("没有可维护的食材");
-      let result: FridgeTraceSummary;
-      if (!item.changed && item.previous) {
-        result = this.toFridgeTraceSummary(item.previous);
-      } else {
-        const created = await tx.fridgeTrace.create({
-          data: {
-            userId,
-            ingredientId: item.ingredientId,
-            kind: "MANUAL_EMPTY",
-            name: normalizedName,
-            categoryName: item.category?.name ?? null,
-            categoryCode: item.category?.code ?? null,
-            createdAt: now
-          }
-        });
-        await this.compactFridgeTraceHistory(tx, userId, [{ ingredientId: item.ingredientId, name: normalizedName }]);
-        if (item.maintenanceEligible) {
-          await this.recordFridgeMaintenance(tx, userId, operationId, "REMOVED", now);
-        }
-        result = this.toFridgeTraceSummary(created);
+      const deletedCount = await this.deleteFridgeTraceItems(tx, userId, [item]);
+      if (deletedCount && item.maintenanceEligible) {
+        await this.recordFridgeMaintenance(tx, userId, operationId, "REMOVED", now);
       }
-      await completeIdempotentOperation(tx, operationId, "fridge-trace:empty", userId, null, requestHash, result);
+      const result = { deletedCount };
+      await completeIdempotentOperation(tx, operationId, "fridge-trace:remove", userId, null, requestHash, result);
       return result;
     });
+  }
+
+  private async deleteFridgeTraceItems(
+    tx: Prisma.TransactionClient,
+    userId: UUID,
+    items: Array<{ ingredientId: UUID | null; name: string }>
+  ): Promise<number> {
+    const identities: Prisma.FridgeTraceWhereInput[] = items.map(item => item.ingredientId === null
+      ? { ingredientId: null, name: { equals: item.name, mode: "insensitive" } }
+      : { ingredientId: item.ingredientId });
+    if (!identities.length) return 0;
+    const result = await tx.fridgeTrace.deleteMany({ where: { userId, OR: identities } });
+    return result.count;
   }
 
   private async loadFridgeCategoryMap(tx: Prisma.TransactionClient, userId: UUID, ingredientIds: Array<UUID | null>) {
