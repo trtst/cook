@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue"
 import { ElMessage, ElMessageBox } from "element-plus";
 import { ingredientApi, type AdminIngredientCategorySummary } from "@/apis/ingredient";
 import { recipeApi, type AdminInspirationCategorySummary } from "@/apis/recipe";
-import { imageGenerationApi, type ImageGenerationCandidate, type ImageGenerationProviderId, type ImageGenerationSettings, type ImageGenerationSlot, type ImageGenerationTarget, type ImageGenerationType } from "@/apis/image-generation";
+import { imageGenerationApi, type ImageGenerationCandidate, type ImageGenerationProviderId, type ImageGenerationSettings, type ImageGenerationSlot, type ImageGenerationTarget, type ImageGenerationType, type RecipeImageFilter } from "@/apis/image-generation";
 import { requestBlob } from "@/apis/http";
 import { createOperationId } from "@/utils/operation-id";
 
@@ -11,6 +11,7 @@ const type = ref<ImageGenerationType>("RECIPE");
 const categories = ref<Array<AdminIngredientCategorySummary | AdminInspirationCategorySummary>>([]);
 const categoryId = ref<number>();
 const missingOnly = ref(true);
+const recipeImageFilter = ref<RecipeImageFilter>("ANY");
 const rows = ref<ImageGenerationTarget[]>([]);
 const selectedIds = ref(new Set<number>());
 const targetCache = reactive(new Map<number, ImageGenerationTarget>());
@@ -74,7 +75,7 @@ async function loadSettings() {
 async function loadTargets() {
   loading.value = true;
   try {
-    const result = await imageGenerationApi.listTargets({ type: type.value, categoryId: categoryId.value, missingOnly: missingOnly.value, page: page.value, pageSize });
+    const result = await imageGenerationApi.listTargets({ type: type.value, categoryId: categoryId.value, missingOnly: missingOnly.value, recipeImageFilter: recipeImageFilter.value, page: page.value, pageSize });
     rows.value = result.items;
     total.value = result.total;
     const retainedRows = [...selectedIds.value].map(id => targetCache.get(id)).filter((row): row is ImageGenerationTarget => Boolean(row));
@@ -289,6 +290,7 @@ async function deleteCandidate(slot: ImageGenerationSlot) {
 
 watch(type, async () => {
   categoryId.value = undefined;
+  recipeImageFilter.value = "ANY";
   selectedIds.value = new Set();
   targetCache.clear();
   page.value = 1;
@@ -296,7 +298,7 @@ watch(type, async () => {
   await Promise.all([loadCategories(), loadSettings()]);
   await loadTargets();
 });
-watch([categoryId, missingOnly], () => {
+watch([categoryId, missingOnly, recipeImageFilter], () => {
   selectedIds.value = new Set();
   targetCache.clear();
   if (page.value !== 1) page.value = 1;
@@ -316,15 +318,21 @@ onBeforeUnmount(() => { [...previewUrls.value.keys()].forEach(releasePreview); }
 
     <el-card shadow="never" class="toolbar-card">
       <div class="toolbar-row">
-        <el-radio-group v-model="type" aria-label="生图类型">
-          <el-radio-button value="RECIPE">食谱</el-radio-button>
-          <el-radio-button value="INGREDIENT">食材</el-radio-button>
+        <el-radio-group v-model="type" class="recipe-type-switch" aria-label="生图类型">
+          <el-radio-button label="RECIPE">食谱</el-radio-button>
+          <el-radio-button label="INGREDIENT">食材</el-radio-button>
         </el-radio-group>
         <el-select v-model="categoryId" clearable placeholder="全部分类" class="category-select">
           <el-option v-for="item in categories" :key="item.id" :label="item.name" :value="item.id" />
         </el-select>
-        <el-checkbox v-model="missingOnly">仅显示缺图片</el-checkbox>
-        <span class="provider-label">共享生图服务</span>
+        <el-select v-if="type === 'RECIPE'" v-model="recipeImageFilter" class="image-filter-select" aria-label="菜谱图片筛选">
+          <el-option label="仅显示缺图片" value="ANY" />
+          <el-option label="仅显示缺封面图" value="COVER" />
+          <el-option label="仅显示缺步骤图" value="STEP" />
+          <el-option label="仅显示缺 Wiki 步骤图" value="WIKI_STEP" />
+          <el-option label="显示全部菜谱" value="ALL" />
+        </el-select>
+        <el-checkbox v-else v-model="missingOnly">仅显示缺图片</el-checkbox>
         <el-select v-model="selectedProvider" class="provider-select" :loading="savingProvider" :disabled="savingProvider || savingSettings || batchRunning || batchReplacing || anyRecipeReplacing" @change="saveProviderDefault">
           <el-option label="Ark Seedream" value="ARK_SEEDREAM" />
           <el-option label="智能绘图通用 3.0" value="VOLCENGINE_CV" />
@@ -359,7 +367,7 @@ onBeforeUnmount(() => { [...previewUrls.value.keys()].forEach(releasePreview); }
       <div class="filter-row"><el-checkbox v-model="selectAllVisible" :indeterminate="hasPartialSelection">选择当前页</el-checkbox><span>已选 {{ selectedRows.length }} 项</span><span v-if="batchProgress" class="progress-text">正在生成 {{ batchProgress }}</span></div>
     </el-card>
 
-    <div v-loading="loading" class="target-list">
+    <div v-loading="loading" class="target-list" :class="{ 'target-list--ingredients': type === 'INGREDIENT' }">
       <el-empty v-if="!loading && rows.length === 0" description="没有符合条件的内容" />
       <el-card v-for="row in rows" :key="row.id" shadow="never" class="target-card">
         <template #header>
@@ -396,5 +404,5 @@ onBeforeUnmount(() => { [...previewUrls.value.keys()].forEach(releasePreview); }
 </template>
 
 <style scoped>
-.image-generation-page{display:flex;flex-direction:column;gap:16px}.page-heading,.toolbar-row,.filter-row,.target-heading,.keywords-row,.slot-actions{display:flex;align-items:center;gap:12px}.page-heading{justify-content:space-between}.page-heading h1{margin:0;font-size:22px}.page-heading p{margin:6px 0 0;color:var(--el-text-color-secondary)}.toolbar-card{position:sticky;top:0;z-index:2}.toolbar-row{flex-wrap:wrap}.toolbar-spacer{flex:1}.category-select{width:190px}.provider-label{font-size:13px;color:var(--el-text-color-secondary)}.provider-select{width:210px}.keywords-row{margin-top:18px;align-items:flex-end}.keywords-label{display:flex;flex-direction:column;gap:5px;min-width:220px}.keywords-label span,.target-id{font-size:12px;color:var(--el-text-color-secondary)}.keywords-row :deep(.el-textarea){flex:1}.recipe-keywords-row{align-items:flex-end}.keyword-field{display:flex;flex:1;min-width:220px;flex-direction:column;gap:7px}.filter-row{margin-top:14px;padding-top:12px;border-top:1px solid var(--el-border-color-lighter);font-size:13px;color:var(--el-text-color-secondary)}.progress-text{margin-left:auto;color:var(--el-color-primary)}.target-list{display:flex;flex-direction:column;gap:12px}.target-heading{min-width:0}.target-heading strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.target-id{margin-left:auto}.target-heading :deep(.el-button){flex-shrink:0}.slot-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:14px}.slot-card{display:flex;flex-direction:column;gap:10px;padding:12px;border:1px solid var(--el-border-color-lighter);border-radius:8px}.slot-label{font-weight:600}.image-pair{display:grid;grid-template-columns:1fr 1fr;gap:10px}.image-preview{position:relative;display:flex;align-items:center;justify-content:center;min-height:135px;aspect-ratio:4/3;background:var(--el-fill-color-lighter);border-radius:6px;overflow:hidden}.image-preview img{width:100%;height:100%;object-fit:contain}.image-preview>span{position:absolute;left:6px;top:6px;padding:2px 6px;border-radius:4px;background:#0009;color:white;font-size:11px}.image-empty{color:var(--el-text-color-placeholder);font-size:12px}.slot-actions{flex-wrap:wrap}@media(max-width:760px){.toolbar-row{align-items:flex-start}.keywords-row{align-items:stretch;flex-direction:column}.keywords-label{min-width:0}.keyword-field{min-width:0}}
+.image-generation-page{display:flex;flex-direction:column;gap:16px}.page-heading,.toolbar-row,.filter-row,.target-heading,.keywords-row,.slot-actions{display:flex;align-items:center;gap:12px}.page-heading{justify-content:space-between}.page-heading h1{margin:0;font-size:22px}.page-heading p{margin:6px 0 0;color:var(--el-text-color-secondary)}.toolbar-card{position:sticky;top:0;z-index:2}.toolbar-row{flex-wrap:wrap}.toolbar-spacer{flex:1}.category-select{width:150px}.image-filter-select{width:180px}.provider-select{width:160px}.keywords-row{margin-top:18px;align-items:flex-end}.keywords-label{display:flex;flex-direction:column;gap:5px;min-width:220px}.keywords-label span,.target-id{font-size:12px;color:var(--el-text-color-secondary)}.keywords-row :deep(.el-textarea){flex:1}.recipe-keywords-row{align-items:flex-end}.keyword-field{display:flex;flex:1;min-width:220px;flex-direction:column;gap:7px}.filter-row{margin-top:14px;padding-top:12px;border-top:1px solid var(--el-border-color-lighter);font-size:13px;color:var(--el-text-color-secondary)}.progress-text{margin-left:auto;color:var(--el-color-primary)}.target-list{display:flex;flex-direction:column;gap:12px}.target-list--ingredients{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}.target-list--ingredients .target-card{min-width:0}.target-heading{min-width:0}.target-heading strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.target-id{margin-left:auto}.target-heading :deep(.el-button){flex-shrink:0}.slot-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:14px}.slot-card{display:flex;flex-direction:column;gap:10px;padding:12px;border:1px solid var(--el-border-color-lighter);border-radius:8px}.slot-label{font-weight:600}.image-pair{display:grid;grid-template-columns:1fr 1fr;gap:10px}.image-preview{position:relative;display:flex;align-items:center;justify-content:center;min-height:135px;aspect-ratio:4/3;background:var(--el-fill-color-lighter);border-radius:6px;overflow:hidden}.image-preview img{width:100%;height:100%;object-fit:contain}.image-preview>span{position:absolute;left:6px;top:6px;padding:2px 6px;border-radius:4px;background:#0009;color:white;font-size:11px}.image-empty{color:var(--el-text-color-placeholder);font-size:12px}.slot-actions{flex-wrap:wrap}.recipe-type-switch :deep(.el-radio-button__inner){font-size:14px}@media(max-width:760px){.toolbar-row{align-items:flex-start}.keywords-row{align-items:stretch;flex-direction:column}.keywords-label{min-width:0}.keyword-field{min-width:0}.target-list--ingredients{grid-template-columns:1fr}}
 </style>

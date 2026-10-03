@@ -2,6 +2,7 @@ import { requestData, type PageResult, type OperationId, type UUID } from "./htt
 
 export type ImageGenerationType = "INGREDIENT" | "RECIPE";
 export type ImageGenerationTargetType = "INGREDIENT" | "RECIPE_COVER" | "RECIPE_STEP" | "WIKI_STEP";
+export type RecipeImageFilter = "ALL" | "ANY" | "COVER" | "STEP" | "WIKI_STEP";
 export type ImageGenerationProviderId = "ARK_SEEDREAM" | "VOLCENGINE_CV";
 
 export interface ImageGenerationCandidate {
@@ -53,8 +54,9 @@ export const imageGenerationApi = {
     const { version, ...settings } = body;
     return requestData<ImageGenerationSettings>("/admin/image-generation/settings", { method: "PUT", body: { ...settings, expectedVersion: version }, idempotencyKey: operationId });
   },
-  listTargets(query: { type: ImageGenerationType; categoryId?: UUID; missingOnly: boolean; page?: number; pageSize?: number }) {
+  listTargets(query: { type: ImageGenerationType; categoryId?: UUID; missingOnly: boolean; recipeImageFilter: RecipeImageFilter; page?: number; pageSize?: number }) {
     const params = new URLSearchParams({ type: query.type, missingOnly: String(query.missingOnly), page: String(query.page ?? 1), pageSize: String(query.pageSize ?? 20) });
+    params.set("recipeImageFilter", query.recipeImageFilter);
     if (query.categoryId) params.set("categoryId", String(query.categoryId));
     return requestData<PageResult<ImageGenerationTarget>>(`/admin/image-generation/targets?${params.toString()}`);
   },
