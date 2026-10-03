@@ -6,6 +6,11 @@ function createNotificationPrisma(
   fridgeRows: Array<{ id: number; name: string; updatedAt: Date }> = [],
   options: {
     officialRows?: Array<{ id: number; title: string; summary: string; bodyHtml: string; publishedAt: Date; updatedAt: Date }>;
+    recipeRecommendationRows?: Array<{ id: number; userId: number; recipeTitle: string; status: "PENDING" | "REJECTED" | "ADOPTED"; reviewNote: string | null; updatedAt: Date }>;
+    recipeReportRows?: Array<{ id: number; reporterId: number; reason: string; status: "OPEN" | "RESOLVED"; resolutionNote: string | null; updatedAt: Date }>;
+    ingredientFeedbackRows?: Array<{ id: number; userId: number; ingredientName: string; suggestedName: string; status: "PENDING" | "REJECTED" | "ADOPTED"; reviewNote: string | null; updatedAt: Date }>;
+    ingredientRecommendationRows?: Array<{ id: number; userId: number; ingredientName: string; status: "PENDING" | "REJECTED" | "ADOPTED" | "MERGED"; reviewNote: string | null; updatedAt: Date }>;
+    unitRecommendationRows?: Array<{ id: number; userId: number; unitName: string; status: "PENDING" | "REJECTED" | "ADOPTED" | "MERGED"; reviewNote: string | null; updatedAt: Date }>;
     wikiRows?: Array<{
       id: number;
       status: "PENDING" | "READY" | "REJECTED";
@@ -38,6 +43,24 @@ function createNotificationPrisma(
     }
   ];
   const wikiRows = options.wikiRows ?? [];
+  const recipeRecommendationRows = options.recipeRecommendationRows ?? [];
+  const recipeReportRows = options.recipeReportRows ?? [];
+  const ingredientFeedbackRows = options.ingredientFeedbackRows ?? [];
+  const ingredientRecommendationRows = options.ingredientRecommendationRows ?? [];
+  const unitRecommendationRows = options.unitRecommendationRows ?? [];
+
+  function createUserSource<T extends { updatedAt: Date; userId?: number; reporterId?: number }>(rows: T[], ownerField: "userId" | "reporterId") {
+    const rowsForUser = (where?: Record<string, unknown>) => rows.filter(row => row[ownerField] === where?.[ownerField]);
+    return {
+      count: async ({ where }: { where?: Record<string, unknown> } = {}) => rowsForUser(where).length,
+      findFirst: async ({ where }: { where?: Record<string, unknown> } = {}) =>
+        rowsForUser(where).slice().sort((left, right) => right.updatedAt.getTime() - left.updatedAt.getTime())[0] ?? null,
+      findMany: async ({ where, take }: { where?: Record<string, unknown>; take?: number } = {}) => {
+        const items = rowsForUser(where).slice().sort((left, right) => right.updatedAt.getTime() - left.updatedAt.getTime());
+        return typeof take === "number" ? items.slice(0, take) : items;
+      }
+    };
+  }
 
   const emptySource = {
     count: async () => 0,
@@ -75,8 +98,11 @@ function createNotificationPrisma(
         notificationReads.set(create.notificationId, create.notificationAt);
       }
     },
-    ingredientRecommendation: emptySource,
-    unitRecommendation: emptySource,
+    ingredientRecommendation: createUserSource(ingredientRecommendationRows, "userId"),
+    unitRecommendation: createUserSource(unitRecommendationRows, "userId"),
+    recipeRecommendation: createUserSource(recipeRecommendationRows, "userId"),
+    recipeReport: createUserSource(recipeReportRows, "reporterId"),
+    ingredientFeedback: createUserSource(ingredientFeedbackRows, "userId"),
     shoppingListInvite: emptySource,
     recipeCookAssistantRequest: {
       count: async ({ where }: { where: { userId: number; status?: { in: string[] } } }) =>
@@ -155,6 +181,67 @@ test("official content is presented as a published message event", async () => {
   assert.equal(item?.typeLabel, "炊火记");
   assert.equal(item?.title, "炊火记发布了《新公告》");
   assert.equal(item?.desc, "注册后公告");
+});
+
+test("recipe review, report handling, and ingredient correction results appear as unread notifications with notes", async () => {
+  const reviewedAt = new Date("2026-09-04T11:00:00.000Z");
+  const service = new NotificationService(
+    createNotificationPrisma([], {
+      officialRows: [],
+      recipeRecommendationRows: [
+        { id: 41, userId: 9, recipeTitle: "番茄炖牛腩", status: "REJECTED", reviewNote: "请补充完整步骤", updatedAt: reviewedAt },
+        { id: 49, userId: 9, recipeTitle: "清炒时蔬", status: "ADOPTED", reviewNote: null, updatedAt: reviewedAt },
+        { id: 50, userId: 8, recipeTitle: "他人的菜谱", status: "REJECTED", reviewNote: "不应泄露", updatedAt: reviewedAt }
+      ],
+      recipeReportRows: [
+        { id: 42, reporterId: 9, reason: "内容错误", status: "RESOLVED", resolutionNote: "已核实并修正", updatedAt: reviewedAt },
+        { id: 51, reporterId: 8, reason: "他人的举报", status: "RESOLVED", resolutionNote: "不应泄露", updatedAt: reviewedAt }
+      ],
+      ingredientFeedbackRows: [
+        { id: 43, userId: 9, ingredientName: "西红柿", suggestedName: "番茄", status: "REJECTED", reviewNote: "系统名称暂不调整", updatedAt: reviewedAt },
+        { id: 44, userId: 9, ingredientName: "白菜", suggestedName: "大白菜", status: "ADOPTED", reviewNote: null, updatedAt: reviewedAt }
+      ],
+      ingredientRecommendationRows: [
+        { id: 45, userId: 9, ingredientName: "小白菜", status: "ADOPTED", reviewNote: null, updatedAt: reviewedAt },
+        { id: 46, userId: 9, ingredientName: "旧名食材", status: "REJECTED", reviewNote: "已有同类食材", updatedAt: reviewedAt }
+      ],
+      unitRecommendationRows: [
+        { id: 47, userId: 9, unitName: "把", status: "ADOPTED", reviewNote: null, updatedAt: reviewedAt },
+        { id: 48, userId: 9, unitName: "盒", status: "REJECTED", reviewNote: "请换用更常见单位", updatedAt: reviewedAt }
+      ]
+    }) as never,
+    {} as never
+  );
+
+  const result = await service.getFeed(9, 1, 20);
+  const recipe = result.items.find(item => item.id === "recipe-recommendation:41");
+  const adoptedRecipe = result.items.find(item => item.id === "recipe-recommendation:49");
+  const report = result.items.find(item => item.id === "recipe-report:42");
+  const feedback = result.items.find(item => item.id === "ingredient-feedback:43");
+  const adoptedFeedback = result.items.find(item => item.id === "ingredient-feedback:44");
+  const ingredientAdopted = result.items.find(item => item.id === "ingredient:45");
+  const ingredientRejected = result.items.find(item => item.id === "ingredient:46");
+  const unitAdopted = result.items.find(item => item.id === "unit:47");
+  const unitRejected = result.items.find(item => item.id === "unit:48");
+
+  assert.equal(recipe?.isUnread, true);
+  assert.equal(recipe?.desc, "请补充完整步骤");
+  assert.equal(adoptedRecipe?.desc, "“清炒时蔬”已收录到灵感");
+  assert.equal(report?.isUnread, true);
+  assert.equal(report?.desc, "已核实并修正");
+  assert.equal(feedback?.isUnread, true);
+  assert.equal(feedback?.desc, "系统名称暂不调整");
+  assert.equal(adoptedFeedback?.desc, "“白菜”的纠错已采纳，名称更新为“大白菜”");
+  assert.equal(ingredientAdopted?.desc, "“小白菜”已收录为系统食材");
+  assert.equal(ingredientRejected?.desc, "已有同类食材");
+  assert.equal(unitAdopted?.desc, "“把”已收录为系统单位");
+  assert.equal(unitRejected?.desc, "请换用更常见单位");
+  assert.equal(result.items.find(item => item.id === "recipe-recommendation:50"), undefined);
+  assert.equal(result.items.find(item => item.id === "recipe-report:51"), undefined);
+  assert.equal((await service.getBadge(9)).unreadCount, 9);
+
+  await (service as any).markItemRead(9, "recipe-report:42", reviewedAt.toISOString());
+  assert.equal((await service.getBadge(9)).unreadCount, 8);
 });
 
 test("opening the feed clears the badge and the matching unread card together", async () => {

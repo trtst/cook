@@ -1417,6 +1417,7 @@ model IngredientFeedback {
   suggestedCategory  IngredientCategory @relation("IngredientFeedbackSuggestedCategory", fields: [suggestedCategoryId], references: [id])
 
   @@index([userId, createdAt])
+  @@index([userId, updatedAt, id])
   @@index([ingredientId, createdAt])
   @@index([status, createdAt])
   @@map("ingredient_feedbacks")
@@ -1987,6 +1988,7 @@ model RecipeReport {
 
   @@index([status, createdAt])
   @@index([recipeId, status])
+  @@index([reporterId, updatedAt, id])
   @@map("recipe_reports")
 }
 
@@ -2014,6 +2016,7 @@ model RecipeRecommendation {
   adoptedRecipe      Recipe?               @relation("RecipeRecommendationAdopted", fields: [adoptedRecipeId], references: [id], onDelete: SetNull)
 
   @@index([userId, createdAt])
+  @@index([userId, updatedAt, id])
   @@index([recipeId, createdAt])
   @@index([status, createdAt])
   @@index([suggestedCategoryId, createdAt])

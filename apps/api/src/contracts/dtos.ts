@@ -517,11 +517,12 @@ export class UpdateNotificationSettingsDto {
 }
 
 export class NotificationFeedQueryDto {
-  @ApiPropertyOptional({ default: 1 })
+  @ApiPropertyOptional({ default: 1, maximum: 50 })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
+  @Max(50)
   page = 1;
 
   @ApiPropertyOptional({ default: 20, maximum: 100 })

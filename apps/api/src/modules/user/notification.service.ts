@@ -26,6 +26,7 @@ type ReadNotificationSummary = { allCount: number };
 
 const officialChannelCode = "OFFICIAL_NOTICE";
 const dayMs = 24 * 60 * 60 * 1000;
+const maxNotificationFeedPage = 50;
 const recipeWikiResolvedStatuses: RecipeWikiRequestStatus[] = ["READY", "REJECTED"];
 
 const recipeWikiFeedSelect = {
@@ -141,12 +142,28 @@ export class NotificationService {
     return this.prisma.$transaction(async tx => {
       const user = await this.loadActiveUser(tx, userId);
       const nextPage = toPositiveInt(page, 1);
+      if (nextPage > maxNotificationFeedPage) {
+        throw new BadRequestException(`通知列表最多支持查看 ${maxNotificationFeedPage} 页`);
+      }
       const nextPageSize = Math.min(toPositiveInt(pageSize, 20), 100);
       const sourceLimit = nextPage * nextPageSize;
-      const [stateRow, ingredientSource, unitSource, inviteSource, officialSource, recipeWikiSource] = await Promise.all([
+      const [
+        stateRow,
+        ingredientSource,
+        unitSource,
+        recipeRecommendationSource,
+        recipeReportSource,
+        ingredientFeedbackSource,
+        inviteSource,
+        officialSource,
+        recipeWikiSource
+      ] = await Promise.all([
         tx.userNotificationState.findUnique({ where: { userId } }),
         this.loadIngredientFeed(tx, userId, sourceLimit),
         this.loadUnitFeed(tx, userId, sourceLimit),
+        this.loadRecipeRecommendationFeed(tx, userId, sourceLimit),
+        this.loadRecipeReportFeed(tx, userId, sourceLimit),
+        this.loadIngredientFeedbackFeed(tx, userId, sourceLimit),
         this.loadInviteFeed(tx, userId, sourceLimit),
         this.loadOfficialFeed(tx, user.createdAt, sourceLimit),
         this.loadRecipeWikiFeed(tx, userId, sourceLimit)
@@ -154,11 +171,22 @@ export class NotificationService {
       const mergedItems = [
         ...ingredientSource.items,
         ...unitSource.items,
+        ...recipeRecommendationSource.items,
+        ...recipeReportSource.items,
+        ...ingredientFeedbackSource.items,
         ...inviteSource.items,
         ...officialSource.items,
         ...recipeWikiSource.items
       ].sort((left, right) => new Date(right.timeValue).getTime() - new Date(left.timeValue).getTime());
-      const total = ingredientSource.total + unitSource.total + inviteSource.total + officialSource.total + recipeWikiSource.total;
+      const total =
+        ingredientSource.total +
+        unitSource.total +
+        recipeRecommendationSource.total +
+        recipeReportSource.total +
+        ingredientFeedbackSource.total +
+        inviteSource.total +
+        officialSource.total +
+        recipeWikiSource.total;
       const start = (nextPage - 1) * nextPageSize;
       const end = start + nextPageSize;
       const pageItems = mergedItems.slice(start, end);
@@ -184,7 +212,7 @@ export class NotificationService {
         page: nextPage,
         pageSize: nextPageSize,
         total,
-        hasNext: end < total
+        hasNext: nextPage < maxNotificationFeedPage && end < total
       };
     });
   }
@@ -363,6 +391,103 @@ export class NotificationService {
           title: `单位审核：${item.unitName}`,
           desc,
           timeValue: toIsoDate(timeValue),
+          targetPath: null
+        } satisfies NotificationFeedItem;
+      })
+    };
+  }
+
+  private async loadRecipeRecommendationFeed(db: NotificationDb, userId: UUID, take: number): Promise<FeedSourceResult> {
+    const where = { userId, status: { not: "WITHDRAWN" as const } };
+    const [total, items] = await Promise.all([
+      db.recipeRecommendation.count({ where }),
+      db.recipeRecommendation.findMany({
+        where,
+        orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+        take,
+        select: { id: true, recipeTitle: true, status: true, reviewNote: true, updatedAt: true }
+      })
+    ]);
+
+    return {
+      total,
+      items: items.map(item => {
+        const desc =
+          item.status === "PENDING"
+            ? `“${item.recipeTitle}”正在审核中`
+            : item.status === "REJECTED"
+              ? item.reviewNote || `“${item.recipeTitle}”审核未通过`
+              : `“${item.recipeTitle}”已收录到灵感`;
+        return {
+          id: `recipe-recommendation:${item.id}`,
+          isUnread: false,
+          typeLabel: "系统审核",
+          tone: "review",
+          title: `食谱审核：${item.recipeTitle}`,
+          desc,
+          timeValue: toIsoDate(item.updatedAt),
+          targetPath: null
+        } satisfies NotificationFeedItem;
+      })
+    };
+  }
+
+  private async loadRecipeReportFeed(db: NotificationDb, userId: UUID, take: number): Promise<FeedSourceResult> {
+    const where = { reporterId: userId };
+    const [total, items] = await Promise.all([
+      db.recipeReport.count({ where }),
+      db.recipeReport.findMany({
+        where,
+        orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+        take,
+        select: { id: true, reason: true, status: true, resolutionNote: true, updatedAt: true }
+      })
+    ]);
+
+    return {
+      total,
+      items: items.map(item => ({
+        id: `recipe-report:${item.id}`,
+        isUnread: false,
+        typeLabel: "系统审核",
+        tone: "review",
+        title: `举报处理：${item.reason}`,
+        desc: item.status === "OPEN" ? "举报正在处理中" : item.resolutionNote || "举报已处理，感谢反馈",
+        timeValue: toIsoDate(item.updatedAt),
+        targetPath: null
+      } satisfies NotificationFeedItem))
+    };
+  }
+
+  private async loadIngredientFeedbackFeed(db: NotificationDb, userId: UUID, take: number): Promise<FeedSourceResult> {
+    const where = { userId };
+    const [total, items] = await Promise.all([
+      db.ingredientFeedback.count({ where }),
+      db.ingredientFeedback.findMany({
+        where,
+        orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+        take,
+        select: { id: true, ingredientName: true, suggestedName: true, status: true, reviewNote: true, updatedAt: true }
+      })
+    ]);
+
+    return {
+      total,
+      items: items.map(item => {
+        const desc =
+          item.status === "PENDING"
+            ? `“${item.ingredientName}”的纠错正在审核中`
+            : item.status === "REJECTED"
+              ? item.reviewNote || `“${item.ingredientName}”的纠错未采纳`
+              : `“${item.ingredientName}”的纠错已采纳${item.suggestedName !== item.ingredientName ? `，名称更新为“${item.suggestedName}”` : ""}`;
+        return {
+          id: `ingredient-feedback:${item.id}`,
+          isUnread: false,
+          typeLabel: "系统审核",
+          tone: "review",
+          title: `食材纠错：${item.ingredientName}`,
+          desc,
+          timeValue: toIsoDate(item.updatedAt),
           targetPath: null
         } satisfies NotificationFeedItem;
       })
@@ -574,6 +699,33 @@ export class NotificationService {
       return item?.updatedAt ?? null;
     }
 
+    const recipeRecommendationId = notificationId.match(/^recipe-recommendation:(\d+)$/)?.[1];
+    if (recipeRecommendationId) {
+      const item = await db.recipeRecommendation.findFirst({
+        where: { id: Number(recipeRecommendationId), userId, status: { not: "WITHDRAWN" } },
+        select: { updatedAt: true }
+      });
+      return item?.updatedAt ?? null;
+    }
+
+    const recipeReportId = notificationId.match(/^recipe-report:(\d+)$/)?.[1];
+    if (recipeReportId) {
+      const item = await db.recipeReport.findFirst({
+        where: { id: Number(recipeReportId), reporterId: userId },
+        select: { updatedAt: true }
+      });
+      return item?.updatedAt ?? null;
+    }
+
+    const ingredientFeedbackId = notificationId.match(/^ingredient-feedback:(\d+)$/)?.[1];
+    if (ingredientFeedbackId) {
+      const item = await db.ingredientFeedback.findFirst({
+        where: { id: Number(ingredientFeedbackId), userId },
+        select: { updatedAt: true }
+      });
+      return item?.updatedAt ?? null;
+    }
+
     const inviteId = notificationId.match(/^invite:(\d+)$/)?.[1];
     if (inviteId) {
       const item = await db.shoppingListInvite.findFirst({
@@ -616,9 +768,22 @@ export class NotificationService {
     userCreatedAt: Date,
     feedReadAt: Date | null
   ): Promise<NotificationBadgeResponse> {
-    const [ingredientSummary, unitSummary, inviteSummary, officialSummary, recipeWikiSummary, readSummary] = await Promise.all([
+    const [
+      ingredientSummary,
+      unitSummary,
+      recipeRecommendationSummary,
+      recipeReportSummary,
+      ingredientFeedbackSummary,
+      inviteSummary,
+      officialSummary,
+      recipeWikiSummary,
+      readSummary
+    ] = await Promise.all([
       this.loadIngredientSummary(db, userId, feedReadAt),
       this.loadUnitSummary(db, userId, feedReadAt),
+      this.loadRecipeRecommendationSummary(db, userId, feedReadAt),
+      this.loadRecipeReportSummary(db, userId, feedReadAt),
+      this.loadIngredientFeedbackSummary(db, userId, feedReadAt),
       this.loadInviteSummary(db, userId, feedReadAt),
       this.loadOfficialSummary(db, userCreatedAt, feedReadAt),
       this.loadRecipeWikiSummary(db, userId, feedReadAt),
@@ -628,6 +793,9 @@ export class NotificationService {
     const sourceUnreadCount =
       ingredientSummary.unreadCount +
       unitSummary.unreadCount +
+      recipeRecommendationSummary.unreadCount +
+      recipeReportSummary.unreadCount +
+      ingredientFeedbackSummary.unreadCount +
       inviteSummary.unreadCount +
       officialSummary.unreadCount +
       recipeWikiSummary.unreadCount;
@@ -636,6 +804,9 @@ export class NotificationService {
     const latestAt = maxDate(
       ingredientSummary.latestAt,
       unitSummary.latestAt,
+      recipeRecommendationSummary.latestAt,
+      recipeReportSummary.latestAt,
+      ingredientFeedbackSummary.latestAt,
       inviteSummary.latestAt,
       officialSummary.latestAt,
       recipeWikiSummary.latestAt
@@ -667,13 +838,111 @@ export class NotificationService {
       return { allCount: 0 };
     }
 
-    const currentTimes = await Promise.all(
-      reads.map(read => this.findNotificationTime(db, userId, userCreatedAt, read.notificationId))
-    );
+    const ingredientIds = new Map<number, string[]>();
+    const unitIds = new Map<number, string[]>();
+    const recipeRecommendationIds = new Map<number, string[]>();
+    const recipeReportIds = new Map<number, string[]>();
+    const ingredientFeedbackIds = new Map<number, string[]>();
+    const inviteIds = new Map<number, string[]>();
+    const officialIds = new Map<number, string[]>();
+    const recipeWikiIds = new Map<number, string[]>();
+
+    const sourceIds = new Map([
+      ["ingredient", ingredientIds],
+      ["unit", unitIds],
+      ["recipe-recommendation", recipeRecommendationIds],
+      ["recipe-report", recipeReportIds],
+      ["ingredient-feedback", ingredientFeedbackIds],
+      ["invite", inviteIds],
+      ["official", officialIds],
+      ["recipe-wiki", recipeWikiIds]
+    ]);
+
+    for (const read of reads) {
+      const match = read.notificationId.match(/^([a-z-]+):(\d+)$/);
+      if (!match) continue;
+      const id = Number(match[2]);
+      if (!Number.isSafeInteger(id) || id < 1) continue;
+      const ids = sourceIds.get(match[1]);
+      if (!ids) continue;
+      const notificationIds = ids.get(id) ?? [];
+      notificationIds.push(read.notificationId);
+      ids.set(id, notificationIds);
+    }
+
+    const loadBatches = async <T>(ids: number[], query: (batch: number[]) => Promise<T[]>): Promise<T[]> => {
+      const rows: T[] = [];
+      for (let start = 0; start < ids.length; start += 500) {
+        rows.push(...await query(ids.slice(start, start + 500)));
+      }
+      return rows;
+    };
+
+    const [ingredients, units, recipeRecommendations, recipeReports, ingredientFeedbacks, invites, officialMessages, recipeWikiRequests] = await Promise.all([
+      loadBatches([...ingredientIds.keys()], ids => db.ingredientRecommendation.findMany({
+        where: { id: { in: ids }, userId },
+        select: { id: true, updatedAt: true }
+      })),
+      loadBatches([...unitIds.keys()], ids => db.unitRecommendation.findMany({
+        where: { id: { in: ids }, userId },
+        select: { id: true, updatedAt: true }
+      })),
+      loadBatches([...recipeRecommendationIds.keys()], ids => db.recipeRecommendation.findMany({
+        where: { id: { in: ids }, userId, status: { not: "WITHDRAWN" } },
+        select: { id: true, updatedAt: true }
+      })),
+      loadBatches([...recipeReportIds.keys()], ids => db.recipeReport.findMany({
+        where: { id: { in: ids }, reporterId: userId },
+        select: { id: true, updatedAt: true }
+      })),
+      loadBatches([...ingredientFeedbackIds.keys()], ids => db.ingredientFeedback.findMany({
+        where: { id: { in: ids }, userId },
+        select: { id: true, updatedAt: true }
+      })),
+      loadBatches([...inviteIds.keys()], ids => db.shoppingListInvite.findMany({
+        where: { id: { in: ids }, targetUserId: userId },
+        select: { id: true, updatedAt: true }
+      })),
+      loadBatches([...officialIds.keys()], ids => db.siteContent.findMany({
+        where: {
+          id: { in: ids },
+          type: "ARTICLE",
+          status: "PUBLISHED",
+          channel: { is: { code: officialChannelCode } },
+          publishedAt: { gt: userCreatedAt }
+        },
+        select: { id: true, updatedAt: true }
+      })),
+      loadBatches([...recipeWikiIds.keys()], ids => db.recipeCookAssistantRequest.findMany({
+        where: { id: { in: ids }, userId, status: { in: recipeWikiResolvedStatuses } },
+        select: { id: true, resolvedAt: true, updatedAt: true }
+      }))
+    ]);
+
+    const currentTimes = new Map<string, Date>();
+    const rememberTimes = <T extends { id: number }>(source: Map<number, string[]>, items: T[], time: (item: T) => Date | null) => {
+      for (const item of items) {
+        const currentTime = time(item);
+        if (!currentTime) continue;
+        for (const notificationId of source.get(item.id) ?? []) {
+          currentTimes.set(notificationId, currentTime);
+        }
+      }
+    };
+
+    rememberTimes(ingredientIds, ingredients, item => item.updatedAt);
+    rememberTimes(unitIds, units, item => item.updatedAt);
+    rememberTimes(recipeRecommendationIds, recipeRecommendations, item => item.updatedAt);
+    rememberTimes(recipeReportIds, recipeReports, item => item.updatedAt);
+    rememberTimes(ingredientFeedbackIds, ingredientFeedbacks, item => item.updatedAt);
+    rememberTimes(inviteIds, invites, item => item.updatedAt);
+    rememberTimes(officialIds, officialMessages, item => item.updatedAt);
+    rememberTimes(recipeWikiIds, recipeWikiRequests, item => item.resolvedAt ?? item.updatedAt);
+
     let allCount = 0;
 
-    reads.forEach((read, index) => {
-      const currentTime = currentTimes[index];
+    reads.forEach(read => {
+      const currentTime = currentTimes.get(read.notificationId);
       if (!currentTime || currentTime.getTime() !== read.notificationAt.getTime()) return;
       allCount += 1;
     });
@@ -727,6 +996,33 @@ export class NotificationService {
       unreadCount,
       latestAt: latest?.updatedAt ?? null
     };
+  }
+
+  private async loadRecipeRecommendationSummary(db: NotificationDb, userId: UUID, readAt: Date | null): Promise<TimedUnreadSummary> {
+    const where = { userId, status: { not: "WITHDRAWN" as const } };
+    const [latest, unreadCount] = await Promise.all([
+      db.recipeRecommendation.findFirst({ where, orderBy: [{ updatedAt: "desc" }, { id: "desc" }], select: { updatedAt: true } }),
+      db.recipeRecommendation.count({ where: readAt ? { ...where, updatedAt: { gt: readAt } } : where })
+    ]);
+    return { unreadCount, latestAt: latest?.updatedAt ?? null };
+  }
+
+  private async loadRecipeReportSummary(db: NotificationDb, userId: UUID, readAt: Date | null): Promise<TimedUnreadSummary> {
+    const where = { reporterId: userId };
+    const [latest, unreadCount] = await Promise.all([
+      db.recipeReport.findFirst({ where, orderBy: [{ updatedAt: "desc" }, { id: "desc" }], select: { updatedAt: true } }),
+      db.recipeReport.count({ where: readAt ? { ...where, updatedAt: { gt: readAt } } : where })
+    ]);
+    return { unreadCount, latestAt: latest?.updatedAt ?? null };
+  }
+
+  private async loadIngredientFeedbackSummary(db: NotificationDb, userId: UUID, readAt: Date | null): Promise<TimedUnreadSummary> {
+    const where = { userId };
+    const [latest, unreadCount] = await Promise.all([
+      db.ingredientFeedback.findFirst({ where, orderBy: [{ updatedAt: "desc" }, { id: "desc" }], select: { updatedAt: true } }),
+      db.ingredientFeedback.count({ where: readAt ? { ...where, updatedAt: { gt: readAt } } : where })
+    ]);
+    return { unreadCount, latestAt: latest?.updatedAt ?? null };
   }
 
   private async loadInviteSummary(db: NotificationDb, userId: UUID, readAt: Date | null): Promise<TimedUnreadSummary> {
