@@ -347,13 +347,14 @@ type RandomTagSnapshot = {
 const mealAssistantContractVersion = "meal-assistant.v1";
 const mealAssistantSnapshotVersion = 1;
 const randomMenuQuotaWindowDays = 7;
-const defaultRandomMenuWeeklyLimit = 21;
+const defaultRandomMenuWeeklyLimit = 7;
+const maxRandomMenuWeeklyLimit = 7;
 const randomMenuEmptyResultLimit = 10;
 const randomMenuEmptyResultWindowMs = 60_000;
 
 function randomMenuWeeklyLimit() {
   const configured = Number(process.env.RANDOM_MENU_WEEKLY_LIMIT);
-  if (Number.isInteger(configured) && configured > 0) return configured;
+  if (Number.isInteger(configured) && configured > 0) return Math.min(configured, maxRandomMenuWeeklyLimit);
   return defaultRandomMenuWeeklyLimit;
 }
 
