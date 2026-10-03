@@ -572,19 +572,16 @@ if (!hasAutomatorRuntime && nodeTest) {
     const eventShoppingSource = detailPageSource.slice(eventShoppingStart, eventShoppingEnd);
 
     nodeAssert.doesNotMatch(eventShoppingSource, /recipeTitles|menu-confirm__item-recipes/);
-    nodeAssert.match(eventShoppingSource, /家里有，不用买/);
+    nodeAssert.match(eventShoppingSource, /我已备好/);
     nodeAssert.match(eventShoppingSource, /已备齐/);
     nodeAssert.match(detailPageSource, /mealApi\.startCooking\(/);
   });
 
-  nodeTest("取消饭局和取消计划位于详情正文底部并在日期后隐藏", () => {
-    const scrollEnd = detailPageSource.indexOf("</scroll-view>");
-    const footerStart = detailPageSource.indexOf('id="meal-footer-panel"');
-    const cancelArea = detailPageSource.slice(0, scrollEnd);
-
-    nodeAssert.ok(scrollEnd > 0 && footerStart > scrollEnd);
-    nodeAssert.match(cancelArea, /取消饭局/);
-    nodeAssert.match(cancelArea, /取消计划/);
+  nodeTest("取消饭局和取消计划使用浮动管理入口并在日期后隐藏", () => {
+    nodeAssert.match(detailPageSource, /class="detail-manage-dock"/);
+    nodeAssert.match(detailPageSource, /label: eventDetail\.value \? "取消饭局" : "取消计划"/);
+    nodeAssert.match(detailPageSource, /planDetail\.value\.planDate >= formatDateOnly\(new Date\(nowMs\.value\)\)/);
+    nodeAssert.match(detailPageSource, /handleDetailCancelAction\(\)/);
     nodeAssert.match(detailPageSource, /mealApi\.cancelPlan\(/);
     nodeAssert.doesNotMatch(detailPageSource, /key: "cancel-event"/);
   });
@@ -607,14 +604,14 @@ if (!hasAutomatorRuntime && nodeTest) {
     nodeAssert.match(detailPageSource, /navigateTo\(`\/pages_share\/memory\/index\?eventId=/);
   });
 
-  nodeTest("确认菜单后的纯计划 footer 可以结束计划", () => {
+  nodeTest("确认菜单后的纯计划 footer 可以完成用餐", () => {
     const readyStageStart = detailPageSource.indexOf('if (footerStage.value === "READY_TO_START")');
     const readyStageEnd = detailPageSource.indexOf("const footerPrimaryGapText", readyStageStart);
     const readyStageSource = detailPageSource.slice(readyStageStart, readyStageEnd);
 
-    nodeAssert.match(readyStageSource, /if \(!eventDetail\.value\) return \{ key: "complete-plan", label: "结束计划" \}/);
+    nodeAssert.match(readyStageSource, /if \(!eventDetail\.value\) return \{ key: "complete-plan", label: "完成用餐" \}/);
     nodeAssert.match(detailPageSource, /mealApi\.completePlan\(planDetail\.value\.id, createOperationId\(\)\)/);
-    nodeAssert.match(detailPageSource, /title: "结束计划"/);
+    nodeAssert.match(detailPageSource, /title: "确认完成用餐"/);
   });
 
   nodeTest("饭局未准备完成先去采购，准备完成后开始做饭", () => {
@@ -628,7 +625,7 @@ if (!hasAutomatorRuntime && nodeTest) {
     nodeAssert.doesNotMatch(readyStageSource, /cancel-event/);
     nodeAssert.match(detailPageSource, /mealApi\.cancelDiningEvent\(eventDetail\.value\.id, createOperationId\(\)\)/);
     nodeAssert.match(detailPageSource, /title: "取消饭局"/);
-    nodeAssert.match(detailPageSource, /原计划和菜单会保留，之后还可以重新发起饭局/);
+    nodeAssert.match(detailPageSource, /取消后，这场饭局及对应计划、菜单和未买采购项会删除，分享邀请失效；已买食材和冰箱记录保留。删除后无法恢复，确定取消吗？/);
     nodeAssert.match(detailPageSource, /scheduledAtMs\.value > nowMs\.value/);
   });
 
@@ -638,18 +635,24 @@ if (!hasAutomatorRuntime && nodeTest) {
     nodeAssert.doesNotMatch(detailPageSource, /shoppingSheetVisible/);
   });
 
-  nodeTest("饭局完成后可独立更新食材或分享回忆，跳过不写状态", () => {
+  nodeTest("饭局完成后可勾选食材并二次确认批量标记没有", () => {
     nodeAssert.match(detailPageSource, /饭局结束啦，要不要顺手看看食材还有没有/);
-    nodeAssert.match(detailPageSource, /全部确认有/);
-    nodeAssert.match(detailPageSource, /全部跳过/);
-    nodeAssert.match(detailPageSource, /fridgeApi\.markPresentBatch\(pending\.map/);
-    nodeAssert.match(detailPageSource, /fridgeApi\.markPresent/);
-    nodeAssert.match(detailPageSource, /fridgeApi\.markEmpty/);
+    nodeAssert.match(detailPageSource, /class="meal-sheet-actions__primary"[\s\S]*家里没有了/);
+    nodeAssert.match(detailPageSource, /completedIngredientSelectedKeys\.has\(item\.key\)/);
+    nodeAssert.match(detailPageSource, /title: "整理食材"[\s\S]*将选中的 \$\{selected\.length\} 种食材从家里食材中移除吗？/);
+    nodeAssert.match(detailPageSource, /fridgeApi\.removeBatch\(batch\.map/);
+    nodeAssert.doesNotMatch(detailPageSource, /全部确认有|全部跳过|skipCompletedIngredientUpdate|fridgeApi\.markPresent/);
     nodeAssert.match(detailPageSource, /mealActuallyCompleted = computed/);
     nodeAssert.match(detailPageSource, /eventDetail\.value\.status === "COMPLETED"[\s\S]*planDetail\.value\?\.status === "COMPLETED"/);
     nodeAssert.match(detailPageSource, /shoppingApi\.previewEventGap[\s\S]*shoppingApi\.previewPlanGap/);
     nodeAssert.match(detailPageSource, /new Map<string, CompletedIngredientItem>/);
-    nodeAssert.match(detailPageSource, /function skipCompletedIngredientUpdate\(\)[\s\S]*completedIngredientSheetVisible\.value = false/);
+    nodeAssert.match(detailPageSource, /\.meal-footer__memory,\s*\.meal-sheet-actions__primary\s*\{[\s\S]*min-height: 84rpx;[\s\S]*border-radius: var\(--radius-pill\);/);
+    nodeAssert.match(detailPageSource, /\.meal-sheet-actions__primary--disabled\s*\{[\s\S]*background: var\(--color-surface-muted\);[\s\S]*color: var\(--color-text-secondary\);/);
+    nodeAssert.match(detailPageSource, /button\.meal-sheet-actions__primary--disabled\[disabled\]:not\(\[type\]\),\s*button\.meal-sheet-actions__primary--disabled\[disabled\]\[type="default"\]/);
+    nodeAssert.match(detailPageSource, /\.completed-ingredient-row__select\s*\{[\s\S]*flex: 0 0 40rpx;[\s\S]*height: 40rpx;/);
+    nodeAssert.match(detailPageSource, /\.completed-ingredient-row__check-icon\s*\{[\s\S]*font-size: 30rpx;/);
+    nodeAssert.match(detailPageSource, /\.completed-ingredient-row__cut-line\s*\{[\s\S]*transform: translateY\(-50%\) scaleX\(0\);[\s\S]*transition: transform 300ms ease;/);
+    nodeAssert.match(detailPageSource, /\.completed-ingredient-row__text--checked \.completed-ingredient-row__cut-line\s*\{[\s\S]*scaleX\(1\)/);
     const completeActionStart = detailPageSource.indexOf("async function handleCompleteEventAction()");
     const completeActionEnd = detailPageSource.indexOf("async function handleCompletePlanAction()", completeActionStart);
     nodeAssert.doesNotMatch(detailPageSource.slice(completeActionStart, completeActionEnd), /openMemory\(\)/);

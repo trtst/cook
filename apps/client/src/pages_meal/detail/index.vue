@@ -871,33 +871,40 @@
           <view v-if="completedIngredientLoading" class="meal-sheet-state">正在整理这顿饭的食材...</view>
           <view v-else-if="!completedIngredientItems.length" class="meal-sheet-state">这顿饭没有可更新的菜谱食材。</view>
           <scroll-view v-else class="completed-ingredient-list" scroll-y>
-            <view v-for="item in completedIngredientItems" :key="item.key" class="completed-ingredient-row">
-              <text class="completed-ingredient-row__name">{{ item.name }}</text>
-              <view class="completed-ingredient-row__actions">
-                <button
-                  class="completed-ingredient-row__button"
-                  :class="{
-                    'completed-ingredient-row__button--active': completedIngredientStates[item.key] === 'PRESENT',
-                    'completed-ingredient-row__button--busy': completedIngredientSubmittingKey === item.key
-                  }"
-                  @click="setCompletedIngredientPresence(item, 'PRESENT')"
-                >有</button>
-                <button
-                  class="completed-ingredient-row__button completed-ingredient-row__button--muted"
-                  :class="{
-                    'completed-ingredient-row__button--active': completedIngredientStates[item.key] === 'EMPTY',
-                    'completed-ingredient-row__button--busy': completedIngredientSubmittingKey === item.key
-                  }"
-                  @click="setCompletedIngredientPresence(item, 'EMPTY')"
-                >没有</button>
+            <view
+              v-for="item in completedIngredientItems"
+              :key="item.key"
+              class="completed-ingredient-row"
+              @click="toggleCompletedIngredientSelected(item.key)"
+            >
+              <view
+                class="completed-ingredient-row__select"
+                :class="{ 'completed-ingredient-row__select--checked': completedIngredientSelectedKeys.has(item.key) }"
+                role="checkbox"
+                :aria-label="item.name"
+                :aria-checked="completedIngredientSelectedKeys.has(item.key)"
+                @click.stop="toggleCompletedIngredientSelected(item.key)"
+              >
+                <text v-if="completedIngredientSelectedKeys.has(item.key)" class="completed-ingredient-row__check-icon">✓</text>
+              </view>
+              <view
+                class="completed-ingredient-row__text"
+                :class="{ 'completed-ingredient-row__text--checked': completedIngredientSelectedKeys.has(item.key) }"
+              >
+                <text class="completed-ingredient-row__name">{{ item.name }}</text>
+                <view class="completed-ingredient-row__cut-line" aria-hidden="true" />
               </view>
             </view>
           </scroll-view>
           <template #footer>
             <view class="meal-sheet-actions">
-              <button class="meal-sheet-actions__secondary" :class="{ 'meal-sheet-actions__button--busy': completedIngredientBusy }" @click="skipCompletedIngredientUpdate">全部跳过</button>
-              <button class="meal-sheet-actions__primary" :class="{ 'meal-sheet-actions__button--busy': completedIngredientBusy || !completedIngredientItems.length }" @click="markAllCompletedIngredientsPresent">
-                {{ completedIngredientBusy ? "更新中..." : "全部确认有" }}
+              <button
+                class="meal-sheet-actions__primary"
+                :class="{ 'meal-sheet-actions__primary--disabled': completedIngredientBusy || !completedIngredientSelectedKeys.size }"
+                :disabled="completedIngredientBusy || !completedIngredientSelectedKeys.size"
+                @click="removeSelectedCompletedIngredients"
+              >
+                {{ completedIngredientBusy ? "更新中..." : "家里没有了" }}
               </button>
             </view>
           </template>
@@ -1147,8 +1154,7 @@ const completedIngredientSheetVisible = ref(false);
 const completedIngredientLoading = ref(false);
 const completedIngredientBusy = ref(false);
 const completedIngredientItems = ref<CompletedIngredientItem[]>([]);
-const completedIngredientStates = ref<Record<string, "PRESENT" | "EMPTY">>({});
-const completedIngredientSubmittingKey = ref("");
+const completedIngredientSelectedKeys = ref(new Set<string>());
 const gapLoading = ref(false);
 const gapErrorText = ref("");
 const eventGapItems = ref<ShoppingGapPreviewItem[] | null>(null);
@@ -3423,7 +3429,7 @@ async function openCompletedIngredientSheet() {
   completedIngredientSheetVisible.value = true;
   completedIngredientLoading.value = true;
   completedIngredientItems.value = [];
-  completedIngredientStates.value = {};
+  completedIngredientSelectedKeys.value = new Set();
   try {
     const rows = eventDetail.value
       ? await shoppingApi.previewEventGap(eventDetail.value.id)
@@ -3453,39 +3459,39 @@ function closeCompletedIngredientSheet() {
 
 function handleCompletedIngredientSheetAfterClose() {
   completedIngredientItems.value = [];
-  completedIngredientStates.value = {};
-  completedIngredientSubmittingKey.value = "";
+  completedIngredientSelectedKeys.value = new Set();
 }
 
-async function setCompletedIngredientPresence(item: CompletedIngredientItem, presence: "PRESENT" | "EMPTY") {
-  if (completedIngredientBusy.value || completedIngredientSubmittingKey.value || completedIngredientStates.value[item.key] === presence) return;
-  completedIngredientSubmittingKey.value = item.key;
-  try {
-    const body = { operationId: createOperationId(), ingredientId: item.ingredientId, name: item.name };
-    if (presence === "PRESENT") await fridgeApi.markPresent(body);
-    else await fridgeApi.markEmpty(body);
-    completedIngredientStates.value = { ...completedIngredientStates.value, [item.key]: presence };
-  } catch (error) {
-    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "更新食材状态失败", icon: "none" });
-  } finally {
-    completedIngredientSubmittingKey.value = "";
-  }
+function toggleCompletedIngredientSelected(key: string) {
+  if (completedIngredientBusy.value) return;
+  const next = new Set(completedIngredientSelectedKeys.value);
+  if (next.has(key)) next.delete(key);
+  else next.add(key);
+  completedIngredientSelectedKeys.value = next;
 }
 
-async function markAllCompletedIngredientsPresent() {
-  if (completedIngredientBusy.value || !completedIngredientItems.value.length) return;
+async function removeSelectedCompletedIngredients() {
+  if (completedIngredientBusy.value || !completedIngredientSelectedKeys.value.size) return;
+  const selected = completedIngredientItems.value.filter(item => completedIngredientSelectedKeys.value.has(item.key));
+  if (!selected.length) return;
+  const confirmed = await uniPlatform.feedback.confirm({
+    title: "整理食材",
+    content: `将选中的 ${selected.length} 种食材从家里食材中移除吗？`
+  });
+  if (!confirmed) return;
+
   completedIngredientBusy.value = true;
   try {
-    const pending = completedIngredientItems.value.filter(item => completedIngredientStates.value[item.key] !== "PRESENT");
-    if (pending.length) {
-      await fridgeApi.markPresentBatch(pending.map(item => ({
+    for (let index = 0; index < selected.length; index += 100) {
+      const batch = selected.slice(index, index + 100);
+      await fridgeApi.removeBatch(batch.map(item => ({
         ingredientId: item.ingredientId,
         name: item.name
       })), createOperationId());
-      completedIngredientStates.value = {
-        ...completedIngredientStates.value,
-        ...Object.fromEntries(pending.map(item => [item.key, "PRESENT"]))
-      };
+      const updatedKeys = new Set(batch.map(item => item.key));
+      completedIngredientSelectedKeys.value = new Set(
+        [...completedIngredientSelectedKeys.value].filter(key => !updatedKeys.has(key))
+      );
     }
     completedIngredientSheetVisible.value = false;
   } catch (error) {
@@ -3493,11 +3499,6 @@ async function markAllCompletedIngredientsPresent() {
   } finally {
     completedIngredientBusy.value = false;
   }
-}
-
-function skipCompletedIngredientUpdate() {
-  if (completedIngredientBusy.value) return;
-  completedIngredientSheetVisible.value = false;
 }
 
 async function handleCompletePlanAction() {
@@ -5975,6 +5976,7 @@ function clearFocusedSection() {
 }
 
 .meal-footer__update {
+  border-radius: var(--radius-pill);
   background: var(--button-primary-bg);
   color: var(--button-primary-text);
 }
@@ -5997,86 +5999,93 @@ function clearFocusedSection() {
 .completed-ingredient-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 20rpx;
-  padding: 20rpx 0;
+  padding: 20rpx 10rpx;
   border-bottom: 1rpx solid var(--color-border-light);
 }
 
-.completed-ingredient-row__name {
+.completed-ingredient-row__select {
+  display: flex;
+  flex: 0 0 40rpx;
+  align-items: center;
+  justify-content: center;
+  width: 40rpx;
+  height: 40rpx;
+  border: 3rpx solid var(--color-text);
+  border-radius: 18rpx 24rpx 16rpx 22rpx / 22rpx 16rpx 24rpx 18rpx;
+  background: var(--color-surface-raised);
+  box-shadow: 4rpx 4rpx 0 var(--color-text);
+  box-sizing: border-box;
+  transition:
+    transform 180ms cubic-bezier(0.175, 0.885, 0.32, 1.275),
+    box-shadow 180ms ease,
+    background-color 180ms ease,
+    border-radius 180ms ease;
+}
+
+.completed-ingredient-row__select--checked {
+  border-radius: 24rpx 16rpx 22rpx 18rpx / 16rpx 24rpx 18rpx 22rpx;
+  background: var(--button-primary-bg);
+  transform: scale(1.05) rotate(-2deg);
+}
+
+.completed-ingredient-row__select:active {
+  box-shadow: 0 0 0 var(--color-text);
+  transform: scale(0.92) translateY(3rpx);
+}
+
+.completed-ingredient-row__check-icon {
+  color: var(--button-primary-text);
+  font-size: 30rpx;
+  font-weight: var(--font-weight-heavy);
+  line-height: 1;
+}
+
+.completed-ingredient-row__text {
+  position: relative;
+  display: inline-block;
   min-width: 0;
+  max-width: calc(100% - 60rpx);
+}
+
+.completed-ingredient-row__name {
   color: var(--color-text);
   font-size: 27rpx;
 }
 
-.completed-ingredient-row__actions,
+.completed-ingredient-row__cut-line {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 100%;
+  height: 6rpx;
+  background: var(--color-text-secondary);
+  pointer-events: none;
+  transform: translateY(-50%) scaleX(0);
+  transform-origin: left center;
+  transition: transform 300ms ease;
+}
+
+.completed-ingredient-row__text--checked .completed-ingredient-row__cut-line {
+  transform: translateY(-50%) scaleX(1);
+}
+
 .meal-sheet-actions {
   display: flex;
   align-items: center;
   gap: 12rpx;
 }
 
-.completed-ingredient-row__button,
-.meal-sheet-actions__secondary,
-.meal-sheet-actions__primary {
-  margin: 0;
-  padding: 0 24rpx;
-  border: 0;
-  border-radius: 14rpx;
-  font-size: 23rpx;
-  line-height: 64rpx;
-}
-
-.completed-ingredient-row__button {
-  background: var(--button-secondary-bg);
-  color: var(--color-text-secondary);
-}
-
-.completed-ingredient-row__button--busy,
-.meal-sheet-actions__button--busy {
-  opacity: 0.55;
-}
-
-.completed-ingredient-row__button--muted {
-  color: var(--color-text-tertiary);
-}
-
-.completed-ingredient-row__button--active {
-  background: var(--color-state-success-soft);
-  color: var(--color-state-success-text);
-}
-
 .meal-sheet-actions {
   width: 100%;
 }
 
-.meal-sheet-actions__secondary,
+.meal-footer__memory,
 .meal-sheet-actions__primary {
-  flex: 1;
-}
-
-.meal-sheet-actions__secondary {
-  background: var(--color-surface-muted);
-  color: var(--color-text-secondary);
-}
-
-.meal-sheet-actions__primary {
-  background: var(--button-primary-bg);
-  color: var(--button-primary-text);
-}
-
-.completed-ingredient-row__button::after,
-.meal-sheet-actions__secondary::after,
-.meal-sheet-actions__primary::after {
-  border: 0;
-}
-
-.meal-footer__memory {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10rpx;
-  width: 100%;
   min-height: 84rpx;
   padding: 0 24rpx;
   border: 0;
@@ -6085,9 +6094,36 @@ function clearFocusedSection() {
   box-shadow: var(--button-primary-shadow);
   color: var(--button-primary-text);
   box-sizing: border-box;
+  font-size: 26rpx;
+  font-weight: var(--font-weight-semibold);
+  line-height: 1;
 }
 
-.meal-footer__memory::after {
+.meal-footer__memory {
+  gap: 10rpx;
+  width: 100%;
+}
+
+.meal-sheet-actions__primary {
+  flex: 1;
+  margin: 0;
+}
+
+.meal-sheet-actions__primary--disabled {
+  background: var(--color-surface-muted);
+  box-shadow: none;
+  color: var(--color-text-secondary);
+}
+
+button.meal-sheet-actions__primary--disabled[disabled]:not([type]),
+button.meal-sheet-actions__primary--disabled[disabled][type="default"] {
+  background-color: var(--color-surface-muted);
+  box-shadow: none;
+  color: var(--color-text-secondary);
+}
+
+.meal-footer__memory::after,
+.meal-sheet-actions__primary::after {
   border: 0;
 }
 

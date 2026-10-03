@@ -11,6 +11,38 @@
     />
 
     <view v-else class="trace-page">
+      <view class="trace-fixed">
+        <text class="trace-intro">最近买过、用过的食材会记在这里，家里有变化时也可以随手更新。</text>
+
+        <view v-if="ingredientCategories.length" class="trace-manage">
+          <view class="trace-category-fixed">
+            <view
+              class="trace-category-chip"
+              :class="{ 'trace-category-chip--active': categoryFilter === null }"
+              @click="changeCategory(null)"
+            >全部<text v-if="allTraceCount !== null"> ({{ allTraceCount }})</text></view>
+          </view>
+          <scroll-view scroll-x class="trace-category-scroll" :show-scrollbar="false">
+            <view class="trace-category-row">
+              <view
+                v-for="category in ingredientCategories"
+                :key="category.id"
+                class="trace-category-chip"
+                :class="{ 'trace-category-chip--active': categoryFilter === category.id }"
+                @click="changeCategory(category.id)"
+              >
+                {{ category.name }}
+                <text v-if="traceCategoryCounts[category.id] !== undefined"> ({{ traceCategoryCounts[category.id] }})</text>
+              </view>
+            </view>
+          </scroll-view>
+          <view class="trace-manage__actions">
+            <text v-if="!manageMode" class="trace-manage__action" @click="enterManageMode">管理</text>
+            <text v-else class="trace-manage__action" @click="exitManageMode">完成</text>
+          </view>
+        </view>
+      </view>
+
       <view class="trace-scroll-wrap">
         <RecipeSearchLoading
           :pull-distance="pullDistance"
@@ -35,51 +67,24 @@
           @refresherabort="onRefresherRestore"
         >
           <view class="trace-content">
-            <text class="trace-intro">最近买过、用过的食材会记在这里，家里有变化时也可以随手更新。</text>
-
-            <view v-if="ingredientCategories.length" class="trace-manage">
-              <view class="trace-category-fixed">
-                <view
-                  class="trace-category-chip"
-                  :class="{ 'trace-category-chip--active': categoryFilter === null }"
-                  @click="changeCategory(null)"
-                >全部</view>
-              </view>
-              <scroll-view scroll-x class="trace-category-scroll" :show-scrollbar="false">
-                <view class="trace-category-row">
-                  <view
-                    v-for="category in ingredientCategories"
-                    :key="category.id"
-                    class="trace-category-chip"
-                    :class="{ 'trace-category-chip--active': categoryFilter === category.id }"
-                    @click="changeCategory(category.id)"
-                  >{{ category.name }}</view>
-              </view>
-            </scroll-view>
-            <view class="trace-manage__actions">
-              <text v-if="!manageMode" class="trace-manage__action" @click="enterManageMode">管理</text>
-              <text v-else class="trace-manage__action" @click="exitManageMode">完成</text>
-            </view>
-          </view>
-
-          <view v-if="loading && !traces.length" class="trace-state">加载中...</view>
+            <view v-if="loading && !traces.length" class="trace-state">加载中...</view>
             <view v-else-if="errorText" class="trace-state trace-state--error" @click="loadPage()">{{ errorText }}，点此重试</view>
-          <Empty
-            v-else-if="!filteredCurrentTraces.length && !filteredArchivedTraces.length && !hasNext"
-            class="trace-empty"
-            :art="emptyStateArt"
-            :title="activeCategoryName ? `${activeCategoryName}里还没有食材` : '还没有记录的食材'"
-            :description="activeCategoryName ? '换个分类看看，或添加食材。' : '可以手动添加，或在购物清单里勾选已买后自动记录。'"
-          />
-          <template v-else>
-            <view v-if="filteredCurrentTraces.length" class="trace-list">
-              <view
-                v-for="trace in filteredCurrentTraces"
-                :key="trace.id"
-                class="trace-card"
-                :class="{ 'trace-card--manage': manageMode }"
-                @click="manageMode ? toggleTraceSelected(trace) : undefined"
-              >
+            <Empty
+              v-else-if="!filteredCurrentTraces.length && !filteredArchivedTraces.length && !hasNext"
+              class="trace-empty"
+              :art="emptyStateArt"
+              :title="activeCategoryName ? `${activeCategoryName}里还没有食材` : '还没有记录的食材'"
+              :description="activeCategoryName ? '换个分类看看，或添加食材。' : '可以手动添加，或在购物清单里勾选已买后自动记录。'"
+            />
+            <template v-else>
+              <view v-if="filteredCurrentTraces.length" class="trace-list">
+                <view
+                  v-for="trace in filteredCurrentTraces"
+                  :key="trace.id"
+                  class="trace-card"
+                  :class="{ 'trace-card--manage': manageMode }"
+                  @click="manageMode ? toggleTraceSelected(trace) : undefined"
+                >
                 <view
                   v-if="manageMode"
                   class="trace-card__select"
@@ -98,12 +103,12 @@
                   </view>
                   <text class="trace-card__label">{{ trace.label }} · {{ formatRecordedAt(trace.recordedAt) }}</text>
                 </view>
+                </view>
               </view>
-            </view>
 
             <view v-if="filteredArchivedTraces.length" class="archive-section">
               <button class="archive-toggle" @click="archiveExpanded = !archiveExpanded">
-                <text>很久没记录</text>
+                <text>很久没记录（{{ filteredArchivedTraces.length }} 项）</text>
                 <text>{{ archiveExpanded ? "收起" : "展开" }}</text>
               </button>
               <view v-if="archiveExpanded" class="trace-list">
@@ -147,8 +152,10 @@
               :loading="loadingMore"
               :has-next="hasNext"
               :show-done="loadedMoreOnce && !hasNext"
-              next-text="继续上滑，查看更多食材"
+              action-mode="tap"
+              next-text="点击加载更多食材"
               done-text="已经翻到底啦"
+              @click="loadMoreTraces"
             />
           </template>
           </view>
@@ -193,7 +200,7 @@
             class="trace-actions__button trace-actions__button--secondary"
             :class="{ 'trace-actions__button--disabled': !selectedTraceIds.size || updatingTraces || shoppingSubmitting }"
             :disabled="!selectedTraceIds.size || updatingTraces || shoppingSubmitting"
-            @click="confirmMarkSelectedEmpty"
+            @click="confirmRemoveSelectedTraces"
           >
             {{ updatingTraces ? "处理中..." : "家里没有了" }}
           </button>
@@ -310,6 +317,8 @@ const selectedTraceItems = ref(new Map<FridgeTraceSummary["id"], FridgeTraceSumm
 const currentTraces = computed(() => traces.value.filter(trace => !trace.archived && trace.presence !== "EMPTY"));
 const archivedTraces = computed(() => traces.value.filter(trace => trace.archived));
 const categoryFilter = ref<UUID | null>(null);
+const allTraceCount = ref<number | null>(null);
+const traceCategoryCounts = ref<Record<string, number>>({});
 const filteredCurrentTraces = computed(() => currentTraces.value);
 const filteredArchivedTraces = computed(() => archivedTraces.value);
 const selectedTraces = computed(() => [...selectedTraceItems.value.values()]);
@@ -346,6 +355,7 @@ const ingredientRequestSeed = ref(0);
 const ingredientLoadedKeyword = ref("");
 const ingredientSearchPending = ref(false);
 let ingredientSearchTimer: ReturnType<typeof setTimeout> | null = null;
+let traceCategoryCountRequestSeed = 0;
 const selectedIngredients = ref<IngredientSummary[]>([]);
 const submitting = ref(false);
 const shoppingSheetVisible = ref(false);
@@ -402,7 +412,10 @@ onShow(() => {
   }
   prepareTraceCacheForUser();
   const cached = traceCache.get(traceCacheKey());
-  if (cached) applyTraceCache(cached);
+  if (cached) {
+    applyTraceCache(cached);
+    void refreshTraceCategoryCounts();
+  }
   else void loadPage();
 });
 
@@ -475,7 +488,10 @@ async function loadPage(options: { reset?: boolean; refreshCategories?: boolean 
   if (!cached) errorText.value = "";
   try {
     await ensureTraceCategories(options.refreshCategories);
-    const result = await fridgeApi.list(1, 20, categoryFilter.value ?? undefined);
+    const [result] = await Promise.all([
+      fridgeApi.list(1, 20, categoryFilter.value ?? undefined),
+      refreshTraceCategoryCounts()
+    ]);
     if (requestId !== traceRequestSeed.value || key !== traceCacheKey()) return;
     const nextCache = {
       items: result.items,
@@ -498,6 +514,35 @@ async function loadPage(options: { reset?: boolean; refreshCategories?: boolean 
     }
   } finally {
     if (requestId === traceRequestSeed.value) loading.value = false;
+  }
+}
+
+async function refreshTraceCategoryCounts() {
+  const requestSeed = ++traceCategoryCountRequestSeed;
+  const userId = sessionStore.uid;
+  allTraceCount.value = null;
+  traceCategoryCounts.value = {};
+  try {
+    await ensureTraceCategories();
+    const [summary, counts] = await Promise.all([
+      fridgeApi.getSummary().catch(() => null),
+      Promise.all(ingredientCategories.value.map(async category => {
+        try {
+          const result = await fridgeApi.list(1, 1, category.id);
+          return [category.id, result.total] as const;
+        } catch {
+          return null;
+        }
+      }))
+    ]);
+    if (requestSeed !== traceCategoryCountRequestSeed || userId !== sessionStore.uid) return;
+    allTraceCount.value = summary?.totalCount ?? null;
+    traceCategoryCounts.value = Object.fromEntries(counts.filter((item): item is readonly [number, number] => item !== null));
+  } catch {
+    if (requestSeed === traceCategoryCountRequestSeed && userId === sessionStore.uid) {
+      allTraceCount.value = null;
+      traceCategoryCounts.value = {};
+    }
   }
 }
 
@@ -772,13 +817,13 @@ function toggleTraceSelected(trace: FridgeTraceSummary) {
   selectedTraceItems.value = nextItems;
 }
 
-async function confirmMarkSelectedEmpty() {
+async function confirmRemoveSelectedTraces() {
   if (!selectedTraceIds.value.size || updatingTraces.value || loading.value) return;
   const selected = selectedTraces.value;
   if (!selected.length) return;
   const confirmed = await uniPlatform.feedback.confirm({
     title: "整理食材",
-    content: `将选中的 ${selected.length} 种食材记为“家里没有”吗？`
+    content: `将选中的 ${selected.length} 种食材从家里食材中移除吗？`
   });
   if (!confirmed) return;
 
@@ -787,7 +832,7 @@ async function confirmMarkSelectedEmpty() {
   try {
     for (let index = 0; index < selected.length; index += 100) {
       const batch = selected.slice(index, index + 100);
-      await fridgeApi.markEmptyBatch(batch.map(trace => ({
+      await fridgeApi.removeBatch(batch.map(trace => ({
         ingredientId: trace.ingredientId,
         name: trace.name,
         categoryName: trace.categoryName
@@ -801,7 +846,7 @@ async function confirmMarkSelectedEmpty() {
     clearTraceCache();
     await loadPage({ reset: true });
     await uniPlatform.feedback.toast({
-      title: errorText.value ? "已更新食材，列表刷新失败" : "已更新食材状态",
+      title: errorText.value ? "已移除食材，列表刷新失败" : "已移除家里食材",
       icon: errorText.value ? "none" : "success"
     });
   } catch (error) {
@@ -813,8 +858,8 @@ async function confirmMarkSelectedEmpty() {
       loadedMoreOnce.value = false;
       await loadPage({ reset: true });
     }
-    const message = error instanceof Error ? error.message : "更新食材状态失败";
-    const errorText = updatedCount ? `已更新 ${updatedCount} 项，其余更新失败：${message}` : message;
+    const message = error instanceof Error ? error.message : "移除家里食材失败";
+    const errorText = updatedCount ? `已移除 ${updatedCount} 项，其余移除失败：${message}` : message;
     await uniPlatform.feedback.toast({ title: errorText, icon: "none" });
   } finally {
     updatingTraces.value = false;
@@ -963,6 +1008,12 @@ async function addSelectedToShoppingList() {
   overflow: hidden;
 }
 
+.trace-fixed {
+  flex: 0 0 auto;
+  padding: 30rpx 28rpx 0;
+  background: var(--color-page);
+}
+
 .trace-scroll {
   flex: 1;
   height: 100%;
@@ -970,7 +1021,7 @@ async function addSelectedToShoppingList() {
 }
 
 .trace-content {
-  padding: 30rpx 28rpx 24rpx;
+  padding: 0 28rpx 24rpx;
 }
 
 .trace-card {
@@ -988,9 +1039,7 @@ async function addSelectedToShoppingList() {
 }
 
 .trace-manage {
-  position: sticky;
-  top: 0;
-  z-index: 20;
+  position: relative;
   display: flex;
   align-items: center;
   gap: 0;
@@ -1280,6 +1329,13 @@ async function addSelectedToShoppingList() {
 }
 
 .trace-actions__button--disabled {
-  opacity: 0.48;
+  background: var(--color-surface-muted);
+  color: var(--color-text-secondary);
+}
+
+button.trace-actions__button--disabled[disabled]:not([type]),
+button.trace-actions__button--disabled[disabled][type="default"] {
+  background-color: var(--color-surface-muted);
+  color: var(--color-text-secondary);
 }
 </style>
