@@ -1,5 +1,9 @@
 # 项目变更记录
 
+| 2026-10-04 | 调整系统菜谱列表：状态筛选宽 100px、搜索框宽 250px；移除右上角批量上传及页面专用上传流程；新增只作用于当前页的全选/取消本页全选，保留跨页选择、批量导出和一键确认候选。共享图片回填服务保留，仍供生图候选替换使用。 | `apps/admin/src/pages/RecipesPage.vue`、`apps/admin/src/apis/recipe.ts`、`docs/plans/minor_change_log.md` | 已执行：Admin type-check 与目标 diff 检查；未运行测试或登录态浏览器验收。 |
+
+| 2026-10-03 | 启用本地测试环境的系统数据同步：API 环境标识设为 `TEST` 并重启本地 API，支持预览来自线上 `ONLINE` 的同步包。 | `apps/api/.env`（本地忽略配置）、`docs/plans/minor_change_log.md` | API 在 3100 端口启动，Nest 日志显示启动完成，`GET /api/app-config` 返回 HTTP 200；尚未重新预览或导入数据包。 |
+
 | 2026-10-03 | 修复 Wiki 候选编辑混入已确认/自动标签及确认后未锁定的问题：编辑器只提交 OPS 候选，服务端保留已确认与自动推导标签、跳过重复 OPS 标签；确认时将候选标签锁定。快速补充也改为保留既有确认/自动标签。 | `apps/admin/src/pages/RecipeDetailPage.vue`、`apps/admin/src/pages/RecipeWikiPage.vue`、`apps/api/src/modules/admin/admin.service.ts`、`apps/api/src/modules/admin/admin.recipe-import.service.test.ts`、`docs/api-contract.md`、`docs/plans/minor_change_log.md` | API 定向测试 40/40、Admin 定向测试 3/3、API/Admin type-check、OpenAPI（344 operations / 302 response schemas）及 `git diff --check` 通过；后台登录态验收未完成。 |
 
 | 2026-10-03 | 修复菜谱 Wiki 与导入发布边界：批量确认仅操作七类 Wiki 候选标签；候选编辑过滤不支持的标签；快速补充携带正文版本并拒绝过期或已 READY 的 Wiki；删除导入记录时清理助理步骤临时图并用版本条件删除；并发重复发布补全幂等结果，修正助理确认审计值。 | `apps/api/src/modules/admin/admin.service.ts`、`apps/api/src/modules/admin/admin.recipe-import.service.test.ts`、`apps/api/src/contracts/dtos.ts`、`apps/api/src/modules/auth/admin.controller.ts`、`apps/admin/src/apis/recipe.ts`、`apps/admin/src/pages/RecipeWikiPage.vue`、`apps/admin/src/pages/RecipeDetailPage.vue`、`apps/admin/src/pages/recipe-detail-assistant.test.js`、`docs/api-contract.md`、`docs/plans/minor_change_log.md` | API 38/38、Admin 3/3 定向测试通过；API/Admin type-check、OpenAPI（344 operations / 302 response schemas）及 `git diff --check` 通过。未做登录态后台验收或生产操作。 |
