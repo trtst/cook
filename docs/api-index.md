@@ -73,6 +73,7 @@
 | AdminMedal | POST | `/admin/medal-templates/export` | 任意环境按选中 ID 导出已上架模板配置包 |
 | AdminMedal | POST | `/admin/medal-templates/preview` | 任意环境预览勋章模板配置包 |
 | AdminMedal | POST | `/admin/medal-templates/import` | 任意环境事务性导入勋章模板配置包 |
+| AdminMedal | POST | `/admin/medal-templates/swap-images` | 当前环境批量交换勋章获得图与未获得图 |
 | AdminMedal | PUT | `/admin/medal-templates/{templateId}` | 后台编辑勋章模板 |
 | AdminMedal | POST | `/admin/medal-templates/{templateId}/status` | 后台切换勋章模板状态 |
 | AdminContent | POST | `/admin/content/{contentId}/schedule` | 预约或取消知识文章的定时发布 |
@@ -198,8 +199,8 @@
 | FridgeTrace | GET | `/fridge-traces` | 查询近期食材状态痕迹，按食材聚合为有/没有/未确认 |
 | FridgeTrace | POST | `/fridge-traces/present` | 手动确认食材还有 |
 | FridgeTrace | POST | `/fridge-traces/present/batch` | 在单个事务中批量确认食材还有 |
-| FridgeTrace | POST | `/fridge-traces/empty` | 手动确认食材没有 |
-| FridgeTrace | POST | `/fridge-traces/empty/batch` | 在单个事务中批量标记食材没有 |
+| FridgeTrace | POST | `/fridge-traces/empty` | 删除当前用户对应食材的全部家里食材痕迹 |
+| FridgeTrace | POST | `/fridge-traces/empty/batch` | 在单个事务中批量删除家里食材痕迹 |
 | FridgeTrace | GET | `/fridge-traces/summary` | 查询食材痕迹摘要 |
 | ShoppingList | POST | `/shopping-lists/{listId}/items/from-gap` | 把需求页选中的食材写入目标购物清单 |
 | ShoppingList | POST | `/shopping-lists/{listId}/items/from-event-gap` | 把某个饭局当前完整需求写入目标购物清单 |

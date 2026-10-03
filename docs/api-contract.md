@@ -646,6 +646,7 @@ POST /admin/medal-templates
 POST /admin/medal-templates/export
 POST /admin/medal-templates/preview
 POST /admin/medal-templates/import
+POST /admin/medal-templates/swap-images
 PUT  /admin/medal-templates/{templateId}
 POST /admin/medal-templates/{templateId}/status
 PUT  /admin/medal-templates/{templateId}/image/{imageType}
@@ -937,9 +938,10 @@ POST /admin/medal-templates/{templateId}/status
 POST /admin/medal-templates/{templateId}/image/{imageType}
 PUT  /admin/medal-templates/{templateId}/image/{imageType}
 DELETE /admin/medal-templates/{templateId}/image/{imageType}
+POST /admin/medal-templates/swap-images
 ```
 
-这一组接口治理 `勋章模板`，不治理用户已获得勋章事实。模板摘要固定返回 `id / code / awardRule / category / categoryName / name / description / condition / iconKey / imageUrl / earnedImageUrl / lockedImageUrl / status / targetCount / sortOrder / isLimited / startAt / endAt / version / createdAt / updatedAt`。`awardRule` 当前允许 `MEAL_COMPLETION / DINING_EVENT_COMPLETION / GROUP_MEAL_COMPLETION / FULL_LOOP_COMPLETION / SHOPPING_COMPLETION / FRIDGE_MAINTENANCE / MEMORY_SHARE_STARTED_TOTAL / RECOMMENDATION_ADOPTED_TOTAL`；`category` 当前允许 `MEAL_CHECKIN / DINING_COLLABORATION / RECOMMENDATION_CONTRIBUTION / HOLIDAY_LIMITED`，其展示名称依次为“厨房日常 / 饭局相聚 / 好味分享 / 节日限定”；`status` 当前允许 `DRAFT / LISTED / UNLISTED / ARCHIVED`。`targetCount` 用于累计型勋章阈值，最小为 `1`。用户侧勋章名称、简介和获取说明不展示档位门槛数字；服务端仍按模板 `targetCount` 派发。`GET /admin/medal-templates` 固定使用 `page / pageSize` 分页，并支持 `keyword / status / category` 过滤。`POST /admin/medal-templates` 允许后台创建模板并指定初始状态，`code` 改为服务端自动生成；`PUT /admin/medal-templates/{templateId}` 只编辑展示与时间配置，不改 `code` 和 `awardRule`；`POST /admin/medal-templates/{templateId}/status` 只切换模板状态；`POST /admin/medal-templates/{templateId}/image/{imageType}`、`PUT /admin/medal-templates/{templateId}/image/{imageType}` 和 `DELETE /admin/medal-templates/{templateId}/image/{imageType}` 分别负责上传、设置图片地址和清空图片，其中 `imageType` 仅允许 `earned / locked`。手动地址只接受 `ASSET_PUBLIC_BASE_URL` 配置域名下 HTTPS `/uploads/` 路径；未配置静态资源域名时不能手动填写地址，但图片上传仍可用。后台上传当前允许 `JPG / PNG / WEBP / SVG`；其中 `SVG` 只允许纯静态矢量内容，服务端会拒绝带脚本、事件处理器或外部资源引用的文件。后台不得通过任何接口直接给用户补发、撤销或修改勋章获得时间。
+这一组接口治理 `勋章模板`，不治理用户已获得勋章事实。模板摘要固定返回 `id / code / awardRule / category / categoryName / name / description / condition / iconKey / imageUrl / earnedImageUrl / lockedImageUrl / status / targetCount / sortOrder / isLimited / startAt / endAt / version / createdAt / updatedAt`。`awardRule` 当前允许 `MEAL_COMPLETION / DINING_EVENT_COMPLETION / GROUP_MEAL_COMPLETION / FULL_LOOP_COMPLETION / SHOPPING_COMPLETION / FRIDGE_MAINTENANCE / MEMORY_SHARE_STARTED_TOTAL / RECOMMENDATION_ADOPTED_TOTAL`；`category` 当前允许 `MEAL_CHECKIN / DINING_COLLABORATION / RECOMMENDATION_CONTRIBUTION / HOLIDAY_LIMITED`，其展示名称依次为“厨房日常 / 饭局相聚 / 好味分享 / 节日限定”；`status` 当前允许 `DRAFT / LISTED / UNLISTED / ARCHIVED`。`targetCount` 用于累计型勋章阈值，最小为 `1`。用户侧勋章名称、简介和获取说明不展示档位门槛数字；服务端仍按模板 `targetCount` 派发。`GET /admin/medal-templates` 固定使用 `page / pageSize` 分页，并支持 `keyword / status / category` 过滤。`POST /admin/medal-templates` 允许后台创建模板并指定初始状态，`code` 改为服务端自动生成；`PUT /admin/medal-templates/{templateId}` 只编辑展示与时间配置，不改 `code` 和 `awardRule`；`POST /admin/medal-templates/{templateId}/status` 只切换模板状态；`POST /admin/medal-templates/{templateId}/image/{imageType}`、`PUT /admin/medal-templates/{templateId}/image/{imageType}` 和 `DELETE /admin/medal-templates/{templateId}/image/{imageType}` 分别负责上传、设置图片地址和清空图片，其中 `imageType` 仅允许 `earned / locked`。手动地址只接受 `ASSET_PUBLIC_BASE_URL` 配置域名下 HTTPS `/uploads/` 路径；未配置静态资源域名时不能手动填写地址，但图片上传仍可用。后台上传当前允许 `JPG / PNG / WEBP / SVG`；其中 `SVG` 只允许纯静态矢量内容，服务端会拒绝带脚本、事件处理器或外部资源引用的文件。`POST /admin/medal-templates/swap-images` 仅限 `SUPER_ADMIN` 并要求数字字符串 `Idempotency-Key`；它逐个交换当前环境模板的获得图/未获得图对象内容、更新时间和自定义图片地址，跳过无图片及已修复模板，每个模板执行版本校验和审计，部分失败后可重试未完成项。后台不得通过任何接口直接给用户补发、撤销或修改勋章获得时间。
 
 勋章模板配置同步仅限 `SUPER_ADMIN`，不限制运行环境和同步方向。`POST /admin/medal-templates/export` 在任意环境可用，请求为 `{ "templateIds": number[] }`，须选 1 至 500 个不同的正整数 ID；服务端确认所有记录存在且为 `LISTED` 后返回 `cook.medal-templates.v1` JSON 包。包顶层为 `schemaVersion / sourceEnvironment / exportedAt / templates`；`sourceEnvironment` 仅记录导出时的环境信息，缺失或未知时规范为 `UNKNOWN`，不参与导入校验。每条模板仅包含 `code / awardRule / category / name / description / condition / status: LISTED / targetCount / sortOrder / isLimited / startAt / endAt`，不包含数据库 ID、版本、图片字段或用户获得事实。
 
@@ -1389,11 +1391,15 @@ interface FridgeTraceSummaryResponse {
   recentCount: number;
   latestTime: IsoDateTime | null;
 }
+
+interface FridgeTraceRemovalResult {
+  deletedCount: number;
+}
 ```
 
-`GET /fridge-traces?page=1&pageSize=20&categoryId=5001` 按食材聚合返回当前用户的状态痕迹，在数据库内完成状态归并后筛选和分页；`categoryId` 可省略以读取全部分类，或传正式食材分类 ID 进行服务端筛选。单页最多 100 项。蔬菜、水果等易腐食材 7 天、其他或未知分类 15 天后降为“未确认”；超过 30 天移入折叠区但不删除。最近购买提示仅保留 3 天。痕迹不包含数量、单位、批次或到期日，不参与采购差额计算。未关联到当前有效食材分类的历史痕迹只出现在未筛选列表中。
+`GET /fridge-traces?page=1&pageSize=20&categoryId=5001` 按食材聚合返回当前用户的家里食材痕迹，在数据库内完成状态归并后筛选和分页；最新状态为旧 `MANUAL_EMPTY` 的食材不再计入列表或摘要，其历史痕迹由前向迁移清理。`categoryId` 可省略以读取全部分类，或传正式食材分类 ID 进行服务端筛选。单页最多 100 项。蔬菜、水果等易腐食材 7 天、其他或未知分类 15 天后降为“未确认”；超过 30 天移入折叠区但不删除。最近购买提示仅保留 3 天。痕迹不包含数量、单位、批次或到期日，不参与采购差额计算。未关联到当前有效食材分类的历史痕迹只出现在未筛选列表中。
 
-`POST /fridge-traces/present` 与 `POST /fridge-traces/empty` 使用 `Idempotency-Key`，请求体为 `{ ingredientId?: UUID | null, name, categoryName?: string | null }`，分别记录用户明确确认的“有”与“没有”。食材 ID 仅在对应食材为系统可用或当前用户 ACTIVE 个人食材时关联；其他 ID 按名称痕迹保存。分类由服务端从已验证食材读取，忽略客户端分类。`POST /fridge-traces/present/batch` 与 `POST /fridge-traces/empty/batch` 使用 `Idempotency-Key`，请求体为 `{ items: Array<{ ingredientId?: UUID | null, name, categoryName?: string | null }> }`，最多 100 项；服务端在单个事务中去重并写入，分别用于批量确认“有”和批量标记“没有”，重复请求返回同一结果。购物项勾选“已买”会记录 `PURCHASED` 痕迹；饭局完成后的逐项确认调用对应单项状态接口。`GET /fridge-traces/summary` 返回不同食材的最新痕迹总数 `totalCount`、仍在 7/15 天确认窗口内的食材数 `recentCount`，以及最近记录时间 `latestTime`。两个计数都是食材种类记录数，不代表可用数量或精确库存。
+`POST /fridge-traces/present` 使用 `Idempotency-Key`，请求体为 `{ ingredientId?: UUID | null, name, categoryName?: string | null }`，记录用户明确确认的“有”。`POST /fridge-traces/empty` 使用相同请求体，删除当前用户该食材身份下的全部家里食材痕迹，不写入“没有”状态；单项和批量删除接口都返回 `{ deletedCount }`。`POST /fridge-traces/present/batch` 与 `POST /fridge-traces/empty/batch` 使用 `Idempotency-Key`，请求体为 `{ items: Array<{ ingredientId?: UUID | null, name, categoryName?: string | null }> }`，最多 100 项；服务端在单个事务中去重处理，“确认有”写入痕迹，“家里没有”删除当前用户各食材身份下的全部痕迹，重复请求返回同一结果。食材 ID 仅在对应食材为系统可用或当前用户 ACTIVE 个人食材时关联；其他 ID 按名称痕迹处理。分类由服务端从已验证食材读取，忽略客户端分类。删除只作用于当前用户的家里食材痕迹，不删除系统/个人食材主档或购物清单记录。购物项勾选“已买”会记录 `PURCHASED` 痕迹；饭局完成后的逐项确认调用对应单项状态接口。`GET /fridge-traces/summary` 返回不同食材的最新痕迹总数 `totalCount`、仍在 7/15 天确认窗口内的食材数 `recentCount`，以及最近记录时间 `latestTime`。两个计数都是食材种类记录数，不代表可用数量或精确库存。
 
 `POST /meal-plans` 继续用于创建或更新本人某一天某餐次的计划，但当前一个餐次可同时承载多道菜；请求体固定提交：
 
@@ -1644,7 +1650,7 @@ interface RandomMenuQuotaResponse {
 
 1. `peopleCount` 当前建议限制为 `1 ~ 12`。
 2. 单次总菜位数当前建议最大 `12`。
-3. 生成次数由服务端按 7 天窗口校验并扣减，V1 默认 21 次；仅当本次至少生成一道菜时扣减。全空结果不扣次数，但同一用户在 60 秒内连续 11 次全空生成时返回业务 `code=429` 与 `data.retryAfterSeconds`；具体额度以后端返回为准，前端不得写死。
+3. 生成次数由服务端按 7 天窗口校验并扣减，V1 最多 7 次，`RANDOM_MENU_WEEKLY_LIMIT` 环境配置可调低但不能超过 7；仅当本次至少生成一道菜时扣减。全空结果不扣次数，但同一用户在 60 秒内连续 11 次全空生成时返回业务 `code=429` 与 `data.retryAfterSeconds`；具体额度以后端返回为准，前端不得写死。
 4. 接口不写随机结果历史、不做缓存。
 5. 响应只返回当前菜单摘要、来源、推荐理由、`matchedIngredients: string[]` 和最新次数摘要；`matchedIngredients` 仅包含当前用户可用冰箱食材与该菜谱食材交集的展示名称，不返回库存数量、冰箱条目 ID、完整菜谱正文、步骤或全量食材明细。
 
