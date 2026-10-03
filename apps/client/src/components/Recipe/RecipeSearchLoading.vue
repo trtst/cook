@@ -131,15 +131,15 @@ const rootClass = computed(() => ({
 }
 
 .recipe-search-loading__art {
-  width: 44rpx;
-  height: 44rpx;
+  width: 54rpx;
+  height: 54rpx;
   flex-shrink: 0;
 }
 
 .recipe-search-loading__loader {
   display: flex;
-  width: 44rpx;
-  height: 44rpx;
+  width: 54rpx;
+  height: 54rpx;
   align-items: center;
   justify-content: center;
 }
@@ -147,8 +147,8 @@ const rootClass = computed(() => ({
 .recipe-search-loading__pan-wrapper {
   position: relative;
   display: flex;
-  width: 44rpx;
-  height: 44rpx;
+  width: 54rpx;
+  height: 54rpx;
   align-items: flex-start;
   justify-content: flex-end;
   flex-direction: column;
@@ -250,7 +250,7 @@ const rootClass = computed(() => ({
 
 .recipe-search-loading__text {
   color: var(--color-text-tertiary);
-  font-size: 22rpx;
+  font-size: 28rpx;
   line-height: 1.2;
   white-space: nowrap;
 }
