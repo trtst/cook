@@ -1071,7 +1071,7 @@ export class MealService {
       return this.toRandomMenuQuota(created, limitCount);
     }
     if (current.usedCount >= limitCount) {
-      throw new HttpException("本周随机次数已用完", HttpStatus.TOO_MANY_REQUESTS);
+      throw new HttpException("本周搭配次数已用完", HttpStatus.TOO_MANY_REQUESTS);
     }
     const updated = await db.randomMenuUsage.update({
         where: { userId },
@@ -4840,7 +4840,7 @@ export class MealService {
     proteinComplementary: boolean;
     quick: boolean;
   }) {
-    if (input.fridgeFit === "HIGH" || input.fridgeFit === "MEDIUM") return "冰箱里有";
+    if (input.fridgeFit === "HIGH" || input.fridgeFit === "MEDIUM") return "家里已有食材可用";
     if (input.notRecentlyEaten) return "最近没吃";
     if (input.proteinComplementary) return "搭配互补";
     if (input.quick) return "做起来快";
