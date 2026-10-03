@@ -2595,6 +2595,11 @@ export class AdminMedalTemplateImportResultModel {
   @ApiProperty({ type: Number }) updatedCount!: number;
 }
 
+export class AdminMedalTemplateImageSwapResultModel {
+  @ApiProperty({ type: Number }) swappedCount!: number;
+  @ApiProperty({ type: Number }) skippedCount!: number;
+}
+
 export class SharePreviewParticipantModel {
   @ApiProperty(nullableString) displayName!: string | null;
   @ApiProperty(nullableString) avatarUrl!: string | null;
@@ -2658,6 +2663,10 @@ export class FridgeTraceIngredientModel extends FridgeTraceModel {
   @ApiProperty({ type: String, enum: ["PRESENT", "EMPTY", "UNCONFIRMED"] }) presence!: string;
   @ApiProperty({ type: Boolean }) archived!: boolean;
   @ApiProperty({ type: Boolean }) recentlyPurchased!: boolean;
+}
+
+export class FridgeTraceRemovalResultModel {
+  @ApiProperty({ type: Number, minimum: 0 }) deletedCount!: number;
 }
 
 export class ShoppingItemModel {

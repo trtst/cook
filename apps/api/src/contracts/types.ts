@@ -3111,6 +3111,11 @@ export interface AdminMedalTemplateImportResult {
   updatedCount: number;
 }
 
+export interface AdminMedalTemplateImageSwapResult {
+  swappedCount: number;
+  skippedCount: number;
+}
+
 export interface AdminMedalTemplateQuery {
   page: number;
   pageSize: number;
@@ -3180,6 +3185,10 @@ export interface FridgeTraceIngredientSummary extends FridgeTraceSummary {
   presence: "PRESENT" | "EMPTY" | "UNCONFIRMED";
   archived: boolean;
   recentlyPurchased: boolean;
+}
+
+export interface FridgeTraceRemovalResult {
+  deletedCount: number;
 }
 
 export interface FridgeTraceSummaryResponse {
