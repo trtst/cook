@@ -1032,6 +1032,11 @@ export class RecipeAssistantModel {
   @ApiProperty({ type: [RecipeAssistantStepModel] }) steps!: RecipeAssistantStepModel[];
 }
 
+export class RecipeAssistantCandidateModel {
+  @ApiProperty({ type: RecipeAssistantSummaryModel }) summary!: RecipeAssistantSummaryModel;
+  @ApiProperty({ type: [RecipeAssistantStepModel] }) steps!: RecipeAssistantStepModel[];
+}
+
 export class RecipeCookAssistantResponseModel {
   @ApiProperty(uuid) recipeVersionId!: string;
   @ApiProperty({ type: String, enum: ["MISSING", "PENDING", "GENERATING", "NEEDS_REVIEW", "READY", "FAILED", "REJECTED"] }) status!: string;
@@ -1435,6 +1440,13 @@ export class AdminRecipeModel {
   @ApiProperty({ type: String }) inspirationCategoryName!: string;
   @ApiProperty(dateTime) updatedAt!: string;
   @ApiProperty({ type: Number, nullable: true }) ownerUid!: number | null;
+  @ApiProperty({ type: Boolean }) hasWikiCandidate!: boolean;
+}
+
+export class AdminRecipeWikiConfirmCandidatesResultModel {
+  @ApiProperty({ type: [Number] }) confirmedRecipeIds!: number[];
+  @ApiProperty({ type: [Number] }) assistantReadyRecipeIds!: number[];
+  @ApiProperty({ type: [Number] }) assistantNeedsReviewRecipeIds!: number[];
 }
 
 export class AdminRecipeImagePromptModel {
@@ -1528,6 +1540,7 @@ export class AdminRecipeWikiSummaryModel {
   @ApiProperty(nullableString) ownerNickname!: string | null;
   @ApiProperty({ type: String, enum: ["USER", "PUBLIC_CONTENT_POOL"] }) sourceType!: string;
   @ApiProperty({ type: String, enum: ["MISSING", "PENDING", "GENERATING", "NEEDS_REVIEW", "FAILED"] }) wikiStatus!: string;
+  @ApiProperty({ type: Boolean }) hasImportWiki!: boolean;
   @ApiProperty({ type: Boolean }) hasPendingRequest!: boolean;
   @ApiProperty({ ...dateTime, nullable: true }) latestRequestAt!: string | null;
   @ApiProperty({ type: Number, nullable: true }) latestRequestUserUid!: number | null;
@@ -1636,6 +1649,7 @@ export class AdminRecipeDetailModel {
   @ApiProperty({ type: RecipeContentModel }) content!: RecipeContentModel;
   @ApiProperty({ type: RecipeAssistantStateSummaryModel }) assistantState!: RecipeAssistantStateSummaryModel;
   @ApiProperty({ type: RecipeAssistantModel, nullable: true }) assistant!: RecipeAssistantModel | null;
+  @ApiProperty({ type: RecipeAssistantCandidateModel, nullable: true }) assistantCandidate!: RecipeAssistantCandidateModel | null;
   @ApiProperty({ type: AdminRecipeWikiModel }) wiki!: AdminRecipeWikiModel;
   @ApiProperty({ type: Number, minimum: 1 }) version!: number;
   @ApiProperty({ type: Number, minimum: 0 }) reportCount!: number;
@@ -1937,6 +1951,12 @@ export class RecipeImportItemDetailModel {
   @ApiProperty({ type: Number, minimum: 1 }) version!: number;
   @ApiProperty(dateTime) createdAt!: string;
   @ApiProperty(dateTime) updatedAt!: string;
+}
+
+export class AdminDeleteRecipeImportItemResultModel {
+  @ApiProperty(uuid) itemId!: string;
+  @ApiProperty(uuid) jobId!: string;
+  @ApiProperty(dateTime) deletedAt!: string;
 }
 
 export class AdminIngredientSuggestionUserModel {

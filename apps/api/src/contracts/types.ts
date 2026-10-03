@@ -1860,6 +1860,23 @@ export interface AdminRecipeSummary {
   inspirationCategoryName: string;
   updatedAt: IsoDateTime;
   ownerUid: number | null;
+  hasWikiCandidate: boolean;
+}
+
+export interface ConfirmAdminRecipeWikiCandidatesRequest {
+  recipeIds: UUID[];
+}
+
+export interface ConfirmAdminRecipeWikiCandidatesResult {
+  confirmedRecipeIds: UUID[];
+  assistantReadyRecipeIds: UUID[];
+  assistantNeedsReviewRecipeIds: UUID[];
+}
+
+export interface UpdateAdminRecipeWikiCandidateRequest {
+  expectedContentVersionId: UUID;
+  tags: RecipeImportTagDraft[];
+  assistantSteps: RecipeImportAssistantStepDraft[];
 }
 
 export interface AdminRecipeWikiSummary {
@@ -1871,6 +1888,7 @@ export interface AdminRecipeWikiSummary {
   ownerNickname: string | null;
   sourceType: "USER" | "PUBLIC_CONTENT_POOL";
   wikiStatus: "MISSING" | "PENDING" | "GENERATING" | "NEEDS_REVIEW" | "FAILED";
+  hasImportWiki: boolean;
   hasPendingRequest: boolean;
   latestRequestAt: IsoDateTime | null;
   latestRequestUserUid: number | null;
@@ -2015,6 +2033,7 @@ export interface AdminRecipeDetail {
   content: RecipeContentSnapshot;
   assistantState: RecipeAssistantStateSummary;
   assistant: RecipeAssistantSnapshot | null;
+  assistantCandidate: Omit<RecipeAssistantSnapshot, "generatedAt"> | null;
   wiki: AdminRecipeWiki;
   version: number;
   reportCount: number;
@@ -2197,6 +2216,12 @@ export interface RecipeImportJobSummary {
 }
 
 export interface AdminDeleteRecipeImportJobResult {
+  jobId: UUID;
+  deletedAt: IsoDateTime;
+}
+
+export interface AdminDeleteRecipeImportItemResult {
+  itemId: UUID;
   jobId: UUID;
   deletedAt: IsoDateTime;
 }

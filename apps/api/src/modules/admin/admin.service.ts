@@ -33,6 +33,7 @@ import type {
     AdminDeletePendingItemResult,
     AdminDeleteInspirationCategoryResult,
     AdminDeleteRecipeImportJobResult,
+    AdminDeleteRecipeImportItemResult,
     AdminDeleteRecipeResult,
     AdminDeleteUnitResult,
   AdminIngredientCategoryPayloadRequest,
@@ -60,6 +61,8 @@ import type {
   AdminUnitSummary,
   AdminResetUserPasswordResponse,
   AdminRecipeSummary,
+  ConfirmAdminRecipeWikiCandidatesResult,
+  UpdateAdminRecipeWikiCandidateRequest,
   AdminRecipeWikiSummary,
   AdminRecipeWikiExportDocument,
   AdminRecipeWikiBatchExportDocument,
@@ -103,6 +106,7 @@ import type {
   UpdateAdminIngredientRequest,
   UpdateAdminIngredientNutritionRequest,
   UpdateRecipeImportItemRequest,
+  RecipeImportAssistantStepDraft,
   UpdateAdminRecipeRequest,
   UpdateAdminUserRequest,
   UserProfile,
@@ -177,7 +181,7 @@ const recipeWikiTagCodes = [
 
 function recipeImportTempKeys(body: RecipeImportRecipeBody) {
   return new Set(
-    [body.coverImageTempKey, ...body.steps.map(step => step.imageTempKey)]
+    [body.coverImageTempKey, ...body.steps.map(step => step.imageTempKey), ...(body.assistantSteps ?? []).map(step => step.imageTempKey)]
       .map(value => value?.trim())
       .filter((value): value is string => Boolean(value))
   );
@@ -4545,6 +4549,47 @@ export class AdminService {
     return result;
   }
 
+  async deleteRecipeImportItem(itemId: UUID, expectedVersion: number, operationId: OperationId, adminId: UUID): Promise<AdminDeleteRecipeImportItemResult> {
+    await this.requireSuperAdmin(adminId);
+    const requestHash = `${itemId}:${expectedVersion}`;
+    const { result, tempKeys } = await this.prisma.$transaction(async tx => {
+      const repeated = await getAdminIdempotentResult<AdminDeleteRecipeImportItemResult>(
+        tx, operationId, "admin-recipe-import:delete-item", adminId, requestHash
+      );
+      if (repeated) return { result: repeated, tempKeys: [] };
+      await startAdminIdempotentOperation(tx, operationId, "admin-recipe-import:delete-item", adminId, requestHash);
+      const item = await tx.recipeImportItem.findFirst({
+        where: { id: itemId, job: { sourceType: "JSON" } },
+        select: { id: true, jobId: true, recipeBodyJson: true, version: true }
+      });
+      if (!item) throw new NotFoundException("导入条目不存在");
+      if (item.version !== expectedVersion) throw new ConflictException("导入条目已更新，请刷新后重试");
+      const recipeBody = normalizeRecipeImportBody(fromJson<RecipeImportRecipeBody>(item.recipeBodyJson));
+      const result: AdminDeleteRecipeImportItemResult = {
+        itemId: item.id,
+        jobId: item.jobId,
+        deletedAt: toIsoDate(new Date())
+      };
+      const deleted = await tx.recipeImportItem.deleteMany({ where: { id: item.id, version: expectedVersion } });
+      if (deleted.count !== 1) throw new ConflictException("导入条目已更新，请刷新后重试");
+      await this.writeRecipeImportJobStats(tx, item.jobId);
+      await tx.auditEvent.create({
+        data: {
+          actorType: "ADMIN",
+          actorAdminId: adminId,
+          action: "RECIPE_IMPORT_ITEM_DELETED",
+          objectType: "RECIPE_IMPORT_ITEM",
+          objectId: item.id,
+          payload: { jobId: item.jobId }
+        }
+      });
+      await completeAdminIdempotentOperation(tx, operationId, "admin-recipe-import:delete-item", adminId, requestHash, result);
+      return { result, tempKeys: Array.from(recipeImportTempKeys(recipeBody)) };
+    });
+    await this.discardAdminRecipeTempImagesWithAudit(tempKeys, adminId, "RECIPE_IMPORT_ITEM", itemId, "import-item-delete");
+    return result;
+  }
+
   async getRecipeImportJobDetail(
     jobId: UUID,
     page: number,
@@ -4632,6 +4677,9 @@ export class AdminService {
       }
       if (currentItem.version !== body.expectedVersion) {
         throw new ConflictException("导入条目已被更新，请刷新后重试");
+      }
+      if (currentItem.recipeId) {
+        throw new ConflictException("该导入条目已关联正式菜谱，不能再修改；请直接编辑正式菜谱");
       }
 
       const rawBody = fromJson<RecipeImportRawBody>(currentItem.rawBodyJson);
@@ -4734,11 +4782,9 @@ export class AdminService {
 
       const preflight = await this.prisma.recipeImportItem.findFirst({ where: { id: itemId, job: { sourceType: "JSON" } } });
       if (!preflight) throw new NotFoundException("导入条目不存在");
+      if (preflight.recipeId) return this.buildRecipeImportItemDetail(preflight);
       if (preflight.version !== body.expectedVersion) {
         throw new ConflictException("导入条目已被更新，请刷新后重试");
-      }
-      if (preflight.status === "PUBLISHED" && preflight.recipeId) {
-        throw new ConflictException("该导入条目已发布");
       }
       const preflightRawBody = fromJson<RecipeImportRawBody>(preflight.rawBodyJson);
       const preflightRecipeBody = normalizeRecipeImportBody(fromJson<RecipeImportRecipeBody>(preflight.recipeBodyJson));
@@ -4777,11 +4823,19 @@ export class AdminService {
         if (!currentItem) {
           throw new NotFoundException("导入条目不存在");
         }
+        if (currentItem.recipeId) {
+          await completeAdminIdempotentOperation(
+            tx,
+            body.operationId,
+            "admin-recipe-import:publish",
+            adminId,
+            requestHash,
+            this.toRecipeImportItemSummary(currentItem)
+          );
+          return { id: currentItem.id, repeated: true };
+        }
         if (currentItem.version !== body.expectedVersion) {
           throw new ConflictException("导入条目已被更新，请刷新后重试");
-        }
-        if (currentItem.status === "PUBLISHED" && currentItem.recipeId) {
-          throw new ConflictException("该导入条目已发布");
         }
 
         const rawBody = fromJson<RecipeImportRawBody>(currentItem.rawBodyJson);
@@ -5081,7 +5135,13 @@ export class AdminService {
           owner: {
             select: { uid: true }
           },
-          inspirationCategory: true
+          inspirationCategory: true,
+          currentVersion: {
+            select: {
+              versionTags: { where: { status: "CANDIDATE", tagCode: { in: [...recipeWikiTagCodes] } }, select: { id: true } },
+              cookAssistant: { select: { candidateJson: true, status: true } }
+            }
+          }
         },
         orderBy: [{ blockedAt: { sort: "asc", nulls: "first" } }, { updatedAt: "desc" }],
         skip,
@@ -5091,12 +5151,198 @@ export class AdminService {
     ]);
 
     return {
-      items: items.map(recipe => this.toAdminRecipeSummary(recipe)),
+      items: items.map(recipe => ({
+        ...this.toAdminRecipeSummary(recipe),
+        hasWikiCandidate: recipe.currentVersion.versionTags.length > 0 || (
+          recipe.currentVersion.cookAssistant?.candidateJson != null && recipe.currentVersion.cookAssistant.status !== "READY"
+        )
+      })),
       page: normalizedPage,
       pageSize: normalizedPageSize,
       total,
       hasNext: skip + items.length < total
     };
+  }
+
+  async confirmRecipeWikiCandidates(recipeIds: UUID[], operationId: OperationId, adminId: UUID): Promise<ConfirmAdminRecipeWikiCandidatesResult> {
+    await this.requireSuperAdmin(adminId);
+    const uniqueIds = Array.from(new Set(recipeIds)).sort((left, right) => left - right);
+    if (!uniqueIds.length || uniqueIds.length > 100) throw new BadRequestException("一次最多确认 100 道菜谱候选");
+    const requestHash = JSON.stringify(uniqueIds);
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getAdminIdempotentResult<ConfirmAdminRecipeWikiCandidatesResult>(
+        tx, operationId, "admin-recipe-wiki:confirm-candidates", adminId, requestHash
+      );
+      if (repeated) return repeated;
+      await startAdminIdempotentOperation(tx, operationId, "admin-recipe-wiki:confirm-candidates", adminId, requestHash);
+      const confirmedRecipeIds: UUID[] = [];
+      const assistantReadyRecipeIds: UUID[] = [];
+      const assistantNeedsReviewRecipeIds: UUID[] = [];
+      for (const recipeId of uniqueIds) {
+        await tx.$queryRaw`SELECT "id" FROM "recipes" WHERE "id" = ${recipeId} FOR UPDATE`;
+        const recipe = await tx.recipe.findFirst({
+          where: { id: recipeId, status: "ACTIVE", isInspiration: true },
+          select: {
+            id: true,
+            currentVersionId: true,
+            currentVersion: { select: { versionTags: { where: { status: "CANDIDATE", tagCode: { in: [...recipeWikiTagCodes] } }, select: { id: true } }, cookAssistant: true } }
+          }
+        });
+        if (!recipe) throw new BadRequestException("存在无效或非正常菜谱");
+        const assistant = recipe.currentVersion.cookAssistant;
+        const hasTags = recipe.currentVersion.versionTags.length > 0;
+        const hasAssistant = assistant?.candidateJson != null && assistant.status !== "READY";
+        if (!hasTags && !hasAssistant) throw new ConflictException("所选菜谱没有待确认的 Wiki 候选，请刷新列表");
+        if (hasTags) {
+          await tx.recipeVersionTag.updateMany({
+            where: { recipeVersionId: recipe.currentVersionId, status: "CANDIDATE", tagCode: { in: [...recipeWikiTagCodes] } },
+            data: { status: "CONFIRMED", isLocked: true }
+          });
+        }
+        let assistantConfirmed = false;
+        if (hasAssistant && assistant) {
+          const candidate = fromJson<ReturnType<typeof buildImportedRecipeAssistantSnapshot>>(assistant.candidateJson);
+          if (this.isRecipeAssistantCandidateReady(candidate)) {
+            const now = new Date();
+            await tx.recipeCookAssistant.update({
+              where: { recipeVersionId: recipe.currentVersionId },
+              data: { status: "READY", candidateJson: Prisma.DbNull, snapshotJson: toJson(candidate), generatedAt: now, lastError: null, updatedByAdminId: adminId }
+            });
+            await this.settleRecipeWikiRequests(tx, recipe.currentVersionId, "READY", now);
+            assistantReadyRecipeIds.push(recipeId);
+            assistantConfirmed = true;
+          } else {
+            assistantNeedsReviewRecipeIds.push(recipeId);
+          }
+        } else if (assistant?.status === "READY") {
+          assistantReadyRecipeIds.push(recipeId);
+        }
+        confirmedRecipeIds.push(recipeId);
+        await tx.auditEvent.create({
+          data: {
+            actorType: "ADMIN",
+            actorAdminId: adminId,
+            action: "RECIPE_WIKI_CANDIDATES_CONFIRMED",
+            objectType: "RECIPE",
+            objectId: recipeId,
+            payload: { contentVersionId: recipe.currentVersionId, tagCount: recipe.currentVersion.versionTags.length, assistantConfirmed }
+          }
+        });
+      }
+      const result = { confirmedRecipeIds, assistantReadyRecipeIds, assistantNeedsReviewRecipeIds } satisfies ConfirmAdminRecipeWikiCandidatesResult;
+      await completeAdminIdempotentOperation(tx, operationId, "admin-recipe-wiki:confirm-candidates", adminId, requestHash, result);
+      return result;
+    });
+  }
+
+  async updateRecipeWikiCandidate(
+    recipeId: UUID,
+    operationId: OperationId,
+    body: UpdateAdminRecipeWikiCandidateRequest,
+    adminId: UUID
+  ): Promise<AdminRecipeDetail> {
+    await this.requireSuperAdmin(adminId);
+    const requestHash = JSON.stringify({ recipeId, ...body });
+    await this.prisma.$transaction(async tx => {
+      const repeated = await getAdminIdempotentResult<{ recipeId: UUID }>(
+        tx, operationId, "admin-recipe-wiki:edit-candidate", adminId, requestHash
+      );
+      if (repeated) return;
+      await startAdminIdempotentOperation(tx, operationId, "admin-recipe-wiki:edit-candidate", adminId, requestHash);
+      await tx.$queryRaw`SELECT "id" FROM "recipes" WHERE "id" = ${recipeId} FOR UPDATE`;
+      const recipe = await tx.recipe.findFirst({
+        where: { id: recipeId, status: "ACTIVE", isInspiration: true },
+        select: {
+          id: true,
+          currentVersionId: true,
+          currentVersion: { select: { cookAssistant: { select: { status: true } } } }
+        }
+      });
+      if (!recipe) throw new NotFoundException("正常系统菜谱不存在");
+      if (recipe.currentVersionId !== body.expectedContentVersionId) {
+        throw new ConflictException("菜谱正文版本已更新，请刷新后重试");
+      }
+      if (recipe.currentVersion.cookAssistant?.status === "READY") {
+        throw new ConflictException("当前 Wiki 已前台可用，不能按候选内容覆盖");
+      }
+      const assistantSteps: RecipeImportAssistantStepDraft[] = body.assistantSteps.map(step => ({ ...step, imageTempKey: null }));
+      const document = {
+        schemaVersion: "recipe.wiki.v1",
+        recipeId,
+        contentVersionId: recipe.currentVersionId,
+        wiki: {
+          tags: body.tags,
+          assistant: { steps: assistantSteps.map(({ imageTempKey: _imageTempKey, ...step }) => step) }
+        }
+      };
+      const parsed = parseRecipeWikiDocument(document);
+      if (parsed.issues.length || !parsed.items[0]) {
+        throw new BadRequestException(parsed.issues.slice(0, 10).map(item => `${item.field ?? "Wiki"}：${item.message}`).join("；") || "候选 Wiki 格式不正确");
+      }
+      const item = parsed.items[0];
+      const candidate = buildImportedRecipeAssistantSnapshot(item.assistantSteps);
+      if (!this.isRecipeAssistantCandidateReady(candidate)) throw new BadRequestException("Wiki 助理步骤必须补全标题、内容和正整数时长");
+      await tx.recipeVersionTag.deleteMany({
+        where: { recipeVersionId: recipe.currentVersionId, source: "OPS", status: "CANDIDATE", tagCode: { in: [...recipeWikiTagCodes] } }
+      });
+      const confirmedOpsTags = await tx.recipeVersionTag.findMany({
+        where: { recipeVersionId: recipe.currentVersionId, source: "OPS", tagCode: { in: [...recipeWikiTagCodes] } },
+        select: { tagCode: true, tagValue: true }
+      });
+      const confirmedOpsTagKeys = new Set(confirmedOpsTags.map(tag => `${tag.tagCode}:${tag.tagValue}`));
+      const candidateTags = item.tags.filter(tag => !confirmedOpsTagKeys.has(`${tag.tagCode}:${tag.tagValue}`));
+      if (candidateTags.length) await tx.recipeVersionTag.createMany({
+        data: candidateTags.map((tag, index) => ({
+          recipeVersionId: recipe.currentVersionId,
+          tagCode: tag.tagCode,
+          tagValue: tag.tagValue,
+          source: "OPS" as const,
+          status: "CANDIDATE" as const,
+          confidence: 1,
+          sortOrder: index,
+          isLocked: false
+        }))
+      });
+      const now = new Date();
+      await tx.recipeCookAssistant.upsert({
+        where: { recipeVersionId: recipe.currentVersionId },
+        update: {
+          status: "NEEDS_REVIEW",
+          candidateJson: toJson(candidate),
+          snapshotJson: Prisma.DbNull,
+          generatedAt: null,
+          lastAttemptAt: now,
+          attemptCount: { increment: 1 },
+          lastError: null,
+          source: "OPS",
+          updatedByAdminId: adminId
+        },
+        create: {
+          recipeVersionId: recipe.currentVersionId,
+          status: "NEEDS_REVIEW",
+          candidateJson: toJson(candidate),
+          snapshotJson: Prisma.DbNull,
+          generatedAt: null,
+          lastAttemptAt: now,
+          attemptCount: 1,
+          lastError: null,
+          source: "OPS",
+          updatedByAdminId: adminId
+        }
+      });
+      await tx.auditEvent.create({
+        data: {
+          actorType: "ADMIN",
+          actorAdminId: adminId,
+          action: "RECIPE_WIKI_CANDIDATE_EDITED",
+          objectType: "RECIPE",
+          objectId: recipeId,
+          payload: { contentVersionId: recipe.currentVersionId, tagCount: candidateTags.length, assistantStepCount: item.assistantSteps.length }
+        }
+      });
+      await completeAdminIdempotentOperation(tx, operationId, "admin-recipe-wiki:edit-candidate", adminId, requestHash, { recipeId });
+    });
+    return this.getRecipeDetail(recipeId, adminId);
   }
 
   async exportRecipes(
@@ -5505,6 +5751,15 @@ export class AdminService {
         })
       : [];
     const pendingMap = new Map(pendingRows.map(row => [row.recipeVersionId, row._count._all]));
+    const importRows = versionIds.length
+      ? await this.prisma.recipeImportItem.findMany({
+          where: { recipeId: { in: items.map(item => item.id) }, job: { sourceType: "JSON" } },
+          orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+          distinct: ["recipeId"],
+          select: { recipeId: true }
+        })
+      : [];
+    const importWikiRecipeIds = new Set(importRows.flatMap(item => item.recipeId === null ? [] : [item.recipeId]));
 
     return {
       items: items.map(item => {
@@ -5519,6 +5774,7 @@ export class AdminService {
           ownerNickname: item.owner.nickname,
           sourceType: item.isInspiration ? "PUBLIC_CONTENT_POOL" : "USER",
           wikiStatus,
+          hasImportWiki: importWikiRecipeIds.has(item.id),
           hasPendingRequest: (pendingMap.get(item.currentVersionId) ?? 0) > 0,
           latestRequestAt: latest ? toIsoDate(latest.requestedAt) : null,
           latestRequestUserUid: latest?.user.uid ?? null,
@@ -5531,6 +5787,61 @@ export class AdminService {
       total,
       hasNext: skip + items.length < total
     };
+  }
+
+  async quickFillRecipeWikiFromImport(
+    recipeId: UUID,
+    expectedContentVersionId: UUID,
+    operationId: OperationId,
+    adminId: UUID
+  ): Promise<AdminRecipeDetail> {
+    await this.requireSuperAdmin(adminId);
+    const requestHash = `${recipeId}:${expectedContentVersionId}`;
+    await this.prisma.$transaction(async tx => {
+      const repeated = await getAdminIdempotentResult<{ recipeId: UUID }>(
+        tx, operationId, "admin-recipe-wiki:quick-fill-import", adminId, requestHash
+      );
+      if (repeated) return;
+      await startAdminIdempotentOperation(tx, operationId, "admin-recipe-wiki:quick-fill-import", adminId, requestHash);
+      await tx.$queryRaw`SELECT "id" FROM "recipes" WHERE "id" = ${recipeId} FOR UPDATE`;
+      const recipe = await tx.recipe.findFirst({
+        where: { id: recipeId, status: "ACTIVE" },
+        select: { id: true, currentVersionId: true, currentVersion: { select: { cookAssistant: { select: { status: true } } } } }
+      });
+      if (!recipe) throw new NotFoundException("正常菜谱不存在");
+      if (recipe.currentVersionId !== expectedContentVersionId) {
+        throw new ConflictException("菜谱正文版本已更新，请刷新后重试");
+      }
+      if (recipe.currentVersion.cookAssistant?.status === "READY") {
+        throw new ConflictException("当前 Wiki 已前台可用，不能从导入记录覆盖");
+      }
+      const source = await tx.recipeImportItem.findFirst({
+        where: { recipeId, job: { sourceType: "JSON" } },
+        orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+        select: { recipeBodyJson: true }
+      });
+      if (!source) throw new NotFoundException("没有关联的菜谱导入 Wiki 数据");
+      const recipeBody = normalizeRecipeImportBody(fromJson<RecipeImportRecipeBody>(source.recipeBodyJson));
+      const item: RecipeWikiImportItem = {
+        recipeId,
+        contentVersionId: expectedContentVersionId,
+        tags: recipeBody.tags ?? [],
+        assistantSteps: (recipeBody.assistantSteps ?? []).map(step => ({
+          order: step.order,
+          phase: step.phase,
+          action: step.action ?? "OTHER",
+          title: step.title,
+          detail: step.detail,
+          imageUrl: step.imageTempKey ? null : step.imageUrl ?? null,
+          imagePrompt: step.imagePrompt ?? null,
+          durationMinutes: step.durationMinutes,
+          durationText: step.durationText ?? null
+        }))
+      };
+      await this.importRecipeWikiItem(tx, item, adminId, { preserveExistingTags: true });
+      await completeAdminIdempotentOperation(tx, operationId, "admin-recipe-wiki:quick-fill-import", adminId, requestHash, { recipeId });
+    });
+    return this.getRecipeDetail(recipeId, adminId);
   }
 
   async exportRecipeWiki(recipeId: UUID, adminId: UUID): Promise<AdminRecipeWikiExportDocument> {
@@ -5717,7 +6028,12 @@ export class AdminService {
     };
   }
 
-  private async importRecipeWikiItem(tx: Prisma.TransactionClient, item: RecipeWikiImportItem, adminId: UUID) {
+  private async importRecipeWikiItem(
+    tx: Prisma.TransactionClient,
+    item: RecipeWikiImportItem,
+    adminId: UUID,
+    options: { preserveExistingTags?: boolean } = {}
+  ) {
     const recipe = await tx.recipe.findUnique({
       where: { id: item.recipeId },
       include: { currentVersion: { include: { cookAssistant: true } } }
@@ -5729,11 +6045,26 @@ export class AdminService {
     const now = new Date();
 
     await tx.recipeVersionTag.deleteMany({
-      where: { recipeVersionId: item.contentVersionId, tagCode: { in: [...recipeWikiTagCodes] } }
+      where: options.preserveExistingTags
+        ? { recipeVersionId: item.contentVersionId, source: "OPS", status: "CANDIDATE", tagCode: { in: [...recipeWikiTagCodes] } }
+        : { recipeVersionId: item.contentVersionId, tagCode: { in: [...recipeWikiTagCodes] } }
     });
-    if (item.tags.length) {
+    const existingTags = options.preserveExistingTags
+      ? await tx.recipeVersionTag.findMany({
+          where: { recipeVersionId: item.contentVersionId, tagCode: { in: [...recipeWikiTagCodes] } },
+          select: { tagCode: true, tagValue: true, source: true }
+        })
+      : [];
+    const existingTagCodes = new Set(existingTags.map(tag => tag.tagCode));
+    const existingTagKeys = new Set(existingTags.map(tag => `${tag.tagCode}:${tag.tagValue}`));
+    const importedTags = options.preserveExistingTags
+      ? item.tags.filter(tag => tag.tagCode === "MEAL_TYPE"
+          ? !existingTagKeys.has(`${tag.tagCode}:${tag.tagValue}`)
+          : !existingTagCodes.has(tag.tagCode))
+      : item.tags;
+    if (importedTags.length) {
       await tx.recipeVersionTag.createMany({
-        data: item.tags.map((tag, index) => ({
+        data: importedTags.map((tag, index) => ({
           recipeVersionId: item.contentVersionId,
           tagCode: tag.tagCode,
           tagValue: tag.tagValue,
@@ -5749,7 +6080,7 @@ export class AdminService {
       where: { recipeVersionId: item.contentVersionId },
       update: {
         status: "READY",
-        candidateJson: toJson(candidate),
+        candidateJson: Prisma.DbNull,
         snapshotJson: toJson(candidate),
         generatedAt: now,
         lastAttemptAt: now,
@@ -5761,7 +6092,7 @@ export class AdminService {
       create: {
         recipeVersionId: item.contentVersionId,
         status: "READY",
-        candidateJson: toJson(candidate),
+        candidateJson: Prisma.DbNull,
         snapshotJson: toJson(candidate),
         generatedAt: now,
         lastAttemptAt: now,
@@ -5779,7 +6110,7 @@ export class AdminService {
         action: "RECIPE_WIKI_IMPORTED",
         objectType: "RECIPE",
         objectId: item.recipeId,
-        payload: { contentVersionId: item.contentVersionId, tagCount: item.tags.length, assistantStepCount: item.assistantSteps.length, notifiedUserCount: userIds.length }
+        payload: { contentVersionId: item.contentVersionId, tagCount: importedTags.length, assistantStepCount: item.assistantSteps.length, notifiedUserCount: userIds.length }
       }
     });
   }
@@ -6776,7 +7107,8 @@ export class AdminService {
       inspirationCategoryId: recipe.inspirationCategoryId,
       inspirationCategoryName: recipe.inspirationCategory.name,
       updatedAt: toIsoDate(recipe.updatedAt),
-      ownerUid: recipe.owner?.uid ?? null
+      ownerUid: recipe.owner?.uid ?? null,
+      hasWikiCandidate: false
     };
   }
 
@@ -6784,6 +7116,9 @@ export class AdminService {
     const content = versionToContent(recipe.currentVersion);
     const assistantRecord = await this.loadRecipeAssistantRecord(tx, recipe.currentVersionId);
     const assistant = versionAssistantToSnapshot(assistantRecord);
+    const assistantCandidate = assistantRecord?.candidateJson == null || assistantRecord.status === "READY"
+      ? null
+      : fromJson<AdminRecipeDetail["assistantCandidate"]>(assistantRecord.candidateJson);
     const categoryIds = Array.from(new Set(content.ingredients.map(item => item.categoryId)));
     const [tags, nutrition, ingredientCategories] = await Promise.all([
       this.loadRecipeWikiTags(tx, recipe.currentVersionId, content),
@@ -6822,6 +7157,7 @@ export class AdminService {
       content: detailContent,
       assistantState: this.toRecipeAssistantState(assistantRecord),
       assistant,
+      assistantCandidate,
       wiki,
       version: recipe.version,
       reportCount: recipe.reportCount,
@@ -6954,7 +7290,7 @@ export class AdminService {
 
     return {
       status: record.status,
-      hasCandidate: record.candidateJson != null,
+      hasCandidate: record.candidateJson != null && record.status !== "READY",
       hasSnapshot: record.status === "READY" && Boolean(record.generatedAt && record.snapshotJson != null),
       generatedAt: record.generatedAt ? toIsoDate(record.generatedAt) : null,
       lastAttemptAt: toIsoDate(record.lastAttemptAt),
@@ -7617,7 +7953,7 @@ export class AdminService {
         where: { recipeVersionId },
         update: {
           status: canPublish ? "READY" : keepsPublishedSnapshot ? "READY" : "NEEDS_REVIEW",
-          candidateJson: toJson(candidate),
+          candidateJson: canPublish || keepsPublishedSnapshot ? Prisma.DbNull : toJson(candidate),
           snapshotJson: canPublish ? toJson(candidate) : keepsPublishedSnapshot ? toJson(current!.snapshotJson) : Prisma.DbNull,
           generatedAt: canPublish ? attemptedAt : keepsPublishedSnapshot ? current!.generatedAt : null,
           lastAttemptAt: attemptedAt,
@@ -7628,7 +7964,7 @@ export class AdminService {
         create: {
           recipeVersionId,
           status: canPublish ? "READY" : "NEEDS_REVIEW",
-          candidateJson: toJson(candidate),
+          candidateJson: canPublish ? Prisma.DbNull : toJson(candidate),
           snapshotJson: canPublish ? toJson(candidate) : Prisma.DbNull,
           generatedAt: canPublish ? attemptedAt : null,
           lastAttemptAt: attemptedAt,
@@ -7643,7 +7979,7 @@ export class AdminService {
         where: { recipeVersionId },
         update: {
           status: keepsPublishedSnapshot ? "READY" : "FAILED",
-          candidateJson: keepsPublishedSnapshot ? toJson(current!.candidateJson) : Prisma.DbNull,
+          candidateJson: Prisma.DbNull,
           snapshotJson: keepsPublishedSnapshot ? toJson(current!.snapshotJson) : Prisma.DbNull,
           generatedAt: keepsPublishedSnapshot ? current!.generatedAt : null,
           lastAttemptAt: attemptedAt,

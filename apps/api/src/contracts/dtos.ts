@@ -2895,6 +2895,34 @@ export class AdminRecipeWikiExportDto {
   recipeIds!: number[];
 }
 
+export class AdminRecipeWikiQuickFillDto {
+  @ApiProperty({ example: resourceIdExample })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  expectedContentVersionId!: number;
+}
+
+export class AdminRecipeWikiConfirmCandidatesDto {
+  @ApiProperty({ type: [Number], minItems: 1, maxItems: 100, example: [10000001] })
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(100)
+  @ArrayUnique()
+  @Type(() => Number)
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  recipeIds!: number[];
+}
+
+export class DeleteRecipeImportItemDto {
+  @ApiProperty({ example: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  expectedVersion!: number;
+}
+
 export class AdminRecipeWikiRejectDto extends OperationDto {
   @ApiProperty({ maxLength: 255, example: "菜谱内容不够完整，请补充关键步骤后重新编辑" })
   @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
@@ -3588,6 +3616,28 @@ export class RecipeImportAssistantStepDto {
   @IsString()
   @MaxLength(64)
   durationText!: string | null;
+}
+
+export class AdminRecipeWikiCandidateUpdateDto {
+  @ApiProperty({ example: resourceIdExample })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  expectedContentVersionId!: number;
+
+  @ApiProperty({ type: [RecipeImportTagDto], maxItems: 100 })
+  @IsArray()
+  @ArrayMaxSize(100)
+  @ValidateNested({ each: true })
+  @Type(() => RecipeImportTagDto)
+  tags!: RecipeImportTagDto[];
+
+  @ApiProperty({ type: [RecipeImportAssistantStepDto], maxItems: 40 })
+  @IsArray()
+  @ArrayMaxSize(40)
+  @ValidateNested({ each: true })
+  @Type(() => RecipeImportAssistantStepDto)
+  assistantSteps!: RecipeImportAssistantStepDto[];
 }
 
 export class RecipeImportStepDto {

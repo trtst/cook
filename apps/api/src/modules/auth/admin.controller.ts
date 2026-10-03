@@ -30,6 +30,10 @@ import {
     AdminRecipeQueryDto,
     AdminRecipeImageBackfillDto,
   AdminRecipeWikiExportDto,
+  AdminRecipeWikiQuickFillDto,
+  AdminRecipeWikiConfirmCandidatesDto,
+  AdminRecipeWikiCandidateUpdateDto,
+  DeleteRecipeImportItemDto,
   AdminRecipeWikiQueryDto,
   AdminRecipeWikiRejectDto,
   AdminRecipeReportQueryDto,
@@ -88,6 +92,7 @@ import {
   AdminDeleteInspirationCategoryResultModel,
   AdminDeletePendingItemResultModel,
   AdminDeleteRecipeImportJobResultModel,
+  AdminDeleteRecipeImportItemResultModel,
   AdminDeleteRecipeResultModel,
   AdminDeleteUnitResultModel,
   AdminInspirationCategoryModel,
@@ -116,7 +121,8 @@ import {
   AdminUserRecipeDomainOverviewModel,
   AdminLoginResultModel,
   AdminResetUserPasswordResultModel,
-    AdminRecipeModel,
+  AdminRecipeModel,
+  AdminRecipeWikiConfirmCandidatesResultModel,
   AdminRecipeWikiImportResultModel,
   AdminRecipeWikiBatchExportDocumentModel,
   AdminRecipeWikiExportDocumentModel,
@@ -558,6 +564,41 @@ export class AdminController {
       .then(result => ok(result));
   }
 
+  @Post("recipes/wiki/confirm-candidates")
+  @UseGuards(AdminAuthGuard, SuperAdminGuard)
+  @ApiBearerAuth("AdminBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(AdminRecipeWikiConfirmCandidatesResultModel, "批量确认系统菜谱 Wiki 候选")
+  confirmRecipeWikiCandidates(
+    @Req() request: RequestWithAdmin,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: AdminRecipeWikiConfirmCandidatesDto
+  ) {
+    return this.adminService.confirmRecipeWikiCandidates(body.recipeIds, operationId, request.admin.adminId).then(result => ok(result));
+  }
+
+  @Put("recipes/:recipeId/wiki-candidate")
+  @UseGuards(AdminAuthGuard, SuperAdminGuard)
+  @ApiBearerAuth("AdminBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(AdminRecipeDetailModel, "编辑一个系统菜谱的 Wiki 候选")
+  updateRecipeWikiCandidate(
+    @Req() request: RequestWithAdmin,
+    @Param("recipeId", ParseIntPipe) recipeId: number,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: AdminRecipeWikiCandidateUpdateDto
+  ) {
+    return this.adminService.updateRecipeWikiCandidate(recipeId, operationId, {
+      expectedContentVersionId: body.expectedContentVersionId,
+      tags: body.tags.map(tag => ({ tagCode: tag.tagCode as RecipeImportTagCode, tagValue: tag.tagValue })),
+      assistantSteps: body.assistantSteps.map(step => ({
+        ...step,
+        phase: step.phase as RecipeImportAssistantPhase,
+        action: step.action as RecipeImportAssistantAction
+      }))
+    }, request.admin.adminId).then(result => ok(result));
+  }
+
   @Get("recipes/export")
   @UseGuards(AdminAuthGuard)
   @ApiBearerAuth("AdminBearerAuth")
@@ -618,6 +659,20 @@ export class AdminController {
   ) {
     if (!file?.buffer) throw new BadRequestException("请上传 Wiki JSON 文件");
     return this.adminService.importRecipeWiki(file.buffer, operationId, request.admin.adminId).then(result => ok(result));
+  }
+
+  @Post("recipe-wiki/:recipeId/quick-fill")
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth("AdminBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(AdminRecipeDetailModel, "从关联的菜谱导入记录快速补充当前版本 Wiki")
+  quickFillRecipeWikiFromImport(
+    @Req() request: RequestWithAdmin,
+    @Param("recipeId", ParseIntPipe) recipeId: number,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: AdminRecipeWikiQuickFillDto
+  ) {
+    return this.adminService.quickFillRecipeWikiFromImport(recipeId, body.expectedContentVersionId, operationId, request.admin.adminId).then(result => ok(result));
   }
 
   @Post("recipe-wiki/:recipeId/reject")
@@ -714,6 +769,20 @@ export class AdminController {
         recipeBody: toRecipeImportRecipeBody(body.recipeBody)
       })
       .then(result => ok(result));
+  }
+
+  @Delete("recipe-import-items/:itemId")
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth("AdminBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(AdminDeleteRecipeImportItemResultModel, "后台只删除单条菜谱导入记录")
+  deleteRecipeImportItem(
+    @Req() request: RequestWithAdmin,
+    @Param("itemId", ParseIntPipe) itemId: number,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: DeleteRecipeImportItemDto
+  ) {
+    return this.adminService.deleteRecipeImportItem(itemId, body.expectedVersion, operationId, request.admin.adminId).then(result => ok(result));
   }
 
   @Post("recipe-import-items/:itemId/publish")

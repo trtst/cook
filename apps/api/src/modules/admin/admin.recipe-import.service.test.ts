@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { BadRequestException } from "@nestjs/common";
+import { BadRequestException, ConflictException } from "@nestjs/common";
 import { AdminService } from "./admin.service";
 import type { RecipeImportRawBody, RecipeImportRecipeBody } from "../../contracts/types";
 
@@ -161,6 +161,33 @@ function createPublishService(
   );
 }
 
+function createTransactionService(tx: Record<string, any>, prismaOverrides: Record<string, any> = {}, imageCalls?: { discarded: string[] }) {
+  tx.$queryRaw ??= async () => [];
+  const prisma = {
+    adminAccount: { findUnique: async () => ({ status: "ACTIVE", roles: ["SUPER_ADMIN"] }) },
+    auditEvent: { create: async () => undefined },
+    $queryRaw: async () => [],
+    $transaction: async <T>(work: (transaction: typeof tx) => Promise<T>) => work(tx),
+    ...prismaOverrides
+  };
+  return new AdminService(
+    prisma as never,
+    {} as never,
+    {} as never,
+    {
+      discardTempImages: async (keys: Iterable<string>) => {
+        imageCalls?.discarded.push(...keys);
+        return [];
+      },
+      publishTempImage: async () => ({ storageKey: "unused", imageUrl: "/unused" }),
+      publishRemoteImage: async () => ({ storageKey: "unused", imageUrl: "/unused" }),
+      removePublishedImages: async () => []
+    } as never,
+    {} as never,
+    {} as never
+  );
+}
+
 test("publishing a JSON item with an unmatched ingredient is blocked before Recipe creation", async () => {
   const recipeCreateCalls = { count: 0 };
   const recipeBody = buildBody();
@@ -180,6 +207,304 @@ test("publishing a JSON item with an unmatched ingredient is blocked before Reci
     (error: unknown) => error instanceof BadRequestException && error.message.includes("未补全")
   );
   assert.equal(recipeCreateCalls.count, 0);
+});
+
+test("republishing a published import item returns its linked recipe without creating a duplicate", async () => {
+  const recipeCreateCalls = { count: 0 };
+  const publishedItem = {
+    id: 901,
+    jobId: 902,
+    sourcePath: "complete.json",
+    status: "PUBLISHED",
+    rawBodyJson: buildRawBody(),
+    recipeBodyJson: buildBody(),
+    version: 2,
+    recipeId: 10000088
+  };
+  const service = createPublishService(publishedItem, recipeCreateCalls);
+  (service as any).buildRecipeImportItemDetail = async (item: typeof publishedItem) => ({
+    id: item.id,
+    recipeId: item.recipeId,
+    status: item.status
+  });
+
+  const result = await service.publishRecipeImportItem({}, 901, 1, {
+    operationId: "202610030001",
+    expectedVersion: 2
+  });
+
+  assert.deepEqual(result, { id: 901, recipeId: 10000088, status: "PUBLISHED" });
+  assert.equal(recipeCreateCalls.count, 0);
+});
+
+test("confirming Wiki candidates only confirms Wiki tags and preserves inferred primary ingredients", async () => {
+  const updates: Array<Record<string, unknown>> = [];
+  const updateData: Array<Record<string, unknown>> = [];
+  const recipeQuery: Array<Record<string, unknown>> = [];
+  const tx = {
+    idempotencyRecord: {
+      findFirst: async () => null,
+      create: async () => undefined,
+      updateMany: async ({ data }: { data: Record<string, unknown> }) => { updates.push(data); return { count: 1 }; }
+    },
+    recipe: {
+      findFirst: async ({ where, select }: { where: Record<string, unknown>; select: Record<string, any> }) => {
+        recipeQuery.push({ where, select });
+        return ({
+        id: 10000001,
+        currentVersionId: 10000002,
+        currentVersion: { versionTags: [{ id: 1 }, { id: 2 }], cookAssistant: null }
+        });
+      }
+    },
+    recipeVersionTag: {
+      updateMany: async ({ where, data }: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
+        updates.push(where);
+        updateData.push(data);
+        return { count: 1 };
+      }
+    },
+    auditEvent: { create: async () => undefined }
+  };
+  const service = createTransactionService(tx);
+
+  await service.confirmRecipeWikiCandidates([10000001], "202610030010", 1);
+
+  assert.deepEqual(updates.find(item => "status" in item), {
+    recipeVersionId: 10000002,
+    status: "CANDIDATE",
+    tagCode: { in: ["CUISINE", "DISH_STYLE", "MEAL_TYPE", "DISH_ROLE", "MAIN_PROTEIN_TYPE", "FLAVOR_PROFILE", "SPICE_LEVEL"] }
+  });
+  assert.deepEqual(updateData[0], { status: "CONFIRMED", isLocked: true });
+  assert.deepEqual(((recipeQuery[0] as any).select.currentVersion as any).select.versionTags.where.tagCode.in, [
+    "CUISINE", "DISH_STYLE", "MEAL_TYPE", "DISH_ROLE", "MAIN_PROTEIN_TYPE", "FLAVOR_PROFILE", "SPICE_LEVEL"
+  ]);
+});
+
+test("editing Wiki candidates preserves confirmed OPS tags and does not recreate them as candidates", async () => {
+  const createCalls: Array<{ data: Array<Record<string, unknown>> }> = [];
+  const deleteCalls: Array<Record<string, unknown>> = [];
+  const tx = {
+    $queryRaw: async () => [],
+    idempotencyRecord: { findFirst: async () => null, create: async () => undefined, updateMany: async () => ({ count: 1 }) },
+    recipe: { findFirst: async () => ({
+      id: 10000001,
+      currentVersionId: 10000002,
+      currentVersion: { cookAssistant: { status: "NEEDS_REVIEW" } }
+    }) },
+    recipeVersionTag: {
+      deleteMany: async ({ where }: { where: Record<string, unknown> }) => { deleteCalls.push(where); },
+      findMany: async () => [{ tagCode: "MEAL_TYPE", tagValue: "DINNER" }],
+      createMany: async ({ data }: { data: Array<Record<string, unknown>> }) => { createCalls.push({ data }); }
+    },
+    recipeCookAssistant: { upsert: async () => undefined },
+    auditEvent: { create: async () => undefined }
+  };
+  const service = createTransactionService(tx);
+  (service as any).getRecipeDetail = async () => ({ id: 10000001 });
+
+  await service.updateRecipeWikiCandidate(10000001, "202610030020", {
+    expectedContentVersionId: 10000002,
+    tags: [
+      { tagCode: "MEAL_TYPE", tagValue: "DINNER" },
+      { tagCode: "DISH_STYLE", tagValue: "STIR_FRY" }
+    ],
+    assistantSteps: [{ order: 1, phase: "PREP", action: "OTHER", title: "准备食材", detail: "准备食材。", imageUrl: null, imagePrompt: null, durationMinutes: 5, durationText: "约 5 分钟", imageTempKey: null }]
+  }, 1);
+
+  assert.deepEqual(deleteCalls[0], {
+    recipeVersionId: 10000002,
+    status: "CANDIDATE",
+    source: "OPS",
+    tagCode: { in: ["CUISINE", "DISH_STYLE", "MEAL_TYPE", "DISH_ROLE", "MAIN_PROTEIN_TYPE", "FLAVOR_PROFILE", "SPICE_LEVEL"] }
+  });
+  assert.deepEqual(createCalls[0].data.map(({ tagCode, tagValue }) => ({ tagCode, tagValue })), [
+    { tagCode: "DISH_STYLE", tagValue: "STIR_FRY" }
+  ]);
+});
+
+test("quick-filling Wiki from import preserves existing AUTO and confirmed tags", async () => {
+  const deleteCalls: Array<Record<string, unknown>> = [];
+  const createCalls: Array<Array<Record<string, unknown>>> = [];
+  const tx = {
+    recipe: { findUnique: async () => ({
+      id: 10000001,
+      status: "ACTIVE",
+      currentVersionId: 10000002,
+      currentVersion: { cookAssistant: null }
+    }) },
+    recipeVersionTag: {
+      deleteMany: async ({ where }: { where: Record<string, unknown> }) => { deleteCalls.push(where); },
+      findMany: async () => [
+        { tagCode: "DISH_STYLE", tagValue: "STIR_FRY", source: "AUTO", status: "CANDIDATE" },
+        { tagCode: "MEAL_TYPE", tagValue: "DINNER", source: "OPS", status: "CONFIRMED" }
+      ],
+      createMany: async ({ data }: { data: Array<Record<string, unknown>> }) => { createCalls.push(data); }
+    },
+    recipeCookAssistant: { upsert: async () => undefined },
+    auditEvent: { create: async () => undefined }
+  };
+  const service = createTransactionService(tx);
+  (service as any).settleRecipeWikiRequests = async () => [];
+
+  await (service as any).importRecipeWikiItem(tx, {
+    recipeId: 10000001,
+    contentVersionId: 10000002,
+    tags: [
+      { tagCode: "DISH_STYLE", tagValue: "STIR_FRY" },
+      { tagCode: "MEAL_TYPE", tagValue: "DINNER" },
+      { tagCode: "CUISINE", tagValue: "CANTONESE" }
+    ],
+    assistantSteps: [{ order: 1, phase: "PREP", action: "OTHER", title: "准备食材", detail: "准备食材。", imageUrl: null, imagePrompt: null, durationMinutes: 5, durationText: "约 5 分钟" }]
+  }, 1, { preserveExistingTags: true });
+
+  assert.deepEqual(deleteCalls[0], {
+    recipeVersionId: 10000002,
+    source: "OPS",
+    status: "CANDIDATE",
+    tagCode: { in: ["CUISINE", "DISH_STYLE", "MEAL_TYPE", "DISH_ROLE", "MAIN_PROTEIN_TYPE", "FLAVOR_PROFILE", "SPICE_LEVEL"] }
+  });
+  assert.deepEqual(createCalls[0].map(({ tagCode, tagValue }) => ({ tagCode, tagValue })), [
+    { tagCode: "CUISINE", tagValue: "CANTONESE" }
+  ]);
+});
+
+test("confirming tag candidates does not audit an already-ready assistant as newly confirmed", async () => {
+  const auditPayloads: Array<Record<string, unknown>> = [];
+  const tx = {
+    idempotencyRecord: { findFirst: async () => null, create: async () => undefined, updateMany: async () => ({ count: 1 }) },
+    recipe: {
+      findFirst: async () => ({
+        id: 10000001,
+        currentVersionId: 10000002,
+        currentVersion: { versionTags: [{ id: 1 }], cookAssistant: { status: "READY", candidateJson: null } }
+      })
+    },
+    recipeVersionTag: { updateMany: async () => ({ count: 1 }) },
+    auditEvent: { create: async ({ data }: { data: { payload: Record<string, unknown> } }) => { auditPayloads.push(data.payload); } }
+  };
+  const service = createTransactionService(tx);
+
+  const result = await service.confirmRecipeWikiCandidates([10000001], "202610030015", 1);
+
+  assert.deepEqual(result.assistantReadyRecipeIds, [10000001]);
+  assert.equal(auditPayloads[0].assistantConfirmed, false);
+});
+
+test("quick-filling an import Wiki rejects a stale content version", async () => {
+  const tx = {
+    idempotencyRecord: { findFirst: async () => null, create: async () => undefined, updateMany: async () => ({ count: 1 }) },
+    recipe: {
+      findFirst: async () => ({ id: 10000001, currentVersionId: 10000003, currentVersion: { cookAssistant: { status: "NEEDS_REVIEW" } } })
+    },
+    recipeImportItem: { findFirst: async () => ({ recipeBodyJson: buildBody() }) },
+    auditEvent: { create: async () => undefined }
+  };
+  const service = createTransactionService(tx);
+  let imported = false;
+  (service as any).importRecipeWikiItem = async () => { imported = true; };
+  (service as any).getRecipeDetail = async () => ({});
+  (service as any).getRecipeDetail = async () => ({});
+
+  await assert.rejects(
+    () => (service as any).quickFillRecipeWikiFromImport(10000001, 10000002, "202610030011", 1),
+    (error: unknown) => error instanceof ConflictException
+  );
+  assert.equal(imported, false);
+});
+
+test("quick-filling an import Wiki rejects a Wiki that is already READY", async () => {
+  const tx = {
+    idempotencyRecord: { findFirst: async () => null, create: async () => undefined, updateMany: async () => ({ count: 1 }) },
+    recipe: {
+      findFirst: async () => ({ id: 10000001, currentVersionId: 10000002, currentVersion: { cookAssistant: { status: "READY" } } })
+    },
+    recipeImportItem: { findFirst: async () => ({ recipeBodyJson: buildBody() }) },
+    auditEvent: { create: async () => undefined }
+  };
+  const service = createTransactionService(tx);
+  let imported = false;
+  (service as any).importRecipeWikiItem = async () => { imported = true; };
+  (service as any).getRecipeDetail = async () => ({});
+
+  await assert.rejects(
+    () => (service as any).quickFillRecipeWikiFromImport(10000001, 10000002, "202610030014", 1),
+    (error: unknown) => error instanceof ConflictException
+  );
+  assert.equal(imported, false);
+});
+
+test("deleting an import item discards assistant-step temporary image keys", async () => {
+  const body = buildBody({
+    assistantSteps: [{
+      order: 1,
+      phase: "PREP",
+      action: "OTHER",
+      title: "准备食材",
+      detail: "准备食材。",
+      imageUrl: null,
+      imageTempKey: "wiki-step-temp-1",
+      durationMinutes: 5,
+      durationText: "约 5 分钟"
+    }]
+  });
+  const item = { id: 901, jobId: 902, recipeBodyJson: body, version: 1 };
+  const deleteWhere: Array<Record<string, unknown>> = [];
+  const tx = {
+    idempotencyRecord: { findFirst: async () => null, create: async () => undefined, updateMany: async () => ({ count: 1 }) },
+    recipeImportItem: {
+      findFirst: async () => item,
+      deleteMany: async ({ where }: { where: Record<string, unknown> }) => { deleteWhere.push(where); return { count: 1 }; }
+    },
+    auditEvent: { create: async () => undefined }
+  };
+  const imageCalls = { discarded: [] as string[] };
+  const service = createTransactionService(tx, {}, imageCalls);
+  (service as any).writeRecipeImportJobStats = async () => undefined;
+
+  await service.deleteRecipeImportItem(901, 1, "202610030012", 1);
+
+  assert.deepEqual(imageCalls.discarded, ["wiki-step-temp-1"]);
+  assert.deepEqual(deleteWhere, [{ id: 901, version: 1 }]);
+});
+
+test("a publish race completes its idempotency record when another request already published the item", async () => {
+  const draftItem = {
+    id: 901, jobId: 902, sourcePath: "complete.json", status: "READY", rawBodyJson: buildRawBody(),
+    recipeBodyJson: buildBody(), version: 1, recipeId: null, title: "菜谱", errorJson: [], warnJson: [],
+    createdAt: new Date("2026-10-03T00:00:00.000Z"), updatedAt: new Date("2026-10-03T00:00:00.000Z")
+  };
+  const publishedItem = { ...draftItem, status: "PUBLISHED", version: 2, recipeId: 10000088 };
+  const completed: Array<Record<string, unknown>> = [];
+  let externalReads = 0;
+  const tx = {
+    $queryRaw: async () => [],
+    idempotencyRecord: {
+      findFirst: async () => null,
+      create: async () => undefined,
+      updateMany: async ({ data }: { data: Record<string, unknown> }) => { completed.push(data); return { count: 1 }; }
+    },
+    recipeImportItem: { findFirst: async () => publishedItem },
+    auditEvent: { create: async () => undefined }
+  };
+  const prisma = {
+    adminAccount: { findUnique: async () => ({ status: "ACTIVE", roles: ["SUPER_ADMIN"] }) },
+    recipeImportItem: { findFirst: async () => (++externalReads === 1 ? draftItem : publishedItem) },
+    auditEvent: { create: async () => undefined },
+    $queryRaw: async () => [{ id: 10000099 }],
+    $transaction: async <T>(work: (transaction: typeof tx) => Promise<T>) => work(tx)
+  };
+  const service = createTransactionService(tx, prisma);
+  (service as any).buildRecipeImportItemState = async () => ({ errorItems: [], warnItems: [] });
+  (service as any).requireInspirationCategory = async () => ({ id: 1 });
+  (service as any).reserveRecipeId = async () => 10000099;
+  (service as any).stageRecipeImportImages = async () => ({ coverImageUrl: null, stepImageUrls: [], assistantSteps: [] });
+  (service as any).buildRecipeImportItemDetail = async (row: typeof publishedItem) => ({ recipeId: row.recipeId, status: row.status });
+
+  const result = await service.publishRecipeImportItem({}, 901, 1, { operationId: "202610030013", expectedVersion: 1 });
+
+  assert.deepEqual(result, { recipeId: 10000088, status: "PUBLISHED" });
+  assert.equal(completed.some(data => data.status === "SUCCEEDED"), true);
 });
 
 test("saving from a client that omits assistant prompts keeps the imported prompts", async () => {
