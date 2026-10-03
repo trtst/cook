@@ -160,7 +160,16 @@
                 <text class="section-heading__eyebrow">按冰箱食材</text>
                 <text class="section-heading__title">先看看能做的菜</text>
               </view>
-              <text class="section-heading__action" @click="refreshFridgeRecipeRecommendations">换一换</text>
+              <view class="section-heading__actions">
+                <view class="section-heading__action" @click="openRandomEntry">
+                  <text class="cookfont icon-cook-assistant section-heading__action-icon" aria-hidden="true" />
+                  <text>智能搭配</text>
+                </view>
+                <view class="section-heading__action" @click="refreshFridgeRecipeRecommendations">
+                  <text class="cookfont icon-refresh section-heading__action-icon" aria-hidden="true" />
+                  <text>换一换</text>
+                </view>
+              </view>
             </view>
             <view class="fridge-recipes-content">
               <view v-if="showFridgeRecipesSkeleton" class="recipe-scroll">
@@ -2095,10 +2104,26 @@ defineExpose({
   line-height: var(--line-height-tight);
 }
 
+.section-heading__actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 20rpx;
+}
+
 .section-heading__action {
+  display: flex;
+  align-items: center;
+  gap: 6rpx;
   color: var(--color-support-action);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-bold);
+}
+
+.section-heading__action-icon {
+  font-size: 26rpx;
+  color: inherit;
+  line-height: 1;
 }
 
 .family-feed {

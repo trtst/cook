@@ -192,6 +192,7 @@
 												<text class="service-row__title">{{ item.title }}</text>
 											</view>
 									<text class="service-row__arrow cookfont icon-back" />
+											<text v-if="item.showBadgeDot" class="service-row__badge-dot" aria-hidden="true" />
 								</view>
 							</template>
 						</view>
@@ -242,6 +243,7 @@ interface PageEntry {
 	description?: string;
 	requiresLogin?: boolean;
 	loginOnlyWhenGuest?: boolean;
+	showBadgeDot?: boolean;
 }
 
 const pageStyle = usePageScrollStyle();
@@ -284,6 +286,11 @@ const membershipCardDescription = computed(() => (
 const membershipCardTitle = computed(() => `你当前是 ${formatMembershipTier(userStore.profile?.membership?.tier)}`);
 const membershipCardMeta = computed(() => formatMembershipValidUntil(userStore.profile?.membership?.validUntil ?? null));
 const notificationBadgeText = computed(() => (notificationBadge.value.unreadCount > 99 ? "99+" : String(notificationBadge.value.unreadCount)));
+const accountNeedsSetup = computed(() => {
+	if (!sessionStore.isLoggedIn || !sessionStore.user) return false;
+	const phoneMissing = !sessionStore.user.phone?.trim();
+	return phoneMissing || userStore.profile?.hasPassword === false;
+});
 const currentThemeText = computed(() => {
 	return formatThemeText(themeMode.value, effectiveSkin.value, effectivePalette.value, canSwitchPalette.value);
 });
@@ -399,7 +406,8 @@ const settingEntries = computed<PageEntry[]>(() => [
 		iconClass: "icon-account-settings",
 		description: sessionStore.isLoggedIn ? "处理当前账号、缓存和登录状态" : "登录后处理账号和登录状态",
 		url: "/pages_me/account/index",
-		requiresLogin: true
+		requiresLogin: true,
+		showBadgeDot: accountNeedsSetup.value
 	},
 	{
 		title: `关于${APP_NAME}`,
@@ -1158,6 +1166,15 @@ function showComingSoon(name: string) {
 	font-size: 22rpx;
 	font-weight: var(--font-weight-bold);
 	line-height: 1;
+}
+
+.service-row__badge-dot {
+	flex: 0 0 auto;
+	width: 14rpx;
+	height: 14rpx;
+	margin-left: 8rpx;
+	border-radius: 50%;
+	background: var(--color-state-danger-base);
 }
 
 .knowledge-grid {

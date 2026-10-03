@@ -25,6 +25,7 @@
           <view class="account-row__meta">
             <text class="account-row__status">{{ phoneStatusText }}</text>
             <text class="account-row__arrow cookfont icon-back" />
+            <text v-if="phoneNeedsBinding" class="account-row__badge-dot" aria-hidden="true" />
           </view>
         </view>
         <view class="account-row" hover-class="is-pressed" hover-stay-time="100" @click="handlePassword">
@@ -34,6 +35,7 @@
           <view class="account-row__meta">
             <text class="account-row__status">{{ passwordStatusText }}</text>
             <text class="account-row__arrow cookfont icon-back" />
+            <text v-if="passwordNeedsSetup" class="account-row__badge-dot" aria-hidden="true" />
           </view>
         </view>
       </view>
@@ -80,8 +82,10 @@ const pageBodyStyle = computed(() => ({
   paddingTop: `${navBarTotalHeight.value + 12}px`
 }));
 const phoneStatusText = computed(() => formatPhoneStatus(sessionStore.user?.phone ?? null));
+const phoneNeedsBinding = computed(() => sessionStore.isLoggedIn && !sessionStore.user?.phone?.trim());
 const passwordEntryTitle = computed(() => (userStore.profile?.hasPassword ? "修改密码" : "设置密码"));
 const passwordStatusText = computed(() => (userStore.profile?.hasPassword ? "已设置" : "未设置"));
+const passwordNeedsSetup = computed(() => sessionStore.isLoggedIn && userStore.profile?.hasPassword === false);
 
 function handleBindPhone() {
   void uniPlatform.navigation.navigateTo("/pages_me/phone/index");
@@ -221,6 +225,15 @@ defineExpose({
   font-size: 24rpx;
   line-height: 1;
   transform: rotate(180deg);
+}
+
+.account-row__badge-dot {
+  flex: 0 0 auto;
+  width: 14rpx;
+  height: 14rpx;
+  margin-left: 8rpx;
+  border-radius: 50%;
+  background: var(--color-state-danger-base);
 }
 
 .account-panel--danger {
