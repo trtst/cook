@@ -1020,6 +1020,8 @@ GET /admin/recipe-reports
 POST /admin/recipes/{recipeId}/block
 POST /admin/recipes/{recipeId}/unblock
 DELETE /admin/recipes/{recipeId}
+POST /admin/recipes/wiki/confirm-candidates
+PUT /admin/recipes/{recipeId}/wiki-candidate
 POST /admin/recipe-reports/{reportId}/resolve
 POST /admin/recipe-import-jobs/json
 GET  /admin/recipe-import-jobs
@@ -1027,15 +1029,21 @@ DELETE /admin/recipe-import-jobs/{jobId}
 GET  /admin/recipe-import-jobs/{jobId}
 GET  /admin/recipe-import-items/{itemId}
 PUT  /admin/recipe-import-items/{itemId}
+DELETE /admin/recipe-import-items/{itemId}
 POST /admin/recipe-import-items/{itemId}/publish
 GET  /admin/recipe-wiki
 GET  /admin/recipe-wiki/{recipeId}/export
 POST /admin/recipe-wiki/export
 POST /admin/recipe-wiki/import
+POST /admin/recipe-wiki/{recipeId}/quick-fill
 POST /admin/recipe-wiki/{recipeId}/reject
 ```
 
 菜谱导入接口接收批量选择的 `.json` / `.zip`，字段为 `files[]`；单菜使用 `recipe.import.v1`，批次使用 `recipe.import.batch.v1.recipes[]`，每道菜独立创建待审核项。ZIP 只允许 JSON；单 JSON 不超过 10 MB，展开后最多 100 道菜、总 JSON 不超过 20 MB；不支持 Markdown 或 Excel。`GET /admin/recipes/{recipeId}` 的后台详情返回当前正文版本、工具、业务标签、营养分析、做饭助手 Wiki 和七个 Wiki 质量卡；质量卡按当前版本实时返回状态、分数和阻断原因。
+
+`DELETE /admin/recipe-import-items/{itemId}` 接收 `expectedVersion`，只删除一条 JSON 导入记录，保留关联的正式菜谱，并更新任务统计与审计。已关联正式菜谱的导入条目不可再编辑；重复发布返回该条目及原 `recipeId`，不得重复创建菜谱。导入菜谱只有完整 Wiki 才能发布。
+
+`GET /admin/recipes` 的菜谱摘要增加 `hasWikiCandidate`。`POST /admin/recipes/wiki/confirm-candidates` 最多接收 100 个已勾选菜谱 ID，批量确认当前版本候选标签并锁定；完整助理步骤同时发布为 `READY`，不完整助理步骤保留待复核。系统菜谱详情返回 `assistantCandidate`；`PUT /admin/recipes/{recipeId}/wiki-candidate` 可编辑当前版本候选标签与助理步骤，要求 `expectedContentVersionId` 与当前正文版本一致，编辑只替换候选标签并保留已确认及自动推导标签，编辑后仍为候选。写入要求 `SUPER_ADMIN` 和数字字符串 `Idempotency-Key`。
 
 `GET /admin/inspiration-categories` 返回后台系统菜谱分类列表，摘要包含 `id / name / iconKey / version / recipeCount / updatedAt`；`POST /admin/inspiration-categories`、`PUT /admin/inspiration-categories/{categoryId}` 和 `POST /admin/inspiration-categories/reorder` 分别用于新增、编辑和重排，`DELETE /admin/inspiration-categories/{categoryId}` 仅允许删除没有菜谱和待审核推荐引用的分类。请求头统一使用 `Idempotency-Key`，重排请求提交完整的 `id + expectedVersion` 集合。`GET /admin/recipes` 只返回后台系统菜谱列表最小摘要，查询参数固定为 `page`、`pageSize`，并支持 `categoryId`、`keyword`、`status` 过滤；系统菜谱口径固定为 `isInspiration = true` 且 `inspirationCategoryId != null`，列表摘要补充 `inspirationCategoryId / inspirationCategoryName / version`，排序统一按 `updatedAt desc`；后台页面将 `BLOCKED` 菜谱集中展示为“下架”视图。`POST /admin/recipe-images` 是后台系统菜谱临时图片上传入口，只允许 `SUPER_ADMIN` 使用，只接受单张 JPG、PNG 或 WEBP 图片，原图上限为 `10 MB`、解码像素不超过 `4000 万`；封面校验 `4:3`，步骤图不限制长宽比例。服务端应用 EXIF 方向并重新编码移除元数据，临时和正式图片成品均不超过 `500 KB`。接口返回处理后临时图片的 `tempKey + 图片元信息`；后台 JSON 导入的远程图片和批量回填图片也使用相同的原图与成品限制。
 
@@ -1048,6 +1056,8 @@ POST /admin/recipe-wiki/{recipeId}/reject
 `POST /admin/recipes/{recipeId}/images/backfill` 只允许 `SUPER_ADMIN` 调用，必须带数字字符串 `Idempotency-Key`。请求按菜谱分组，提交 `images[{fileName, tempKey}]`；文件名严格使用 `{contentVersionId}_{recipeId}.jpg`、`{contentVersionId}_{recipeId}_step{n}.jpg` 或 `{contentVersionId}_{recipeId}_step_wiki{n}.jpg`。服务端必须校验菜谱仍为 ACTIVE 系统菜谱、文件名 ID 对应路径菜谱、版本仍为当前版本、槽位存在且目标唯一，再将临时图片固化并回填。仅封面图时更新 `Recipe.coverImageUrl`；任一正文或 Wiki 步骤图回填时，创建新的当前 `RecipeContentVersion`，仅替换命中的图片 URL，并复制原版本的标签、营养、完整度、Wiki 快照与已解锁记录；历史固定版本和其引用不变。版本冲突或目标校验失败时不写入数据库并清理本次已固化的未引用图片。封面图片保持 `4:3` 校验，步骤图片保持原比例。
 
 `GET /admin/recipe-wiki` 只返回 `Recipe.status = ACTIVE` 且当前固定正文版本 Wiki 尚未 `READY` 的菜谱，草稿、回收、下架和删除菜谱不进入列表。列表同时返回 `contentVersionId`、来源（用户 UID/昵称或“公共内容池”）、Wiki 状态、是否存在申请、最近申请时间和最近申请人。`GET /admin/recipe-wiki/{recipeId}/export` 与 `POST /admin/recipe-wiki/export` 分别导出单个或批量 `recipe.wiki.v1` / `recipe.wiki.batch.v1` JSON；每条数据必须带 `recipeId`、`contentVersionId`，正文不在导出范围内。`POST /admin/recipe-wiki/import` 只接受这两种 JSON，服务端校验菜谱仍为 ACTIVE 且正文版本 ID 一致，只替换当前版本的 Wiki 标签和助理步骤，并将 Wiki 置为 `READY`，不创建或修改菜谱正文；READY 会把对应申请的预扣次数转为正式消耗并通知申请人。`POST /admin/recipe-wiki/{recipeId}/reject` 写入拒绝原因、释放当前版本所有申请人的预扣次数并向申请人提供拒绝提示。上述后台写接口均要求管理员权限和数字字符串 `Idempotency-Key`（单纯导出和列表除外）。
+
+`GET /admin/recipe-wiki` 的摘要包含 `hasImportWiki`；`POST /admin/recipe-wiki/{recipeId}/quick-fill` 请求体必须提交 `expectedContentVersionId`，从关联导入记录读取 Wiki 标签和助理步骤，写入菜谱当前版本，不修改正文或封面。服务端校验正文版本未变化，且当前 Wiki 尚未 `READY`；版本过期或已有可用 Wiki 时返回冲突。该操作替换 OPS 来源的待审核标签和助理步骤，保留已确认及自动推导标签；单值标签已有记录时不重复导入，多值餐别只跳过相同值。写入要求 `SUPER_ADMIN` 和数字字符串 `Idempotency-Key`。
 
 ## 后台系统数据同步
 
