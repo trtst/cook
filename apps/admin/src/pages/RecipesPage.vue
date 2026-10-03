@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
 import { useRouter } from "vue-router";
-import { Download, Plus, Search, Upload } from "@element-plus/icons-vue";
+import { Download, Plus, Search } from "@element-plus/icons-vue";
 import { ElMessage, ElMessageBox } from "element-plus";
-import { recipeApi, type AdminInspirationCategorySummary, type AdminRecipeImageBackfillResult, type AdminRecipeSummary } from "@/apis/recipe";
+import { recipeApi, type AdminInspirationCategorySummary, type AdminRecipeSummary } from "@/apis/recipe";
 import type { UUID } from "@/apis/http";
 import { useAdminHeaderRefresh } from "@/composables/useAdminHeader";
 import { formatDateTime } from "@/utils/date";
@@ -21,20 +21,7 @@ const blockedRecipeCount = ref(0);
 const blockedView = ref(false);
 const exporting = ref(false);
 const confirmingCandidates = ref(false);
-const imageBusy = ref(false);
-const imageProgress = ref("");
-const imageDialog = ref(false);
-const imageInput = ref<HTMLInputElement | null>(null);
-const imageResults = ref<Array<{ fileName: string; status: "SUCCESS" | "FAILED"; message: string }>>([]);
 let requestId = 0;
-
-type RecipeImageTarget = {
-  file: File;
-  recipeId: UUID;
-  contentVersionId: UUID;
-  target: "COVER" | "RECIPE_STEP" | "WIKI_STEP";
-  order: number | null;
-};
 
 const query = reactive({
   page: 1,
@@ -45,6 +32,7 @@ const query = reactive({
 });
 
 const allRecipeCount = computed(() => categories.value.reduce((sum, item) => sum + item.recipeCount, 0));
+const allCurrentPageRecipesSelected = computed(() => recipes.value.length > 0 && recipes.value.every(item => selectedRecipes.value.has(item.id)));
 const isAllView = computed(() => !query.categoryId && !blockedView.value);
 const isBlockedView = computed(() => blockedView.value);
 const currentScopeName = computed(() => {
@@ -118,6 +106,21 @@ function toggleRecipeSelection(row: AdminRecipeSummary, selected: string | numbe
   }
 }
 
+function toggleCurrentPageSelection() {
+  if (allCurrentPageRecipesSelected.value) {
+    for (const recipe of recipes.value) {
+      selectedRecipes.value.delete(recipe.id);
+      selectedCandidateRecipes.value.delete(recipe.id);
+    }
+    return;
+  }
+  for (const recipe of recipes.value) {
+    selectedRecipes.value.add(recipe.id);
+    if (recipe.hasWikiCandidate) selectedCandidateRecipes.value.add(recipe.id);
+    else selectedCandidateRecipes.value.delete(recipe.id);
+  }
+}
+
 async function confirmSelectedCandidates() {
   const recipeIds = Array.from(selectedCandidateRecipes.value);
   if (!recipeIds.length || confirmingCandidates.value) return;
@@ -153,7 +156,7 @@ async function confirmSelectedCandidates() {
 
 async function exportFilteredRecipes() {
   // 无选择时按当前筛选条件分页导出；有选择时只导出跨页保留的菜谱。
-  if (exporting.value || imageBusy.value) return;
+  if (exporting.value) return;
   exporting.value = true;
   try {
     const filters = {
@@ -195,116 +198,6 @@ async function exportFilteredRecipes() {
     ElMessage.error(error instanceof Error ? error.message : "导出菜谱失败");
   } finally {
     exporting.value = false;
-  }
-}
-
-function chooseRecipeImages() {
-  if (imageBusy.value || exporting.value) return;
-  imageInput.value?.click();
-}
-
-function parseRecipeImageFile(file: File): RecipeImageTarget | null {
-  const match = /^(\d+)_(\d+)(?:_step(_wiki)?(\d+))?\.jpg$/i.exec(file.name);
-  if (!match) return null;
-  const contentVersionId = Number(match[1]);
-  const recipeId = Number(match[2]);
-  const order = match[4] ? Number(match[4]) : null;
-  if (!Number(contentVersionId) || !Number(recipeId) || (order !== null && (!Number.isSafeInteger(order) || order < 1))) return null;
-  return {
-    file,
-    contentVersionId,
-    recipeId,
-    target: order === null ? "COVER" : match[3] ? "WIKI_STEP" : "RECIPE_STEP",
-    order
-  };
-}
-
-function imageTargetKey(item: RecipeImageTarget) {
-  return `${item.recipeId}:${item.contentVersionId}:${item.target}:${item.order ?? 0}`;
-}
-
-function targetText(target: RecipeImageTarget) {
-  if (target.target === "COVER") return "封面";
-  return target.target === "RECIPE_STEP" ? `菜谱步骤 ${target.order}` : `Wiki 步骤 ${target.order}`;
-}
-
-function addImageResult(fileName: string, status: "SUCCESS" | "FAILED", message: string) {
-  imageResults.value.push({ fileName, status, message });
-}
-
-async function uploadRecipeImages(event: Event) {
-  const input = event.target as HTMLInputElement;
-  const files = Array.from(input.files ?? []);
-  input.value = "";
-  if (!files.length) return;
-  imageBusy.value = true;
-  imageDialog.value = true;
-  imageResults.value = [];
-  try {
-    const parsed: RecipeImageTarget[] = [];
-    for (const file of files) {
-      const item = parseRecipeImageFile(file);
-      if (!item) addImageResult(file.name, "FAILED", "文件名不符合约定，或文件不是 .jpg 命名");
-      else parsed.push(item);
-    }
-    const occurrences = new Map<string, RecipeImageTarget[]>();
-    for (const item of parsed) {
-      const key = imageTargetKey(item);
-      occurrences.set(key, [...(occurrences.get(key) ?? []), item]);
-    }
-    const duplicates = new Set<string>();
-    for (const [key, items] of occurrences) {
-      if (items.length > 1) {
-        duplicates.add(key);
-        items.forEach(item => addImageResult(item.file.name, "FAILED", "同一菜谱图片位置选择了多张图片"));
-      }
-    }
-    const groups = new Map<string, RecipeImageTarget[]>();
-    for (const item of parsed) {
-      if (duplicates.has(imageTargetKey(item))) continue;
-      const key = `${item.recipeId}:${item.contentVersionId}`;
-      groups.set(key, [...(groups.get(key) ?? []), item]);
-    }
-
-    let completedGroups = 0;
-    for (const items of groups.values()) {
-      const first = items[0]!;
-      const staged: Array<{ fileName: string; tempKey: string; target: RecipeImageTarget }> = [];
-      for (const item of items) {
-        imageProgress.value = `正在上传 ${item.file.name}（${completedGroups + 1}/${groups.size} 道菜谱）`;
-        try {
-          if (item.file.size > 10 * 1024 * 1024) {
-            throw new Error("图片过大，请选择 10 MB 以内的图片");
-          }
-          const uploaded = await recipeApi.uploadImage(item.target === "COVER" ? "COVER" : "STEP", item.file, createOperationId());
-          staged.push({ fileName: item.file.name, tempKey: uploaded.image.tempKey, target: item });
-        } catch (error) {
-          addImageResult(item.file.name, "FAILED", error instanceof Error ? error.message : "图片上传失败");
-        }
-      }
-      if (staged.length) {
-        try {
-          const result: AdminRecipeImageBackfillResult = await recipeApi.backfillImages(
-            first.recipeId,
-            staged.map(({ fileName, tempKey }) => ({ fileName, tempKey })),
-            createOperationId()
-          );
-          const byName = new Map(result.items.map(item => [item.fileName, item]));
-          for (const item of staged) {
-            const updated = byName.get(item.fileName);
-            addImageResult(item.fileName, "SUCCESS", updated ? `${targetText(item.target)}，已回填` : `${targetText(item.target)}，已完成`);
-          }
-        } catch (error) {
-          const message = error instanceof Error ? error.message : "图片回填失败";
-          staged.forEach(item => addImageResult(item.fileName, "FAILED", message));
-        }
-      }
-      completedGroups += 1;
-    }
-    imageProgress.value = "处理完成";
-    await loadRecipes();
-  } finally {
-    imageBusy.value = false;
   }
 }
 
@@ -427,25 +320,18 @@ onMounted(() => {
         <el-button
           type="success"
           :loading="confirmingCandidates"
-          :disabled="selectedCandidateRecipes.size === 0 || exporting || imageBusy"
+          :disabled="selectedCandidateRecipes.size === 0 || exporting"
           @click="confirmSelectedCandidates"
         >
           一键确认候选（{{ selectedCandidateRecipes.size }}）
         </el-button>
-        <el-button :icon="Download" :loading="exporting" :disabled="imageBusy" @click="exportFilteredRecipes">批量导出</el-button>
-        <el-button :icon="Upload" :loading="imageBusy" :disabled="exporting" @click="chooseRecipeImages">批量上传图片</el-button>
+        <el-button text @click="toggleCurrentPageSelection">
+          {{ allCurrentPageRecipesSelected ? "取消本页全选" : "全选当前页" }}
+        </el-button>
+        <el-button :icon="Download" :loading="exporting" @click="exportFilteredRecipes">批量导出</el-button>
         <el-button class="toolbar-main-action" type="primary" :icon="Plus" @click="openCreate">新增系统菜谱</el-button>
       </div>
     </div>
-
-    <input
-      ref="imageInput"
-      class="recipe-image-input"
-      type="file"
-      accept=".jpg,image/jpeg"
-      multiple
-      @change="uploadRecipeImages"
-    />
 
     <div class="category-panel table-panel">
       <div class="category-panel__title">菜谱分类</div>
@@ -530,25 +416,6 @@ onMounted(() => {
       </div>
     </div>
 
-    <el-dialog v-model="imageDialog" title="批量上传菜谱图片" width="min(760px, 92vw)" :close-on-click-modal="!imageBusy">
-      <p class="recipe-image-hint">
-        {{ imageBusy ? imageProgress : "支持封面、菜谱步骤和 Wiki 步骤；封面仍需 4:3，步骤图保持原比例。" }}
-      </p>
-      <el-table :data="imageResults" size="small" max-height="360" empty-text="选择图片后会显示处理结果">
-        <el-table-column prop="fileName" label="文件名" min-width="250" show-overflow-tooltip />
-        <el-table-column label="结果" width="90">
-          <template #default="{ row }">
-            <span :class="row.status === 'SUCCESS' ? 'recipe-image-result--success' : 'recipe-image-result--failed'">
-              {{ row.status === "SUCCESS" ? "成功" : "失败" }}
-            </span>
-          </template>
-        </el-table-column>
-        <el-table-column prop="message" label="说明" min-width="180" show-overflow-tooltip />
-      </el-table>
-      <template #footer>
-        <el-button :disabled="imageBusy" @click="imageDialog = false">关闭</el-button>
-      </template>
-    </el-dialog>
   </section>
 </template>
 
@@ -631,6 +498,10 @@ onMounted(() => {
   flex-wrap: wrap;
 }
 
+.recipe-toolbar .toolbar-select {
+  width: 100px;
+}
+
 .recipe-selection-count {
   color: #78716c;
   font-size: 13px;
@@ -638,7 +509,7 @@ onMounted(() => {
 }
 
 .toolbar-search--wide {
-  width: 320px;
+  width: 250px;
 }
 
 .toolbar-search-button,
@@ -675,24 +546,6 @@ onMounted(() => {
   border-radius: 6px;
   background: #fff;
   box-shadow: 0 12px 28px rgba(28, 25, 23, 0.05);
-}
-
-.recipe-image-input {
-  display: none;
-}
-
-.recipe-image-hint {
-  margin: 0 0 12px;
-  color: #78716c;
-  font-size: 13px;
-}
-
-.recipe-image-result--success {
-  color: #2f7a4b;
-}
-
-.recipe-image-result--failed {
-  color: #b42318;
 }
 
 .recipe-card__cover {
