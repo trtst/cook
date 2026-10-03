@@ -91,6 +91,22 @@ async function removeJob() {
   }
 }
 
+async function removeItem(item: RecipeImportItemSummary) {
+  try {
+    await ElMessageBox.confirm(
+      `确认删除导入记录“${item.title || item.sourcePath}”？只删除导入记录，${item.recipeId ? "已发布的正式菜谱会保留。" : "不会影响其他正式菜谱。"}`,
+      "删除导入记录",
+      { type: "warning", confirmButtonText: "删除记录", cancelButtonText: "取消" }
+    );
+    await recipeApi.deleteImportItem(item.id, item.version, createOperationId());
+    ElMessage.success("导入记录已删除");
+    await loadDetail();
+  } catch (error) {
+    if (error === "cancel" || error === "close") return;
+    ElMessage.error(error instanceof Error ? error.message : "删除导入记录失败");
+  }
+}
+
 async function publishAllReady() {
   const currentJobId = jobId.value;
   if (!detail.value || !currentJobId || batchPublishing.value || detail.value.readyCount < 1) return;
@@ -262,6 +278,7 @@ onMounted(() => {
           <template #default="{ row }">
             <el-button text type="primary" @click="openItem(row.id)">查看 / 修正</el-button>
             <el-button v-if="row.recipeId" text @click="openRecipe(row.recipeId)">正式菜谱</el-button>
+            <el-button text type="danger" @click="removeItem(row)">删除记录</el-button>
           </template>
         </el-table-column>
       </el-table>

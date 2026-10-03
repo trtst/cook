@@ -1071,8 +1071,10 @@ onBeforeUnmount(() => {
       <el-button text :icon="ArrowLeft" @click="goBack">返回任务详情</el-button>
       <div class="toolbar-spacer" />
       <el-button v-if="detail?.recipeId" @click="openRecipe">查看正式菜谱</el-button>
-      <el-button type="primary" :loading="saving" @click="saveItem">保存修正</el-button>
+      <el-tag v-if="detail?.recipeId" type="success">已关联正式菜谱，重复发布会打开原菜谱</el-tag>
+      <el-button v-else type="primary" :loading="saving" @click="saveItem">保存修正</el-button>
       <el-button
+        v-if="!detail?.recipeId"
         type="success"
         :loading="publishing"
         :disabled="detail?.status !== 'READY' || detail.errorItems.length > 0"

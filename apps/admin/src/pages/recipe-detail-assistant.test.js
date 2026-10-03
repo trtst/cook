@@ -19,3 +19,7 @@ test("recipe detail assistant panel labels READY as frontend-available and NEEDS
   assert.doesNotMatch(detailPage, /保留上一版可用快照/);
   assert.doesNotMatch(detailPage, /做饭建议已生成，可直接供前台单菜助理和本餐助理复用/);
 });
+
+test("Wiki candidate save omits non-Wiki tags rejected by the API contract", () => {
+  assert.match(detailPage, /tags: draft\.tags\.filter\(tag => recipeImportTagCodes\.has\(tag\.tagCode\)\)/);
+});

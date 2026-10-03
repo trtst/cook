@@ -11,6 +11,19 @@ export interface AdminRecipeSummary {
   inspirationCategoryName: string;
   updatedAt: IsoDateTime;
   ownerUid: number | null;
+  hasWikiCandidate: boolean;
+}
+
+export interface ConfirmAdminRecipeWikiCandidatesResult {
+  confirmedRecipeIds: UUID[];
+  assistantReadyRecipeIds: UUID[];
+  assistantNeedsReviewRecipeIds: UUID[];
+}
+
+export interface UpdateAdminRecipeWikiCandidatePayload {
+  expectedContentVersionId: UUID;
+  tags: Array<{ tagCode: string; tagValue: string }>;
+  assistantSteps: RecipeImportAssistantStepDraft[];
 }
 
 export interface AdminRecipeWikiSummary {
@@ -22,6 +35,7 @@ export interface AdminRecipeWikiSummary {
   ownerNickname: string | null;
   sourceType: "USER" | "PUBLIC_CONTENT_POOL";
   wikiStatus: "MISSING" | "PENDING" | "GENERATING" | "NEEDS_REVIEW" | "FAILED";
+  hasImportWiki: boolean;
   hasPendingRequest: boolean;
   latestRequestAt: IsoDateTime | null;
   latestRequestUserUid: number | null;
@@ -186,6 +200,16 @@ export interface AdminRecipeDetail {
       durationMinutes: number | null;
       durationText: string | null;
     }>;
+  } | null;
+  assistantCandidate: {
+    summary: {
+      stepCount: number;
+      prepStepCount: number;
+      cookStepCount: number;
+      serveStepCount: number;
+      totalDurationText: string | null;
+    };
+    steps: NonNullable<AdminRecipeDetail["assistant"]>["steps"];
   } | null;
   wiki: {
     tags: Array<{
@@ -515,10 +539,30 @@ export interface PublishRecipeImportItemPayload {
   expectedVersion: number;
 }
 
+export interface AdminDeleteRecipeImportItemResult {
+  itemId: UUID;
+  jobId: UUID;
+  deletedAt: IsoDateTime;
+}
+
 export const recipeApi = {
   list(query: AdminRecipeQuery) {
     return requestData<PageResult<AdminRecipeSummary>>("/admin/recipes", {
       query: { ...query }
+    });
+  },
+  confirmWikiCandidates(recipeIds: UUID[], operationId: OperationId) {
+    return requestData<ConfirmAdminRecipeWikiCandidatesResult>("/admin/recipes/wiki/confirm-candidates", {
+      method: "POST",
+      body: { recipeIds },
+      idempotencyKey: operationId
+    });
+  },
+  updateWikiCandidate(recipeId: UUID, body: UpdateAdminRecipeWikiCandidatePayload, operationId: OperationId) {
+    return requestData<AdminRecipeDetail>(`/admin/recipes/${encodeURIComponent(String(recipeId))}/wiki-candidate`, {
+      method: "PUT",
+      body,
+      idempotencyKey: operationId
     });
   },
   exportImages(query: Pick<AdminRecipeQuery, "page" | "pageSize" | "keyword" | "status" | "categoryId">) {
@@ -551,6 +595,13 @@ export const recipeApi = {
     const formData = new FormData();
     formData.append("file", file);
     return uploadForm<AdminRecipeWikiImportResult>("/admin/recipe-wiki/import", formData, { idempotencyKey: operationId });
+  },
+  quickFillWikiFromImport(recipeId: UUID, expectedContentVersionId: UUID, operationId: OperationId) {
+    return requestData<AdminRecipeDetail>(`/admin/recipe-wiki/${encodeURIComponent(String(recipeId))}/quick-fill`, {
+      method: "POST",
+      body: { expectedContentVersionId },
+      idempotencyKey: operationId
+    });
   },
   rejectWiki(recipeId: UUID, reason: string, operationId: OperationId) {
     return requestData<AdminRecipeWikiRejectResult>(`/admin/recipe-wiki/${encodeURIComponent(String(recipeId))}/reject`, {
@@ -644,6 +695,13 @@ export const recipeApi = {
     return requestData<RecipeImportItemDetail>(`/admin/recipe-import-items/${encodeURIComponent(String(itemId))}/publish`, {
       method: "POST",
       body: payload,
+      idempotencyKey: operationId
+    });
+  },
+  deleteImportItem(itemId: UUID, expectedVersion: number, operationId: OperationId) {
+    return requestData<AdminDeleteRecipeImportItemResult>(`/admin/recipe-import-items/${encodeURIComponent(String(itemId))}`, {
+      method: "DELETE",
+      body: { expectedVersion },
       idempotencyKey: operationId
     });
   },

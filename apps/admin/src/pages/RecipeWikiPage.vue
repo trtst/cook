@@ -124,6 +124,22 @@ async function reject(row: AdminRecipeWikiSummary) {
   }
 }
 
+async function quickFill(row: AdminRecipeWikiSummary) {
+  try {
+    await ElMessageBox.confirm(
+      `将用关联导入记录替换“${row.title}”当前版本的待审核标签和助理步骤，保留已确认及自动推导标签，不修改菜谱正文和封面。`,
+      "快速补充 Wiki",
+      { type: "warning", confirmButtonText: "补充 Wiki", cancelButtonText: "取消" }
+    );
+    await recipeApi.quickFillWikiFromImport(row.id, row.contentVersionId, createOperationId());
+    ElMessage.success("已从菜谱导入记录补充 Wiki");
+    await loadPage();
+  } catch (error) {
+    if (error === "cancel" || error === "close") return;
+    ElMessage.error(error instanceof Error ? error.message : "快速补充 Wiki 失败");
+  }
+}
+
 function handleSelectionChange(value: AdminRecipeWikiSummary[]) {
   selected.value = value;
 }
@@ -169,8 +185,9 @@ onMounted(() => void loadPage());
             <small v-if="row.latestRequestUserUid">UID {{ row.latestRequestUserUid }}{{ row.latestRequestUserNickname ? ` · ${row.latestRequestUserNickname}` : "" }}</small>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="220" fixed="right">
+        <el-table-column label="操作" width="320" fixed="right">
           <template #default="{ row }">
+            <el-button v-if="row.hasImportWiki" link type="success" @click="quickFill(row)">从导入数据补充</el-button>
             <el-button link type="primary" :icon="Download" @click="exportOne(row)">导出</el-button>
             <el-button link type="danger" @click="reject(row)">拒绝</el-button>
           </template>

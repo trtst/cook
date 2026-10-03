@@ -14,6 +14,7 @@ import {
   type AdminInspirationCategorySummary,
   type AdminRecipeContentInput,
   type AdminRecipeDetail,
+  type RecipeImportAssistantStepDraft,
   type RecipeIngredientInput,
   type UpdateAdminRecipePayload
 } from "@/apis/recipe";
@@ -94,6 +95,9 @@ const optionLoading = ref(false);
 const saving = ref(false);
 const imageSaving = ref(false);
 const assistantSaving = ref(false);
+const candidateSaving = ref(false);
+const candidateEditorVisible = ref(false);
+const candidateEditorJson = ref("");
 const wikiTagCodeText: Record<string, string> = {
   CUISINE: "菜系",
   DISH_STYLE: "菜式",
@@ -119,6 +123,9 @@ const assistantStatusLabel: Record<AdminRecipeDetail["assistantState"]["status"]
   READY: "前台可用",
   FAILED: "生成失败"
 };
+const hasWikiCandidate = computed(() => Boolean(
+  detail.value && (detail.value.assistantState.hasCandidate || detail.value.wiki.tags.some(tag => tag.status === "CANDIDATE"))
+));
 const wikiQualityStatusText: Record<string, string> = { COMPLETE: "已完成", INCOMPLETE: "待补充" };
 const wikiNutritionStatusText: Record<string, string> = {
   COMPLETE: "估算较完整",
@@ -830,6 +837,61 @@ async function regenerateAssistant() {
   }
 }
 
+async function confirmWikiCandidate() {
+  if (!detail.value || candidateSaving.value || !hasWikiCandidate.value) return;
+  candidateSaving.value = true;
+  try {
+    const result = await recipeApi.confirmWikiCandidates([detail.value.id], createOperationId());
+    detail.value = await recipeApi.getDetail(detail.value.id);
+    const isAssistantReady = result.assistantReadyRecipeIds.includes(detail.value.id);
+    ElMessage.success(isAssistantReady ? "候选 Wiki 已确认并可供前台使用" : "候选标签已确认，助理步骤仍需补充后才能供前台使用");
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : "确认 Wiki 候选失败");
+  } finally {
+    candidateSaving.value = false;
+  }
+}
+
+function openCandidateEditor() {
+  if (!detail.value) return;
+  const tags = Array.from(new Map(detail.value.wiki.tags
+    .filter(tag => tag.source === "OPS" && tag.status === "CANDIDATE" && recipeImportTagCodes.has(tag.tagCode))
+    .map(tag => [`${tag.tagCode}:${tag.tagValue}`, { tagCode: tag.tagCode, tagValue: tag.tagValue }])).values());
+  const assistantSteps = detail.value.assistantCandidate?.steps.map(step => ({
+    ...step,
+    action: (step.action ?? "OTHER") as RecipeImportAssistantStepDraft["action"],
+    imageTempKey: null
+  })) ?? [];
+  candidateEditorJson.value = JSON.stringify({ tags, assistantSteps }, null, 2);
+  candidateEditorVisible.value = true;
+}
+
+async function saveCandidateEditor() {
+  if (!detail.value || candidateSaving.value) return;
+  let draft: { tags?: Array<{ tagCode: string; tagValue: string }>; assistantSteps?: RecipeImportAssistantStepDraft[] };
+  try {
+    draft = JSON.parse(candidateEditorJson.value) as typeof draft;
+    if (!Array.isArray(draft.tags) || !Array.isArray(draft.assistantSteps)) throw new Error("候选内容必须包含 tags 和 assistantSteps 数组");
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : "JSON 格式不正确");
+    return;
+  }
+  candidateSaving.value = true;
+  try {
+    detail.value = await recipeApi.updateWikiCandidate(detail.value.id, {
+      expectedContentVersionId: detail.value.contentVersionId,
+      tags: draft.tags.filter(tag => recipeImportTagCodes.has(tag.tagCode)),
+      assistantSteps: draft.assistantSteps.map(step => ({ ...step, imageTempKey: null }))
+    }, createOperationId());
+    candidateEditorVisible.value = false;
+    ElMessage.success("候选 Wiki 已保存，仍需确认后前台可用");
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : "保存 Wiki 候选失败");
+  } finally {
+    candidateSaving.value = false;
+  }
+}
+
 function goBack() {
   void router.push("/recipes/list");
 }
@@ -1237,6 +1299,21 @@ onBeforeUnmount(() => {
             >
               重新生成
             </el-button>
+            <el-button
+              v-if="hasWikiCandidate && detail.assistantCandidate"
+              plain
+              @click="openCandidateEditor"
+            >
+              编辑 Wiki 候选
+            </el-button>
+            <el-button
+              v-if="hasWikiCandidate"
+              type="success"
+              :loading="candidateSaving"
+              @click="confirmWikiCandidate"
+            >
+              确认 Wiki 候选
+            </el-button>
           </div>
           <div class="assistant-layout">
             <div class="assistant-overview">
@@ -1279,6 +1356,12 @@ onBeforeUnmount(() => {
                   </div>
                 </div>
               </template>
+              <template v-else-if="detail.assistantCandidate">
+                <div class="content-list assistant-summary-list">
+                  <div class="content-list__item"><span>候选步骤</span><span>{{ detail.assistantCandidate.summary.stepCount }}</span></div>
+                  <div class="content-list__item"><span>候选总时长</span><span>{{ detail.assistantCandidate.summary.totalDurationText ?? "时长待补充" }}</span></div>
+                </div>
+              </template>
             </div>
 
             <div class="assistant-steps-panel">
@@ -1298,6 +1381,23 @@ onBeforeUnmount(() => {
                     </div>
                     <div class="multiline-text">{{ item.detail }}</div>
                     <div v-if="item.imagePrompt" class="multiline-text">图片提示词：{{ item.imagePrompt }}</div>
+                  </div>
+                </div>
+              </template>
+              <template v-else-if="detail.assistantCandidate">
+                <div class="detail-step-list assistant-step-list">
+                  <div
+                    v-for="item in detail.assistantCandidate.steps"
+                    :key="`candidate-${item.order}-${item.title}`"
+                    class="detail-step-card"
+                  >
+                    <div class="detail-step-card__index">候选步骤 {{ item.order }} · {{ item.phase }}</div>
+                    <img v-if="item.imageUrl" :src="item.imageUrl" :alt="item.title" class="detail-step-card__image" />
+                    <div class="detail-step-card__title-row">
+                      <strong>{{ item.title }}</strong>
+                      <span>{{ item.action ? `${item.action} · ` : "" }}{{ item.durationText ?? (item.durationMinutes ? `约 ${item.durationMinutes} 分钟` : "时长待定") }}</span>
+                    </div>
+                    <div class="multiline-text">{{ item.detail }}</div>
                   </div>
                 </div>
               </template>
@@ -1491,6 +1591,14 @@ onBeforeUnmount(() => {
       </template>
     </el-dialog>
   </section>
+  <el-dialog v-model="candidateEditorVisible" title="编辑 Wiki 候选" width="min(760px, 92vw)">
+    <p class="table-hint">编辑当前菜谱版本的标签和助理步骤。保存后仍是候选 Wiki；正文与封面不会改变。</p>
+    <el-input v-model="candidateEditorJson" type="textarea" :rows="20" spellcheck="false" />
+    <template #footer>
+      <el-button @click="candidateEditorVisible = false">取消</el-button>
+      <el-button type="primary" :loading="candidateSaving" @click="saveCandidateEditor">保存候选</el-button>
+    </template>
+  </el-dialog>
 </template>
 
 <style scoped lang="scss">

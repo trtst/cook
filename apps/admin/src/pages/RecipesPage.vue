@@ -15,10 +15,12 @@ const loading = ref(false);
 const categories = ref<AdminInspirationCategorySummary[]>([]);
 const recipes = ref<AdminRecipeSummary[]>([]);
 const selectedRecipes = ref(new Set<UUID>());
+const selectedCandidateRecipes = ref(new Set<UUID>());
 const total = ref(0);
 const blockedRecipeCount = ref(0);
 const blockedView = ref(false);
 const exporting = ref(false);
+const confirmingCandidates = ref(false);
 const imageBusy = ref(false);
 const imageProgress = ref("");
 const imageDialog = ref(false);
@@ -101,13 +103,52 @@ async function loadPage() {
 
 function search() {
   selectedRecipes.value.clear();
+  selectedCandidateRecipes.value.clear();
   query.page = 1;
   void loadRecipes();
 }
 
 function toggleRecipeSelection(row: AdminRecipeSummary, selected: string | number | boolean) {
-  if (selected) selectedRecipes.value.add(row.id);
-  else selectedRecipes.value.delete(row.id);
+  if (selected) {
+    selectedRecipes.value.add(row.id);
+    if (row.hasWikiCandidate) selectedCandidateRecipes.value.add(row.id);
+  } else {
+    selectedRecipes.value.delete(row.id);
+    selectedCandidateRecipes.value.delete(row.id);
+  }
+}
+
+async function confirmSelectedCandidates() {
+  const recipeIds = Array.from(selectedCandidateRecipes.value);
+  if (!recipeIds.length || confirmingCandidates.value) return;
+  if (recipeIds.length > 100) {
+    ElMessage.warning("一次最多确认 100 道菜谱候选，请减少勾选数量");
+    return;
+  }
+  confirmingCandidates.value = true;
+  try {
+    await ElMessageBox.confirm(
+      `确认处理已勾选的 ${recipeIds.length} 道菜谱候选？完整的助理步骤会成为前台可用 Wiki；不完整的步骤会保留待补充状态。`,
+      "批量确认 Wiki 候选",
+      { type: "warning", confirmButtonText: "确认候选", cancelButtonText: "取消" }
+    );
+  } catch (error) {
+    confirmingCandidates.value = false;
+    if (error !== "cancel" && error !== "close") ElMessage.error(error instanceof Error ? error.message : "确认失败");
+    return;
+  }
+  try {
+    const result = await recipeApi.confirmWikiCandidates(recipeIds, createOperationId());
+    selectedRecipes.value.clear();
+    selectedCandidateRecipes.value.clear();
+    await loadRecipes();
+    const incompleteCount = result.assistantNeedsReviewRecipeIds.length;
+    ElMessage.success(`已确认 ${result.confirmedRecipeIds.length} 道菜谱候选${incompleteCount ? `；${incompleteCount} 道助理步骤仍需补充` : ""}`);
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : "批量确认 Wiki 候选失败");
+  } finally {
+    confirmingCandidates.value = false;
+  }
 }
 
 async function exportFilteredRecipes() {
@@ -270,6 +311,7 @@ async function uploadRecipeImages(event: Event) {
 async function selectCategory(categoryId: UUID | "") {
   if (query.categoryId === categoryId && !blockedView.value) return;
   selectedRecipes.value.clear();
+  selectedCandidateRecipes.value.clear();
   blockedView.value = false;
   query.categoryId = categoryId;
   query.status = "";
@@ -281,6 +323,7 @@ async function selectCategory(categoryId: UUID | "") {
 async function selectBlockedView() {
   if (blockedView.value) return;
   selectedRecipes.value.clear();
+  selectedCandidateRecipes.value.clear();
   blockedView.value = true;
   query.categoryId = "";
   query.status = "BLOCKED";
@@ -381,6 +424,14 @@ onMounted(() => {
       <div class="toolbar-spacer" />
       <div class="recipe-toolbar__actions">
         <span class="recipe-selection-count">已选 {{ selectedRecipes.size }} 道</span>
+        <el-button
+          type="success"
+          :loading="confirmingCandidates"
+          :disabled="selectedCandidateRecipes.size === 0 || exporting || imageBusy"
+          @click="confirmSelectedCandidates"
+        >
+          一键确认候选（{{ selectedCandidateRecipes.size }}）
+        </el-button>
         <el-button :icon="Download" :loading="exporting" :disabled="imageBusy" @click="exportFilteredRecipes">批量导出</el-button>
         <el-button :icon="Upload" :loading="imageBusy" :disabled="exporting" @click="chooseRecipeImages">批量上传图片</el-button>
         <el-button class="toolbar-main-action" type="primary" :icon="Plus" @click="openCreate">新增系统菜谱</el-button>
@@ -443,6 +494,7 @@ onMounted(() => {
             />
             <span v-if="row.status !== 'ACTIVE'" class="recipe-card__status">{{ formatStatusText(row.status) }}</span>
             <span v-if="isAllView" class="recipe-card__category">{{ row.inspirationCategoryName }}</span>
+            <el-tag v-if="row.hasWikiCandidate" class="recipe-card__candidate" type="warning" size="small">Wiki 有候选</el-tag>
           </div>
           <div class="recipe-card__body">
             <div class="recipe-card__title" @click="openDetail(row.id)">{{ row.title }}</div>
@@ -690,6 +742,12 @@ onMounted(() => {
   font-size: 12px;
   line-height: 1.4;
   backdrop-filter: blur(8px);
+}
+
+.recipe-card__candidate {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
 }
 
 .recipe-card__status {
