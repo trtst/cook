@@ -55,6 +55,11 @@ export interface MedalTemplateImportResult {
   updatedCount: number;
 }
 
+export interface MedalTemplateImageSwapResult {
+  swappedCount: number;
+  skippedCount: number;
+}
+
 export interface AdminMedalTemplateSummary {
   id: UUID;
   code: string;
@@ -150,6 +155,12 @@ export const medalApi = {
     const form = new FormData();
     form.append("file", file);
     return uploadForm<MedalTemplateImportResult>("/admin/medal-templates/import", form, { idempotencyKey: operationId });
+  },
+  swapAllImages(operationId: OperationId) {
+    return requestData<MedalTemplateImageSwapResult>("/admin/medal-templates/swap-images", {
+      method: "POST",
+      idempotencyKey: operationId
+    });
   },
   create(body: CreateAdminMedalTemplatePayload) {
     const { operationId, ...payload } = body;

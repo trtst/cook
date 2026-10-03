@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, reactive, ref } from "vue";
-import { Download, Plus, Upload } from "@element-plus/icons-vue";
+import { Download, Plus, Refresh, Upload } from "@element-plus/icons-vue";
 import { ElMessage, ElMessageBox, type TableInstance } from "element-plus";
 import {
   medalApi,
   type AdminMedalTemplateSummary,
   type MedalTemplateImportPreview,
+  type MedalTemplateImageSwapResult,
   type MedalImageType,
   type MedalAwardRule,
   type MedalCategory,
@@ -94,6 +95,7 @@ const selectedIds = ref<number[]>([]);
 const exporting = ref(false);
 const previewing = ref(false);
 const importing = ref(false);
+const swappingImages = ref(false);
 const importPreview = ref<MedalTemplateImportPreview | null>(null);
 const importFile = ref<File | null>(null);
 const importOperationId = ref<string | null>(null);
@@ -351,6 +353,30 @@ async function exportSelected() {
     ElMessage.error(error instanceof Error ? error.message : "导出勋章模板失败");
   } finally {
     exporting.value = false;
+  }
+}
+
+async function swapAllImages() {
+  if (swappingImages.value) return;
+  try {
+    await ElMessageBox.confirm(
+      "将交换当前环境所有勋章模板的获得图与未获得图，包括图片文件和图片地址。已修复过的模板及没有图片的模板会自动跳过。确认继续？",
+      "批量修复勋章图片",
+      { confirmButtonText: "交换全部图片", cancelButtonText: "取消", type: "warning" }
+    );
+  } catch {
+    return;
+  }
+
+  swappingImages.value = true;
+  try {
+    const result: MedalTemplateImageSwapResult = await medalApi.swapAllImages(createOperationId());
+    ElMessage.success(`已交换 ${result.swappedCount} 枚勋章图片，跳过 ${result.skippedCount} 枚`);
+    await loadList();
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : "批量交换勋章图片失败，可重试未完成项");
+  } finally {
+    swappingImages.value = false;
   }
 }
 
@@ -660,6 +686,7 @@ onMounted(() => {
       <el-button type="primary" :icon="Plus" @click="openCreate">新增勋章</el-button>
       <el-button :icon="Download" :loading="exporting" :disabled="selectedIds.length === 0" @click="exportSelected">导出已选（{{ selectedIds.length }}）</el-button>
       <el-button :icon="Upload" :loading="previewing" :disabled="importing" @click="chooseImportFile">导入数据包</el-button>
+      <el-button :icon="Refresh" :loading="swappingImages" :disabled="loading || saving || exporting || previewing || importing" @click="swapAllImages">批量修复图片方向</el-button>
     </div>
 
     <div class="category-panel table-panel">
