@@ -82,6 +82,7 @@ import {
   AdminMedalTemplateTransferPackageModel,
   AdminMedalTemplateTransferPreviewModel,
   AdminMedalTemplateImportResultModel,
+  AdminMedalTemplateImageSwapResultModel,
   AdminDeleteIngredientCategoryResultModel,
   AdminDeleteIngredientResultModel,
   AdminDeleteInspirationCategoryResultModel,
@@ -299,6 +300,15 @@ export class AdminController {
   @ApiOkModel(AdminMedalTemplateImportResultModel, "事务性导入 TEST 勋章模板配置包")
   importMedalTemplates(@Req() request: RequestWithAdmin, @ReadIdempotencyKey() operationId: string, @UploadedFile() file?: { buffer?: Buffer }) {
     return this.medalService.importTemplates(this.parseMedalPackage(file), operationId, request.admin.adminId).then(result => ok(result));
+  }
+
+  @Post("medal-templates/swap-images")
+  @UseGuards(AdminAuthGuard, SuperAdminGuard)
+  @ApiBearerAuth("AdminBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(AdminMedalTemplateImageSwapResultModel, "批量交换勋章获得图与未获得图")
+  swapAllMedalTemplateImages(@Req() request: RequestWithAdmin, @ReadIdempotencyKey() operationId: string) {
+    return this.medalService.swapAllTemplateImages(operationId, request.admin.adminId).then(result => ok(result));
   }
 
   private parseMedalPackage(file?: { buffer?: Buffer }) {

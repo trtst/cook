@@ -5,6 +5,9 @@ import type { UUID } from "../../contracts/types";
 
 type ImageKind = "jpeg" | "png" | "webp" | "svg";
 export type MedalImageType = "earned" | "locked";
+type ImageSwapChange =
+  | { kind: "replace"; imageType: MedalImageType; backupPath: string | null }
+  | { kind: "clear"; imageType: MedalImageType; backupPath: string };
 type RequestLike = {
   protocol?: string;
   get?: (name: string) => string | undefined;
@@ -170,6 +173,73 @@ export class MedalImageService {
   async finalizeReplacedImage(backupPath: string | null) {
     if (!backupPath) return;
     await this.assetStorage.deleteObject(backupPath);
+  }
+
+  async swapStoredImages(templateId: UUID) {
+    const earned = await this.findStoredImage(templateId, "earned");
+    const locked = await this.findStoredImage(templateId, "locked");
+    if (!earned && !locked) return null;
+
+    let earnedStage: { tempPath: string; kind: ImageKind } | null = null;
+    let lockedStage: { tempPath: string; kind: ImageKind } | null = null;
+    const changes: ImageSwapChange[] = [];
+    try {
+      if (locked) {
+        const buffer = await this.assetStorage.readBuffer(locked.path);
+        earnedStage = await this.stageImageUpload(templateId, "earned", { buffer, size: buffer.length });
+      }
+      if (earned) {
+        const buffer = await this.assetStorage.readBuffer(earned.path);
+        lockedStage = await this.stageImageUpload(templateId, "locked", { buffer, size: buffer.length });
+      }
+
+      if (earnedStage) {
+        const backupPath = await this.replaceStagedImage(templateId, "earned", earnedStage.tempPath, earnedStage.kind);
+        earnedStage = null;
+        changes.push({ kind: "replace", imageType: "earned", backupPath });
+      } else {
+        const backupPath = await this.stageClearImage(templateId, "earned");
+        if (backupPath) changes.push({ kind: "clear", imageType: "earned", backupPath });
+      }
+
+      if (lockedStage) {
+        const backupPath = await this.replaceStagedImage(templateId, "locked", lockedStage.tempPath, lockedStage.kind);
+        lockedStage = null;
+        changes.push({ kind: "replace", imageType: "locked", backupPath });
+      } else {
+        const backupPath = await this.stageClearImage(templateId, "locked");
+        if (backupPath) changes.push({ kind: "clear", imageType: "locked", backupPath });
+      }
+
+      return changes;
+    } catch (error) {
+      await this.rollbackImageSwap(templateId, changes);
+      await Promise.all([
+        this.discardStagedImage(earnedStage?.tempPath ?? null),
+        this.discardStagedImage(lockedStage?.tempPath ?? null)
+      ]);
+      throw error;
+    }
+  }
+
+  async rollbackImageSwap(templateId: UUID, changes: ImageSwapChange[]) {
+    for (const change of [...changes].reverse()) {
+      if (change.kind === "replace") {
+        await this.rollbackReplacedImage(templateId, change.imageType, change.backupPath);
+      } else {
+        await this.rollbackClearedImage(templateId, change.backupPath);
+      }
+    }
+  }
+
+  async finalizeImageSwap(changes: ImageSwapChange[]) {
+    for (const change of changes) {
+      try {
+        await this.finalizeReplacedImage(change.backupPath);
+      } catch {
+        // Best effort cleanup after the database transaction has committed.
+      }
+    }
   }
 
   async stageClearImage(templateId: UUID, imageType: MedalImageType) {

@@ -9,6 +9,7 @@ import {
 } from "../../common/idempotency";
 import type {
   AdminMedalTemplateSummary,
+  AdminMedalTemplateImageSwapResult,
   AdminMedalTemplateImportResult,
   AdminMedalTemplateTransferPackage,
   AdminMedalTemplateTransferPreview,
@@ -451,6 +452,121 @@ export class MedalService {
       if (isUniqueConstraintError(error) || (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2034")) throw new ConflictException("勋章模板导入遇到并发修改，请重新预览");
       throw error;
     }
+  }
+
+  async swapAllTemplateImages(operationId: string, adminId: UUID): Promise<AdminMedalTemplateImageSwapResult> {
+    const templates = await this.prisma.medalTemplate.findMany({
+      orderBy: { id: "asc" },
+      take: 501,
+      select: {
+        id: true,
+        code: true,
+        version: true,
+        earnedImageUpdatedAt: true,
+        lockedImageUpdatedAt: true,
+        earnedImageSourceUrl: true,
+        lockedImageSourceUrl: true
+      }
+    });
+    if (templates.length > 500) throw new BadRequestException("单次最多修复 500 枚勋章模板");
+
+    const processedRows = templates.length
+      ? await this.prisma.auditEvent.findMany({
+          where: {
+            action: "MEDAL_TEMPLATE_IMAGES_SWAPPED",
+            objectType: "MEDAL_TEMPLATE",
+            objectId: { in: templates.map(item => item.id) }
+          },
+          select: { objectId: true }
+        })
+      : [];
+    const processedIds = new Set(processedRows.map(item => item.objectId));
+    const result: AdminMedalTemplateImageSwapResult = { swappedCount: 0, skippedCount: 0 };
+
+    for (const snapshot of templates) {
+      const hasImage = Boolean(
+        snapshot.earnedImageUpdatedAt
+        || snapshot.lockedImageUpdatedAt
+        || snapshot.earnedImageSourceUrl
+        || snapshot.lockedImageSourceUrl
+      );
+      if (!hasImage || processedIds.has(snapshot.id)) {
+        result.skippedCount += 1;
+        continue;
+      }
+
+      const itemOperationId = `${operationId}${snapshot.id}`;
+      const requestHash = `medal-template:${snapshot.id}:swap-image-slots`;
+      let imageChanges: Awaited<ReturnType<MedalImageService["swapStoredImages"]>> = null;
+      try {
+        const swapped = await this.prisma.$transaction(async tx => {
+          const repeated = await getAdminIdempotentResult<{ swapped: boolean }>(
+            tx,
+            itemOperationId,
+            "admin-medal-template:swap-images",
+            adminId,
+            requestHash
+          );
+          if (repeated) return repeated;
+          await startAdminIdempotentOperation(
+            tx,
+            itemOperationId,
+            "admin-medal-template:swap-images",
+            adminId,
+            requestHash
+          );
+          await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`MEDAL_TEMPLATE_IMAGE_SWAP:${snapshot.id}`}, 0))::text`;
+
+          const current = await this.requireTemplate(tx, snapshot.id);
+          if (current.version !== snapshot.version) {
+            throw new ConflictException(`勋章“${current.name}”已被更新，请刷新后重试`);
+          }
+
+          imageChanges = await this.medalImageService.swapStoredImages(snapshot.id);
+          const updated = await tx.medalTemplate.updateMany({
+            where: { id: snapshot.id, version: snapshot.version },
+            data: {
+              earnedImageUpdatedAt: snapshot.lockedImageUpdatedAt,
+              lockedImageUpdatedAt: snapshot.earnedImageUpdatedAt,
+              earnedImageSourceUrl: snapshot.lockedImageSourceUrl,
+              lockedImageSourceUrl: snapshot.earnedImageSourceUrl,
+              version: { increment: 1 }
+            }
+          });
+          if (updated.count !== 1) throw new ConflictException("勋章模板已被更新，请刷新后重试");
+
+          await tx.auditEvent.create({
+            data: {
+              actorType: "ADMIN",
+              actorAdminId: adminId,
+              action: "MEDAL_TEMPLATE_IMAGES_SWAPPED",
+              objectType: "MEDAL_TEMPLATE",
+              objectId: snapshot.id,
+              payload: { code: snapshot.code, operationId }
+            }
+          });
+          const itemResult = { swapped: true };
+          await completeAdminIdempotentOperation(
+            tx,
+            itemOperationId,
+            "admin-medal-template:swap-images",
+            adminId,
+            requestHash,
+            itemResult
+          );
+          return itemResult;
+        }, { timeout: 30_000 });
+
+        await this.medalImageService.finalizeImageSwap(imageChanges ?? []);
+        if (swapped.swapped) result.swappedCount += 1;
+        else result.skippedCount += 1;
+      } catch (error) {
+        if (imageChanges) await this.medalImageService.rollbackImageSwap(snapshot.id, imageChanges);
+        throw error;
+      }
+    }
+
+    return result;
   }
 
   async createTemplate(request: AssetRequest, body: CreateAdminMedalTemplateRequest, adminId: UUID): Promise<AdminMedalTemplateSummary> {
