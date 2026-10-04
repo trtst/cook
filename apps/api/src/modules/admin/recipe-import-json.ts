@@ -84,7 +84,16 @@ const tagValues: Record<RecipeImportTagCode, Set<string>> = {
   FLAVOR_PROFILE: new Set(["LIGHT", "MILD", "SPICY", "SOUR", "SWEET"]),
   SPICE_LEVEL: new Set(["NONE", "MILD", "MEDIUM", "HOT"])
 };
-const tagCodes = new Set(Object.keys(tagValues));
+const tagCodeText: Record<RecipeImportTagCode, string> = {
+  CUISINE: "菜系",
+  DISH_STYLE: "菜式",
+  MEAL_TYPE: "餐次",
+  DISH_ROLE: "菜品角色",
+  MAIN_PROTEIN_TYPE: "主蛋白",
+  FLAVOR_PROFILE: "风味",
+  SPICE_LEVEL: "辣度"
+};
+const tagCodes = new Set<RecipeImportTagCode>(Object.keys(tagValues) as RecipeImportTagCode[]);
 const actionByPhase: Record<RecipeImportAssistantPhase, Set<RecipeImportAssistantAction>> = {
   PREP: new Set(["SHOP", "WASH", "SOAK", "THAW", "CUT", "SLICE", "DICE", "SHRED", "MINCE", "MARINATE", "BLANCH", "MEASURE", "MIX", "OTHER"]),
   COOK: new Set(["BOIL", "SIMMER", "STEAM", "STIR_FRY", "PAN_FRY", "DEEP_FRY", "BRAISE", "ROAST", "BAKE", "PRESSURE_COOK", "REDUCE", "OTHER"]),
@@ -220,7 +229,9 @@ function parseTags(value: unknown, errors: RecipeImportIssue[]) {
     tags.push({ tagCode: code, tagValue: item.tagValue });
   });
   for (const code of tagCodes) {
-    if (!tags.some(item => item.tagCode === code)) addIssue(errors, "wiki.tags", `缺少 ${code} 标签`);
+    if (!tags.some(item => item.tagCode === code)) {
+      addIssue(errors, "wiki.tags", `缺少 ${tagCodeText[code]} 标签`);
+    }
   }
   return tags;
 }

@@ -16,7 +16,13 @@ type Check = {
   reason: string;
 };
 
-const requiredTagCodes = ["MEAL_TYPE", "DISH_ROLE", "MAIN_PROTEIN_TYPE", "FLAVOR_PROFILE", "SPICE_LEVEL"];
+const requiredTagLabels = [
+  ["MEAL_TYPE", "餐次"],
+  ["DISH_ROLE", "菜品角色"],
+  ["MAIN_PROTEIN_TYPE", "主蛋白"],
+  ["FLAVOR_PROFILE", "风味"],
+  ["SPICE_LEVEL", "辣度"]
+] as const;
 const supportedMealTypes = new Set(["BREAKFAST", "LUNCH", "DINNER"]);
 const supportedDishRoles = new Set(["MAIN", "VEGETABLE", "SOUP", "STAPLE"]);
 
@@ -64,9 +70,9 @@ export function buildRecipeWikiQualityCards(input: {
     [validSteps, "缺少有效制作步骤"]
   ].map(([ok, reason]) => ({ ok: Boolean(ok), reason: String(reason) }));
 
-  const businessTagChecks = requiredTagCodes.map(code => ({
+  const businessTagChecks = requiredTagLabels.map(([code, label]) => ({
     ok: hasTag(code),
-    reason: `缺少已确认的 ${code} 标签`
+    reason: `缺少已确认的 ${label} 标签`
   }));
   const assistantReady = Boolean(
     input.assistant &&
