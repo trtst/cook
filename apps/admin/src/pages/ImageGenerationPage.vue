@@ -27,15 +27,21 @@ const loading = ref(false);
 const savingSettings = ref(false);
 const savingProvider = ref(false);
 const batchRunning = ref(false);
-const batchLoadingAction = ref<"missing" | "cover" | null>(null);
+const batchLoadingAction = ref(false);
 const batchReplacing = ref(false);
 const replacingRecipeIds = reactive(new Set<number>());
 const batchProgress = ref("");
 
 const selectedRows = computed(() => [...selectedIds.value].map(id => targetCache.get(id)).filter((row): row is ImageGenerationTarget => Boolean(row)));
-const applicableSelectedSlotCount = computed(() => selectedRows.value.reduce((total, row) => total + row.slots.filter(slot => !slot.imageUrl && !slot.candidate).length, 0));
-const applicableSelectedCoverCount = computed(() => selectedRows.value.reduce((total, row) => total + row.slots.filter(slot => slot.targetType === "RECIPE_COVER" && !slot.imageUrl && !slot.candidate).length, 0));
-const selectedCandidateCount = computed(() => selectedRows.value.reduce((total, row) => total + row.slots.filter(slot => slot.candidate).length, 0));
+function matchesImageFilter(slot: ImageGenerationSlot) {
+  if (type.value !== "RECIPE") return true;
+  if (recipeImageFilter.value === "COVER") return slot.targetType === "RECIPE_COVER";
+  if (recipeImageFilter.value === "STEP") return slot.targetType === "RECIPE_STEP";
+  if (recipeImageFilter.value === "WIKI_STEP") return slot.targetType === "WIKI_STEP";
+  return true;
+}
+const applicableSelectedSlotCount = computed(() => selectedRows.value.reduce((total, row) => total + row.slots.filter(slot => matchesImageFilter(slot) && !slot.imageUrl && !slot.candidate).length, 0));
+const selectedCandidateCount = computed(() => selectedRows.value.reduce((total, row) => total + row.slots.filter(slot => matchesImageFilter(slot) && slot.candidate).length, 0));
 const selectedVisibleCount = computed(() => rows.value.filter(row => selectedIds.value.has(row.id)).length);
 const anyRecipeReplacing = computed(() => replacingRecipeIds.size > 0);
 const selectAllVisible = computed({
@@ -174,11 +180,11 @@ async function generateSlot(slot: ImageGenerationSlot, notify = true, failures?:
 
 async function generateSelected() {
   if (!selectedRows.value.length) { ElMessage.warning("请先选择食材或菜谱"); return; }
-  const slots = selectedRows.value.flatMap(row => row.slots.filter(slot => !slot.imageUrl && !slot.candidate));
+  const slots = selectedRows.value.flatMap(row => row.slots.filter(slot => matchesImageFilter(slot) && !slot.imageUrl && !slot.candidate));
   if (!slots.length) { ElMessage.info("所选内容没有缺图位置"); return; }
   if (batchReplacing.value || anyRecipeReplacing.value) return;
   batchRunning.value = true;
-  batchLoadingAction.value = "missing";
+  batchLoadingAction.value = true;
   let completed = 0;
   const failures: string[] = [];
   try {
@@ -192,30 +198,7 @@ async function generateSelected() {
     await loadTargets();
     if (failures.length) ElMessage.error(`生成 ${completed}/${slots.length} 张候选图；失败 ${failures.length} 张。${failures[0]}`);
     else ElMessage.success(`成功生成 ${completed}/${slots.length} 张候选图`);
-  } finally { batchRunning.value = false; batchLoadingAction.value = null; batchProgress.value = ""; }
-}
-
-async function generateSelectedCovers() {
-  if (type.value !== "RECIPE" || !selectedRows.value.length) { ElMessage.warning("请先选择菜谱"); return; }
-  const slots = selectedRows.value.flatMap(row => row.slots.filter(slot => slot.targetType === "RECIPE_COVER" && !slot.imageUrl && !slot.candidate));
-  if (!slots.length) { ElMessage.info("所选菜谱没有待生成的封面图"); return; }
-  if (batchReplacing.value || anyRecipeReplacing.value) return;
-  batchRunning.value = true;
-  batchLoadingAction.value = "cover";
-  let completed = 0;
-  const failures: string[] = [];
-  try {
-    const batchSize = 3;
-    for (let offset = 0; offset < slots.length; offset += batchSize) {
-      const batch = slots.slice(offset, offset + batchSize);
-      batchProgress.value = `${offset + 1}-${offset + batch.length}/${slots.length}`;
-      const results = await Promise.all(batch.map(slot => generateSlot(slot, false, failures)));
-      completed += results.filter(Boolean).length;
-    }
-    await loadTargets();
-    if (failures.length) ElMessage.error(`封面候选图生成 ${completed}/${slots.length} 张；失败 ${failures.length} 张。${failures[0]}`);
-    else ElMessage.success(`成功生成 ${completed}/${slots.length} 张封面候选图`);
-  } finally { batchRunning.value = false; batchLoadingAction.value = null; batchProgress.value = ""; }
+  } finally { batchRunning.value = false; batchLoadingAction.value = false; batchProgress.value = ""; }
 }
 
 async function applyCandidates(candidates: ImageGenerationCandidate[], targetLabel: string) {
@@ -244,7 +227,7 @@ async function applyCandidates(candidates: ImageGenerationCandidate[], targetLab
 
 async function replaceSelectedCandidates() {
   if (type.value !== "RECIPE" || !selectedCandidateCount.value || batchRunning.value || batchReplacing.value || anyRecipeReplacing.value) return;
-  const candidates = selectedRows.value.flatMap(row => row.slots.flatMap(slot => slot.candidate ? [slot.candidate] : []));
+  const candidates = selectedRows.value.flatMap(row => row.slots.flatMap(slot => matchesImageFilter(slot) && slot.candidate ? [slot.candidate] : []));
   batchReplacing.value = true;
   try {
     await ElMessageBox.confirm(`将回填所选菜谱中的 ${candidates.length} 张候选图。`, "一键替换所选", { type: "warning", confirmButtonText: "确认替换" });
@@ -338,10 +321,7 @@ onBeforeUnmount(() => { [...previewUrls.value.keys()].forEach(releasePreview); }
           <el-option label="智能绘图通用 3.0" value="VOLCENGINE_CV" />
         </el-select>
         <span class="toolbar-spacer" />
-        <el-button v-if="type === 'RECIPE'" type="success" plain :loading="batchLoadingAction === 'cover'" :disabled="batchRunning || batchReplacing || anyRecipeReplacing || !selectedRows.length || !applicableSelectedCoverCount" @click="generateSelectedCovers">
-          生成所选封面图 ({{ applicableSelectedCoverCount }})
-        </el-button>
-        <el-button type="primary" :loading="batchLoadingAction === 'missing'" :disabled="batchRunning || batchReplacing || anyRecipeReplacing || !selectedRows.length" @click="generateSelected">
+        <el-button type="primary" :loading="batchLoadingAction" :disabled="batchRunning || batchReplacing || anyRecipeReplacing || !selectedRows.length" @click="generateSelected">
           生成所选缺图 ({{ applicableSelectedSlotCount }})
         </el-button>
         <el-button v-if="type === 'RECIPE'" type="success" plain :loading="batchReplacing" :disabled="batchReplacing || batchRunning || anyRecipeReplacing || !selectedCandidateCount" @click="replaceSelectedCandidates">
