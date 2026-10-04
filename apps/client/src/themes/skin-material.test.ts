@@ -534,7 +534,7 @@ expectSelectorIncludes(pantryIndexPageSource, ".trace-card", [
   "box-shadow: var(--material-card-shadow);"
 ]);
 expectExcludes(pantryIndexPageSource, LEGACY_SECONDARY_OUTLINE);
-expectSelectorIncludes(imageLoaderSource, ".image-loader", [
+expectSelectorIncludes(imageLoaderSource, ".image-loader__loading", [
   "background: var(--page-cover-fresh-bg);"
 ]);
 expectExcludes(pantryGapPageSource, LEGACY_SECONDARY_OUTLINE);

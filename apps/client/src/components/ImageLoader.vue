@@ -56,7 +56,6 @@ function markLoaded() {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: var(--page-cover-fresh-bg);
 }
 
 .image-loader__empty,
