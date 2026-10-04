@@ -1232,7 +1232,7 @@ export type RecipeSlotType =
   | "BREAKFAST_STAPLE"
   | "BREAKFAST_PROTEIN"
   | "BREAKFAST_SIDE";
-export type RecipeProteinType = "PORK" | "CHICKEN" | "BEEF" | "LAMB" | "DUCK" | "FISH" | "NONE";
+export type RecipeProteinType = "PORK" | "CHICKEN" | "BEEF" | "LAMB" | "DUCK" | "FISH" | "EGG" | "NONE";
 export type IngredientProteinType =
   | "PORK"
   | "CHICKEN"

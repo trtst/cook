@@ -60,11 +60,11 @@ function mapIngredientProteinType(value: DbIngredientProteinType | null): Recipe
     case "BEEF":
     case "LAMB":
     case "DUCK":
+    case "EGG":
     case "NONE":
       return value;
     case "SEAFOOD":
       return "FISH";
-    case "EGG":
     case "TOFU":
       return "NONE";
     default:
@@ -147,7 +147,8 @@ export function inferRecipeVersionTagSnapshot(
     else if (/(鸭肉|鸭腿|鸭翅|鸭血|烤鸭)/.test(text)) mainProteinType = "DUCK";
     else if (/(鱼|虾|蟹|贝|蛤|蚝|海鲜)/.test(text)) mainProteinType = "FISH";
     else if (/(猪肉|排骨|五花肉|里脊|肉末|肉丝|肉片|腊肠)/.test(text)) mainProteinType = "PORK";
-    else if (/(鸡蛋|豆腐|豆皮|腐竹|豆干)/.test(text)) mainProteinType = "NONE";
+    else if (/(鸡蛋|鸭蛋|鹅蛋|鹌鹑蛋|皮蛋|咸蛋|松花蛋)/.test(text)) mainProteinType = "EGG";
+    else if (/(豆腐|豆皮|腐竹|豆干)/.test(text)) mainProteinType = "NONE";
   }
 
   const dishRoles = new Set<RecipeVersionTagSnapshot["dishRoles"][number]>();

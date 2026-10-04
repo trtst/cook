@@ -80,7 +80,7 @@ const tagValues: Record<RecipeImportTagCode, Set<string>> = {
   DISH_STYLE: new Set(["STIR_FRY", "COLD_DISH", "SOUP", "STAPLE_FOOD", "STEW", "STEAMED", "BRAISED", "FRIED", "BBQ", "HOT_POT", "SNACK"]),
   MEAL_TYPE: new Set(["BREAKFAST", "LUNCH", "AFTERNOON_TEA", "DINNER", "LATE_NIGHT"]),
   DISH_ROLE: new Set(["MAIN", "VEGETABLE", "COLD_DISH", "SOUP", "STAPLE"]),
-  MAIN_PROTEIN_TYPE: new Set(["PORK", "CHICKEN", "BEEF", "LAMB", "DUCK", "FISH", "NONE"]),
+  MAIN_PROTEIN_TYPE: new Set(["PORK", "CHICKEN", "BEEF", "LAMB", "DUCK", "FISH", "EGG", "NONE"]),
   FLAVOR_PROFILE: new Set(["LIGHT", "MILD", "SPICY", "SOUR", "SWEET"]),
   SPICE_LEVEL: new Set(["NONE", "MILD", "MEDIUM", "HOT"])
 };

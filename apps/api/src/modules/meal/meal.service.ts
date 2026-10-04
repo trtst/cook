@@ -4948,7 +4948,7 @@ export class MealService {
     const mainProteinTypeValue = confirmedRandomTagValues(byCode.get("MAIN_PROTEIN_TYPE") ?? [], false)[0] ?? null;
     const mainProteinType =
       mainProteinTypeValue &&
-      ["PORK", "CHICKEN", "BEEF", "LAMB", "DUCK", "FISH", "NONE"].includes(mainProteinTypeValue)
+      ["PORK", "CHICKEN", "BEEF", "LAMB", "DUCK", "FISH", "EGG", "NONE"].includes(mainProteinTypeValue)
         ? (mainProteinTypeValue as RecipeProteinType)
         : null;
     const flavorTags = confirmedRandomTagValues(byCode.get("FLAVOR_PROFILE") ?? [], true);

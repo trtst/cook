@@ -7477,6 +7477,7 @@ export class AdminService {
         LAMB: "羊肉",
         DUCK: "鸭肉",
         FISH: "鱼类",
+        EGG: "蛋类",
         NONE: "无主蛋白"
       },
       FLAVOR_PROFILE: {

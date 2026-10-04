@@ -2370,7 +2370,7 @@ export class RandomMenuItemModel {
   @ApiProperty(nullableString) durationText!: string | null;
   @ApiProperty({ type: Number, nullable: true, minimum: 0 }) estimatedCalories!: number | null;
   @ApiProperty({ type: [String] }) flavorTags!: string[];
-  @ApiProperty({ type: String, nullable: true, enum: ["PORK", "CHICKEN", "BEEF", "LAMB", "DUCK", "FISH", "NONE"] })
+  @ApiProperty({ type: String, nullable: true, enum: ["PORK", "CHICKEN", "BEEF", "LAMB", "DUCK", "FISH", "EGG", "NONE"] })
   mainProteinType!: string | null;
   @ApiProperty({ type: String, enum: ["HIGH", "MEDIUM", "LOW", "UNKNOWN"] }) fridgeFit!: string;
   @ApiProperty({ type: [String] }) matchedIngredients!: string[];

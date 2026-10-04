@@ -129,6 +129,7 @@ enum RecipeProteinType {
   LAMB
   DUCK
   FISH
+  EGG
   NONE
 }
 
