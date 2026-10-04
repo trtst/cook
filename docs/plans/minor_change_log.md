@@ -1,5 +1,9 @@
 # 项目变更记录
 
+| 2026-10-05 | 菜谱级主蛋白新增 `EGG`（蛋类）：食材映射、鸡蛋标题识别、JSON 导入、后台标签选项、随机菜单接口与客户端卡片显示同步支持；新增前向迁移，仅将有效菜谱当前版本中结构化食材的首个可识别主蛋白明确为鸡蛋的旧 `AUTO/NONE` 标签改为 `EGG`，保留 OPS 人工标签及无法可靠判断的记录。 | `apps/api/prisma/schema.prisma`、`apps/api/prisma/migrations/20261005120000_recipe_protein_egg/migration.sql`、`apps/api/prisma/migrations/20261005130000_recipe_protein_egg_tag_backfill/migration.sql`、`apps/api/src/contracts/types.ts`、`apps/api/src/contracts/openapi.ts`、`apps/api/src/modules/recipe/recipe-version-tags.ts`、`apps/api/src/modules/meal/meal.service.ts`、`apps/api/src/modules/admin/admin.service.ts`、`apps/api/src/modules/admin/recipe-import-json.ts`、`apps/admin/src/pages/RecipeDetailPage.vue`、`apps/admin/src/pages/RecipeImportItemPage.vue`、`apps/client/src/pages_meal/apis/random.ts`、`apps/client/src/pages_meal/components/RandomSlotCard.vue`、`docs/plans/recipe-admin-json-conversion.md`、`docs/plans/minor_change_log.md` | API 定向测试 32/32、API/Admin/Client type-check、API/Admin/Client 生产构建、Prisma schema validate、OpenAPI verify（345 operations / 304 response schemas）、`git diff --check` 通过；未执行数据库迁移，生产数据仅会在 `./deploy.sh` 自动应用前向迁移时更新。 |
+
+| 2026-10-05 | 修复购物清单多个精确数量合计在微信小程序中因 BigInt 幂运算被转换为 `Math.pow` 而报错的问题；改用十进制字符串构造倍率，保留精确整数计算。 | `apps/client/src/pages_pantry/list-detail/index.vue`、`docs/plans/minor_change_log.md` | 以字符串解析构造 BigInt 倍率，避免 BigInt 参与 `**` 运算；未运行测试或微信开发者工具/真机验收。 |
+
 | 2026-10-04 | 让烹饪沉浸模式 header 背景与内容区的遮罩后底色一致。 | `apps/client/src/pages_meal/cook-mode/index.vue`、`apps/client/src/pages_meal/cook-mode/index.test.js`、`docs/plans/minor_change_log.md` | header 使用与内容区相同的 medium 底色和黑色遮罩比例；同步静态断言，未运行测试或设备验收。 |
 
 | 2026-10-04 | 调整烹饪沉浸模式步骤图片的定位和层级。 | `apps/client/src/pages_meal/cook-mode/index.vue`、`apps/client/src/pages_meal/cook-mode/index.test.js`、`docs/plans/minor_change_log.md` | 按指定值设置 `position: relative`、`z-index: 9`，同步静态断言；未运行测试或设备验收。 |

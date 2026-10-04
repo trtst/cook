@@ -267,6 +267,7 @@ DRIED_PRESERVED（干货腌制）：食材身份主要由干燥、腌制、风�
 |  | `LAMB` | 羊肉 |
 |  | `DUCK` | 鸭肉 |
 |  | `FISH` | 鱼类 |
+|  | `EGG` | 蛋类 |
 |  | `NONE` | 无主蛋白 |
 | `FLAVOR_PROFILE` | `LIGHT` | 清淡 | 单选 |
 |  | `MILD` | 温和 |
