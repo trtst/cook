@@ -1,5 +1,9 @@
 # 项目变更记录
 
+| 2026-10-04 | 让烹饪沉浸模式 header 背景与内容区的遮罩后底色一致。 | `apps/client/src/pages_meal/cook-mode/index.vue`、`apps/client/src/pages_meal/cook-mode/index.test.js`、`docs/plans/minor_change_log.md` | header 使用与内容区相同的 medium 底色和黑色遮罩比例；同步静态断言，未运行测试或设备验收。 |
+
+| 2026-10-04 | 调整烹饪沉浸模式步骤图片的定位和层级。 | `apps/client/src/pages_meal/cook-mode/index.vue`、`apps/client/src/pages_meal/cook-mode/index.test.js`、`docs/plans/minor_change_log.md` | 按指定值设置 `position: relative`、`z-index: 9`，同步静态断言；未运行测试或设备验收。 |
+
 | 2026-10-04 | 菜谱导入校验与 Wiki 完整度提示将英文标签枚举代码替换为对应中文文案，如“缺少主蛋白标签”。 | `apps/api/src/modules/admin/recipe-import-json.ts`、`apps/api/src/modules/recipe/recipe-wiki.ts`、`docs/plans/minor_change_log.md` | API type-check 与 `git diff --check` 通过；未运行测试或后台交互验收。 |
 
 | 2026-10-04 | 移除 `.image-loader` 容器的封面背景色声明，并将材质静态契约改为检查实际加载态背景。 | `apps/client/src/components/ImageLoader.vue`、`apps/client/src/themes/skin-material.test.ts`、`docs/plans/minor_change_log.md` | 保留加载中的封面背景，避免已加载图片继续继承容器背景；客户端静态材质测试待本轮验证。 |
