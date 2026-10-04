@@ -1,5 +1,11 @@
 # 项目变更记录
 
+| 2026-10-04 | 菜谱导入校验与 Wiki 完整度提示将英文标签枚举代码替换为对应中文文案，如“缺少主蛋白标签”。 | `apps/api/src/modules/admin/recipe-import-json.ts`、`apps/api/src/modules/recipe/recipe-wiki.ts`、`docs/plans/minor_change_log.md` | API type-check 与 `git diff --check` 通过；未运行测试或后台交互验收。 |
+
+| 2026-10-04 | 移除 `.image-loader` 容器的封面背景色声明，并将材质静态契约改为检查实际加载态背景。 | `apps/client/src/components/ImageLoader.vue`、`apps/client/src/themes/skin-material.test.ts`、`docs/plans/minor_change_log.md` | 保留加载中的封面背景，避免已加载图片继续继承容器背景；客户端静态材质测试待本轮验证。 |
+
+| 2026-10-04 | 后台图片生成与“一键替换所选”均按当前菜谱图片筛选类型处理；移除重复的封面专用批量生成按钮及逻辑。 | `apps/admin/src/pages/ImageGenerationPage.vue`、`docs/plans/minor_change_log.md` | Admin type-check 与 `git diff --check` 通过；未运行测试或后台交互验收。 |
+
 | 2026-10-04 | 修复批量同步导入正文时自动食材标签沿用旧内容、已解锁记录被重复计入每日额度的问题：按新正文重建 AUTO 标签，复制已消费访问权但标记为不计额度，未完成预约不复制。 | `apps/api/prisma/schema.prisma`、`apps/api/prisma/migrations/20261004100000_recipe_unlock_quota_inheritance/migration.sql`、`apps/api/src/modules/admin/admin.service.ts`、`apps/api/src/modules/cook-assistant/cook-assistant-access.service.ts`、`apps/api/src/modules/admin/admin.recipe-import.service.test.ts`、`apps/api/src/modules/cook-assistant/cook-assistant-access.service.test.ts`、`docs/api-contract.md`、`docs/plans/recipe-import-content-sync-execution.md`、`docs/plans/minor_change_log.md` | 两个 API 定向测试文件 52/52、API/Admin type-check、API OpenAPI 校验（345 个操作、304 个响应 schema）、Prisma schema validate、`git diff --check` 通过；未应用数据库迁移，未做后台登录态验收。 |
 
 | 2026-10-04 | 批量同步导入正文时只查询状态为 `PUBLISHED` 且来源类型为 `JSON` 的导入记录，避免其他格式的旧导入记录干扰来源唯一性判断。 | `apps/api/src/modules/admin/admin.service.ts`、`apps/api/src/modules/admin/admin.recipe-import.service.test.ts`、`docs/plans/minor_change_log.md` | API 定向测试 41/41、API type-check 与 `git diff --check` 通过。 |
