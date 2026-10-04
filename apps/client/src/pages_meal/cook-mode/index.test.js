@@ -138,7 +138,7 @@ if (!hasAutomatorRuntime && nodeTest) {
     nodeAssert.match(pageSource, /:navbar-placeholder="true"/);
     nodeAssert.match(pageSource, /:navbar-transparent="false"/);
     nodeAssert.match(pageSource, /:navbar-background-color="navbarBackgroundColor"/);
-    nodeAssert.match(pageSource, /const navbarBackgroundColor = computed\(\(\) => isImmersive\.value \? "var\(--color-overlay-medium\)" : "var\(--color-page\)"\);/);
+    nodeAssert.match(pageSource, /const navbarBackgroundColor = computed\(\(\) => isImmersive\.value\s*\? "color-mix\(in srgb, var\(--color-overlay-medium\) 44%, #000000\)"\s*: "var\(--color-page\)"\);/);
     nodeAssert.doesNotMatch(pageSource, /const navbarBackgroundColor = "var\(--cook-surface-bg\)";/);
     nodeAssert.match(pageSource, /\.cook-mode-layout :deep\(\.navbar__fixed\)[\s\S]*?transition: background-color 280ms ease;/);
     nodeAssert.match(pageSource, /\.cook-mode-layout :deep\(\.navbar__title\)[\s\S]*?transition: color 280ms ease;/);
@@ -181,7 +181,7 @@ if (!hasAutomatorRuntime && nodeTest) {
   });
 
   nodeTest("meal cook mode shares semantic surfaces across the navbar, slide, and page", () => {
-    nodeAssert.match(pageSource, /const navbarBackgroundColor = computed\(\(\) => isImmersive\.value \? "var\(--color-overlay-medium\)" : "var\(--color-page\)"\);/);
+    nodeAssert.match(pageSource, /const navbarBackgroundColor = computed\(\(\) => isImmersive\.value\s*\? "color-mix\(in srgb, var\(--color-overlay-medium\) 44%, #000000\)"\s*: "var\(--color-page\)"\);/);
     nodeAssert.doesNotMatch(pageSource, /--cook-/);
     nodeAssert.match(pageSource, /\.cook-mode-page\s*\{[\s\S]*?background-color: var\(--page-warm-bg\);/);
     nodeAssert.match(pageSource, /\.cook-slide\s*\{[\s\S]*?background-color: var\(--page-warm-bg\);/);
@@ -291,7 +291,7 @@ if (!hasAutomatorRuntime && nodeTest) {
     nodeAssert.match(pageSource, /<text v-else class="cook-nav__title">\{\{ sourceTitle \}\}<\/text>/);
     nodeAssert.doesNotMatch(pageSource, /<view class="cook-slide__top-left">[\s\S]*?cook-slide__tag[\s\S]*?<\/view>/);
     nodeAssert.match(pageSource, /\.cook-slide\s*\{[\s\S]*?display: flex;[\s\S]*?align-items: center;[\s\S]*?justify-content: center;/);
-    nodeAssert.match(pageSource, /\.cook-slide__image\s*\{[\s\S]*?width: 100%;[\s\S]*?height: auto;/);
+    nodeAssert.match(pageSource, /\.cook-slide__image\s*\{[\s\S]*?position: relative;[\s\S]*?z-index: 9;[\s\S]*?width: 100%;[\s\S]*?height: auto;/);
     nodeAssert.match(pageSource, /const isImmersive = computed\(\(\) => viewMode\.value === "swiper"\);/);
     nodeAssert.match(pageSource, /class="cook-mode-page" :class="\{ 'cook-mode-page--immersive': isImmersive \}"/);
     nodeAssert.match(pageSource, /:navbar-transparent="false"/);
@@ -405,7 +405,7 @@ if (!hasAutomatorRuntime && nodeTest) {
     nodeAssert.match(pageSource, /\.cook-nav__mode-toggle--immersive[\s\S]*?background-position: 100%;/);
     nodeAssert.match(pageSource, /\.cook-nav__mode-toggle--immersive \.cook-nav__mode-state--immersive\s*\{[\s\S]*?transform: translateX\(12rpx\);/);
     nodeAssert.doesNotMatch(pageSource, /\.cook-nav__mode-toggle::before|\.cook-nav__mode-icon|icon-cook-mode-(immersive|list)/);
-    nodeAssert.match(pageSource, /\.cook-slide__top\s*\{[\s\S]*?top: 0;/);
+    nodeAssert.match(pageSource, /\.cook-slide__top\s*\{[\s\S]*?position: absolute;[\s\S]*?top: var\(--space-page\);/);
     nodeAssert.doesNotMatch(pageSource, /\.cook-slide\s*\{[^}]*background:/);
   });
 

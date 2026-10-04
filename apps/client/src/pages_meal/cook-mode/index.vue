@@ -286,7 +286,9 @@ const isAssistantMode = computed(() => flowMode.value === "assistant");
 const isImmersive = computed(() => viewMode.value === "swiper");
 const hasMenuTabs = computed(() => sourceType.value === "plan" && menuTabs.value.length > 1);
 const showMenuTabs = computed(() => !isImmersive.value && hasMenuTabs.value);
-const navbarBackgroundColor = computed(() => isImmersive.value ? "var(--color-overlay-medium)" : "var(--color-page)");
+const navbarBackgroundColor = computed(() => isImmersive.value
+  ? "color-mix(in srgb, var(--color-overlay-medium) 44%, #000000)"
+  : "var(--color-page)");
 const currentDishSteps = computed(() => {
   const tab = menuTabs.value[selectedDishIndex.value];
   if (!tab) return originalSteps.value;
@@ -1612,15 +1614,17 @@ defineExpose({
 }
 
 .cook-slide__image {
+  position: relative;
   display: block;
   flex: 0 0 auto;
+  z-index: 9;
   width: 100%;
   height: auto;
 }
 
 .cook-slide__top {
   position: absolute;
-  top: 0;
+  top: var(--space-page);
   right: var(--space-page);
   left: var(--space-page);
   z-index: 3;
