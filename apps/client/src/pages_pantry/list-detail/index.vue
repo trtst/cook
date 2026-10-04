@@ -1157,7 +1157,7 @@ function parseManualExactQuantity(value: string) {
 
 function addExactQuantities(values: string[]) {
   const scale = Math.max(...values.map(value => value.split(".")[1]?.length ?? 0));
-  const factor = 10n ** BigInt(scale);
+  const factor = BigInt(`1${"0".repeat(scale)}`);
   const toScaled = (value: string) => {
     const negative = value.startsWith("-");
     const unsigned = value.replace(/^[+-]/, "");
