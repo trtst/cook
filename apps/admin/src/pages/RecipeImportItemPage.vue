@@ -109,7 +109,8 @@ const tagValueOptions: Record<RecipeImportTagCode, Array<{ value: string; label:
   ],
   MAIN_PROTEIN_TYPE: [
     { value: "PORK", label: "猪肉" }, { value: "CHICKEN", label: "鸡肉" }, { value: "BEEF", label: "牛肉" },
-    { value: "LAMB", label: "羊肉" }, { value: "DUCK", label: "鸭肉" }, { value: "FISH", label: "鱼类" }, { value: "NONE", label: "无主蛋白" }
+    { value: "LAMB", label: "羊肉" }, { value: "DUCK", label: "鸭肉" }, { value: "FISH", label: "鱼类" },
+    { value: "EGG", label: "蛋类" }, { value: "NONE", label: "无主蛋白" }
   ],
   FLAVOR_PROFILE: [
     { value: "LIGHT", label: "清淡" }, { value: "MILD", label: "温和" }, { value: "SPICY", label: "辛辣" },
