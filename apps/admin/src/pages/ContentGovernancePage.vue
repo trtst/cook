@@ -570,6 +570,7 @@ onMounted(() => {
               <el-button v-if="row.status === 'DRAFT' && !row.scheduledPublishAt" size="small" type="primary" plain @click="openSchedule(row)">定时发布</el-button>
               <el-button v-if="row.status === 'DRAFT' && row.scheduledPublishAt" size="small" type="warning" plain @click="cancelSchedule(row)">取消预约</el-button>
               <el-button v-if="row.status === 'PUBLISHED'" size="small" type="warning" @click="setContentStatus(row, 'UNLISTED')">下架</el-button>
+              <el-button v-if="row.status !== 'PUBLISHED'" size="small" type="danger" @click="removeContent(row)">删除</el-button>
             </template>
             <template v-else>
               <el-button v-if="row.status !== 'PUBLISHED'" size="small" type="success" @click="setContentStatus(row, 'PUBLISHED')">上架</el-button>
