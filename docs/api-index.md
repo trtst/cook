@@ -114,9 +114,9 @@
 | AdminRecipeDomain | GET | `/admin/users/{userId}/recipes` | 后台按用户读取已发布菜谱 |
 | AdminRecipeDomain | GET | `/admin/users/{userId}/recipe-drafts` | 后台按用户读取菜谱草稿 |
 | AdminRecipeDomain | GET | `/admin/users/{userId}/collections*` | 历史合集兼容查询，不作为当前前台功能 |
-| AdminSystemData | GET | `/admin/system-data/export` | 导出带格式版本的系统基础数据 JSON 包 |
-| AdminSystemData | POST | `/admin/system-data/preview` | 校验数据包并预览新增、覆盖和冲突 |
-| AdminSystemData | POST | `/admin/system-data/import` | 事务性导入系统数据包，缺失项保留，要求幂等键 |
+| AdminSystemData | GET | `/admin/system-data/export?categories=...` | 按类别导出数据快照 ZIP |
+| AdminSystemData | POST | `/admin/system-data/preview` | 校验快照并预览新增、覆盖、清理、依赖和冲突 |
+| AdminSystemData | POST | `/admin/system-data/import` | 事务性替换所选数据类别，要求幂等键 |
 | AdminIngredient | GET | `/admin/ingredient-categories` | 后台系统食材分类列表 |
 | AdminIngredient | POST | `/admin/ingredient-categories` | 后台新建系统食材分类 |
 | AdminIngredient | PUT | `/admin/ingredient-categories/{categoryId}` | 后台编辑系统食材分类 |
