@@ -132,7 +132,7 @@ function scrubUser(row: Record<string, unknown>) {
   return { ...row, passwordHash: null, openid: null, unionid: null, sessionVersion: Number(row.sessionVersion ?? 0) + 1 };
 }
 
-export async function collectCategoryRows(db: object, category: SnapshotCategory) {
+export async function collectCategoryRows(db: object, category: SnapshotCategory, options: { includePhoneLessUsers?: boolean } = {}) {
   const allowed = new Set(categoryModels[category]);
   const rows: SnapshotRows = {};
   const add = (modelName: string, values: Array<Record<string, unknown>>) => {
@@ -159,11 +159,12 @@ export async function collectCategoryRows(db: object, category: SnapshotCategory
     }
   };
   const queue: Array<{ model: string; category: SnapshotCategory }> = [];
+  const userWhere = category === "users" && options.includePhoneLessUsers ? {} : snapshotModelWhere("User", category);
   const userIds = category === "users"
-    ? await delegateFor(db, "User").findMany({ where: snapshotModelWhere("User", category), select: { id: true } }).then(rows => rows.map(row => row.id))
+    ? await delegateFor(db, "User").findMany({ where: userWhere, select: { id: true } }).then(rows => rows.map(row => row.id))
     : [];
   for (const model of categoryRoots[category]) {
-    const found = await delegateFor(db, model).findMany({ where: snapshotModelWhere(model, category), orderBy: primaryFields(model).map(field => ({ [field]: "asc" })) });
+    const found = await delegateFor(db, model).findMany({ where: model === "User" ? userWhere : snapshotModelWhere(model, category), orderBy: primaryFields(model).map(field => ({ [field]: "asc" })) });
     add(model, found);
     queue.push({ model, category });
   }
@@ -200,7 +201,7 @@ export async function collectCategoryRows(db: object, category: SnapshotCategory
         const relationWhere = targetFields.length === 1
           ? { [targetFields[0]]: { in: Array.from(new Set(tuples.map(tuple => tuple[targetFields[0]]))) } }
           : { OR: tuples };
-        const categoryWhere = snapshotModelWhere(nextModel, category);
+        const categoryWhere = nextModel === "User" ? userWhere : snapshotModelWhere(nextModel, category);
         const where = category === "users" && (nextModel === "Ingredient" || nextModel === "Unit")
           ? { AND: [relationWhere, categoryWhere, { ownerId: { in: userIds } }] }
           : { AND: [relationWhere, categoryWhere] };

@@ -35,7 +35,7 @@ type DataEnvironment = "TEST" | "ONLINE";
 type SnapshotAsset = SnapshotDocument["assets"][number] & { sourceKey: string; references: string[] };
 type SnapshotArchive = { document: SnapshotDocument; files: Map<string, Buffer> };
 
-type ModelField = { name: string; kind: string; type: string; isUnique?: boolean; relationFromFields: string[]; relationToFields: string[] };
+type ModelField = { name: string; kind: string; type: string; isUnique?: boolean; isRequired?: boolean; relationFromFields: string[]; relationToFields: string[]; relationOnDelete?: string };
 type ModelInfo = { name: string; dbName: string | null; fields: ModelField[]; primaryKey?: { fields: string[]; name?: string } | null; uniqueFields?: string[][] };
 type DynamicDelegate = {
   findMany(args?: unknown): Promise<Array<Record<string, unknown>>>;
@@ -90,6 +90,36 @@ function primaryWhere(model: string, row: Record<string, unknown>) {
   if (fields.length === 1) return { [fields[0]]: row[fields[0]] };
   const name = modelInfo(model).primaryKey?.name ?? fields.join("_");
   return { [name]: Object.fromEntries(fields.map(field => [field, row[field]])) };
+}
+
+export function deletePrimaryWhere(model: string, row: Record<string, unknown>) {
+  const fields = primaryFields(model);
+  if (!fields.length || fields.some(field => row[field] === undefined || row[field] === null)) {
+    throw new BadRequestException(`${model} 快照记录缺少主键`);
+  }
+  return Object.fromEntries(fields.map(field => [field, row[field]]));
+}
+
+export function snapshotReplacementKey(model: string, row: Record<string, unknown>) {
+  if (model === "MedalTemplate") return JSON.stringify([row.code]);
+  return rowKey(model, row);
+}
+
+export function snapshotUpsertArgs(model: string, row: Record<string, unknown>) {
+  if (model === "MedalTemplate") {
+    if (typeof row.code !== "string" || !row.code) throw new BadRequestException("MedalTemplate 快照记录缺少 code");
+    return {
+      where: { code: row.code },
+      create: row,
+      update: Object.fromEntries(Object.entries(row).filter(([key]) => key !== "id" && key !== "code"))
+    };
+  }
+  const primary = new Set(primaryFields(model));
+  return {
+    where: primaryWhere(model, row),
+    create: row,
+    update: Object.fromEntries(Object.entries(row).filter(([key]) => !primary.has(key)))
+  };
 }
 
 function rowKey(model: string, row: Record<string, unknown>) {
@@ -181,9 +211,14 @@ function rewriteRefs(value: unknown, replacements: Map<string, string>): unknown
   return value;
 }
 
-function dateValues(model: string, row: Record<string, unknown>) {
-  const dateNames = new Set(modelInfo(model).fields.filter(field => field.type === "DateTime").map(field => field.name));
-  return Object.fromEntries(Object.entries(row).map(([key, value]) => [key, dateNames.has(key) && typeof value === "string" ? new Date(value) : value]));
+export function snapshotRowValues(model: string, row: Record<string, unknown>) {
+  const fields = new Map(modelInfo(model).fields.map(field => [field.name, field]));
+  return Object.fromEntries(Object.entries(row).map(([key, value]) => {
+    const field = fields.get(key);
+    if (field?.type === "Json" && field.isRequired === false && value === null) return [key, Prisma.DbNull];
+    if (field?.type === "DateTime" && typeof value === "string") return [key, new Date(value)];
+    return [key, value];
+  }));
 }
 
 function sortModels(models: string[]) {
@@ -329,30 +364,37 @@ export class AdminSystemDataSnapshotService {
     const { document } = parseArchive(value);
     const targetEnvironment = currentEnvironment();
     const conflicts: string[] = [];
-    const directionConflict = await this.findDirectionConflict(document.sourceEnvironment, targetEnvironment, this.prisma);
+    const prepared = await this.mapUsersToProtectedAccounts(document, this.prisma);
+    const snapshot = prepared.document;
+    conflicts.push(...prepared.conflicts);
+    const directionConflict = await this.findDirectionConflict(snapshot.sourceEnvironment, targetEnvironment, this.prisma);
     if (directionConflict) conflicts.push(directionConflict);
-    if (document.categories.includes("recipes") && (document.data.recipes.Recipe?.length ?? 0) > 0) {
+    if (snapshot.categories.includes("recipes") && (snapshot.data.recipes.Recipe?.length ?? 0) > 0) {
       const poolCount = await this.prisma.publicContentUserPoolMember.count();
       if (!poolCount) conflicts.push("目标环境没有系统菜谱归属账号，暂时不能导入菜谱");
     }
-    await this.findUserConflicts(document, conflicts);
-    const current = await this.collectCurrentRows(document, this.prisma);
-    conflicts.push(...await this.findRemovalReferences(document, current, this.prisma));
-    await this.findUniqueConflicts(document, current, conflicts, this.prisma);
-    const counts = await this.countRows(document, this.prisma, current);
-    const missingDependencies = await this.findDependencies(document, this.prisma);
-    const previewFingerprint = this.previewFingerprint(value, targetEnvironment, current);
+    if (targetEnvironment !== "TEST") await this.findUserConflicts(snapshot, conflicts);
+    const current = await this.collectCurrentRows(snapshot, this.prisma);
+    await this.findUniqueConflicts(snapshot, current, conflicts, this.prisma, prepared.protectedUserIds);
+    const removal = await this.findRemovalReferences(snapshot, current, this.prisma, prepared.protectedUserIds);
+    conflicts.push(...removal.conflicts);
+    const counts = await this.countRows(snapshot, this.prisma, current, removal.retainedUserIds);
+    const missingDependencies = await this.findDependencies(snapshot, this.prisma);
+    const previewFingerprint = this.previewFingerprint(value, targetEnvironment, current, removal.effects, removal.retainedUserIds, prepared.userIdMappings);
     return {
       schemaVersion: snapshotVersion,
       targetEnvironment,
-      sourceExportedAt: document.exportedAt || null,
-      categories: document.categories,
+      sourceExportedAt: snapshot.exportedAt || null,
+      categories: snapshot.categories,
       counts,
       missingDependencies,
       assetCount: document.assets.length,
       conflicts,
+      cleanupEffects: removal.effects,
+      retainedUserCount: removal.retainedUserCount,
+      remappedUserCount: prepared.userIdMappings.length,
       previewFingerprint,
-      behavior: "替换已选择类别并清理本地多余记录；未选择类别保持不变"
+      behavior: "替换已选择类别；受保护关联及其本地账号保留，预览列出的其他本地关联按提示清理或解除"
     };
   }
 
@@ -392,46 +434,58 @@ export class AdminSystemDataSnapshotService {
         const currentEnvironmentValue = currentEnvironment();
         const directionConflict = await this.findDirectionConflict(document.sourceEnvironment, currentEnvironmentValue, tx, true);
         if (directionConflict) throw new ConflictException(directionConflict);
+        const prepared = await this.mapUsersToProtectedAccounts(document, tx);
+        const snapshot = prepared.document;
+        if (prepared.conflicts.length) throw new ConflictException(prepared.conflicts.join("；"));
         const conflicts: string[] = [];
-        await this.findUserConflicts(document, conflicts, tx);
+        if (currentEnvironment() !== "TEST") await this.findUserConflicts(snapshot, conflicts, tx);
         if (conflicts.length) throw new ConflictException(conflicts.join("；"));
-        const missing = await this.findDependencies(document, tx);
+        const missing = await this.findDependencies(snapshot, tx);
         if (missing.length) throw new ConflictException(`缺少依赖数据：${missing.map(item => `${item.label} ${item.count} 条`).join("、")}`);
         await startAdminIdempotentOperation(tx, operationId, "admin-system-data:import", adminId, requestHash);
         const before: SnapshotDocument["data"] = {} as SnapshotDocument["data"];
-        for (const category of document.categories) before[category] = await collectCategoryRows(tx, category);
-        if (!/^[a-f0-9]{64}$/u.test(previewFingerprint) || this.previewFingerprint(value, currentEnvironmentValue, before) !== previewFingerprint) {
+        for (const category of snapshot.categories) before[category] = await collectCategoryRows(tx, category, { includePhoneLessUsers: currentEnvironmentValue === "TEST" && category === "users" });
+        const uniqueConflicts: string[] = [];
+        await this.findUniqueConflicts(snapshot, before, uniqueConflicts, tx, prepared.protectedUserIds);
+        const removal = await this.findRemovalReferences(snapshot, before, tx, prepared.protectedUserIds);
+        if (!/^[a-f0-9]{64}$/u.test(previewFingerprint) || this.previewFingerprint(value, currentEnvironmentValue, before, removal.effects, removal.retainedUserIds, prepared.userIdMappings) !== previewFingerprint) {
           throw new ConflictException("目标数据或快照文件已变化，请重新预览后再导入");
         }
-        const removalConflicts = await this.findRemovalReferences(document, before, tx);
-        if (removalConflicts.length) throw new ConflictException(removalConflicts.join("；"));
-        const uniqueConflicts: string[] = [];
-        await this.findUniqueConflicts(document, before, uniqueConflicts, tx);
+        if (removal.conflicts.length) throw new ConflictException(removal.conflicts.join("；"));
         if (uniqueConflicts.length) throw new ConflictException(uniqueConflicts.join("；"));
         const incoming: SnapshotRows = {};
         const existing: SnapshotRows = {};
-        for (const category of document.categories) {
-          mergeRows(incoming, document.data[category]);
+        for (const category of snapshot.categories) {
+          mergeRows(incoming, snapshot.data[category]);
           mergeRows(existing, before[category]);
         }
         const ordered = sortModels(snapshotModels(document.categories));
         const importedUserIds = (incoming.User ?? []).map(row => Number(row.id));
-        if (document.categories.includes("users") && importedUserIds.length) {
+        const incomingUserIdSet = new Set(importedUserIds);
+        const retainedUserIds = new Set(removal.retainedUserIds);
+        const removedUserIds = (existing.User ?? []).map(row => Number(row.id)).filter(id => !incomingUserIdSet.has(id) && !retainedUserIds.has(id));
+        if (removedUserIds.length) await tx.idempotencyRecord.deleteMany({ where: { userId: { in: removedUserIds } } });
+        if (snapshot.categories.includes("users") && importedUserIds.length) {
           await tx.authSession.deleteMany({ where: { userId: { in: importedUserIds } } });
           await tx.userWechatIdentity.deleteMany({ where: { userId: { in: importedUserIds } } });
           await tx.phoneChangeSession.deleteMany({ where: { userId: { in: importedUserIds } } });
         }
         let removedCount = 0;
         for (const model of [...ordered].reverse()) {
-          const wanted = new Set((incoming[model] ?? []).map(row => rowKey(model, row)));
-          const extra = (existing[model] ?? []).filter(row => !wanted.has(rowKey(model, row)));
+          if (model === "RecipeContentVersion") continue;
+          const wanted = new Set((incoming[model] ?? []).map(row => snapshotReplacementKey(model, row)));
+          const extra = (existing[model] ?? []).filter(row => !wanted.has(snapshotReplacementKey(model, row))
+            && !(model === "User" && retainedUserIds.has(Number(row.id))));
           if (!extra.length) continue;
-          const where = extra.map(row => primaryWhere(model, row));
+          const where = extra.map(row => deletePrimaryWhere(model, row));
           for (let index = 0; index < where.length; index += 500) {
             const result = await modelDelegate(tx, model).deleteMany({ where: { OR: where.slice(index, index + 500) } });
             removedCount += result.count;
           }
         }
+        removedCount += removal.effects
+          .filter(effect => effect.action === "CASCADE_DELETE")
+          .reduce((sum, effect) => sum + effect.count, 0);
         const cleanData = mergeRows({}, incoming);
         for (const [model, rows] of Object.entries(cleanData)) {
           cleanData[model] = rows.map(row => rewriteRefs(row, replacements) as Record<string, unknown>);
@@ -445,10 +499,10 @@ export class AdminSystemDataSnapshotService {
             }));
           }
         }
-        const pool = document.categories.includes("recipes")
+        const pool = snapshot.categories.includes("recipes")
           ? await tx.publicContentUserPoolMember.findMany({ orderBy: { userId: "asc" }, select: { userId: true } })
           : [];
-        if (document.categories.includes("recipes") && (cleanData.Recipe ?? []).length && !pool.length) {
+        if (snapshot.categories.includes("recipes") && (cleanData.Recipe ?? []).length && !pool.length) {
           throw new ConflictException("目标环境没有系统菜谱归属账号，无法导入菜谱");
         }
         let importedCount = 0;
@@ -456,7 +510,7 @@ export class AdminSystemDataSnapshotService {
           const rows = cleanData[model] ?? [];
           const delegate = modelDelegate(tx, model);
           for (const [index, raw] of rows.entries()) {
-            const row = dateValues(model, raw);
+            const row = snapshotRowValues(model, raw);
             if (model === "Recipe" && (row as Record<string, unknown>).isInspiration === true) {
               (row as Record<string, unknown>).ownerId = pool[Number((row as Record<string, unknown>).id) % pool.length].userId;
               (row as Record<string, unknown>).reportCount = 0;
@@ -464,20 +518,32 @@ export class AdminSystemDataSnapshotService {
             }
             if (model === "SiteContent") (row as Record<string, unknown>).updatedByAdminId = null;
             try {
-              await delegate.upsert({ where: primaryWhere(model, row as Record<string, unknown>), create: row, update: Object.fromEntries(Object.entries(row as Record<string, unknown>).filter(([key]) => !primaryFields(model).includes(key))) });
+              await delegate.upsert(snapshotUpsertArgs(model, row as Record<string, unknown>));
             } catch (error) {
               throw new ConflictException(`${model} 第 ${index + 1} 条记录无法写入：${error instanceof Error ? error.message : "数据冲突"}`);
             }
             importedCount += 1;
           }
         }
+        const wantedVersionIds = new Set((incoming.RecipeContentVersion ?? []).map(row => rowKey("RecipeContentVersion", row)));
+        const extraVersions = (existing.RecipeContentVersion ?? []).filter(row => !wantedVersionIds.has(rowKey("RecipeContentVersion", row)));
+        for (let index = 0; index < extraVersions.length; index += 500) {
+          try {
+            const result = await tx.recipeContentVersion.deleteMany({
+              where: { OR: extraVersions.slice(index, index + 500).map(row => deletePrimaryWhere("RecipeContentVersion", row)) }
+            });
+            removedCount += result.count;
+          } catch {
+            throw new ConflictException("更新所选数据后，本地仍有饭局菜品引用待清理的旧菜谱版本；导入已回滚，请重新校验快照");
+          }
+        }
         await syncSequences(tx, ordered);
-        const counts = await this.countRows(document, tx, before);
+        const counts = await this.countRows(snapshot, tx, before, removal.retainedUserIds);
         const result = { schemaVersion: snapshotVersion, targetEnvironment, importedCount, removedCount, counts };
         await tx.auditEvent.create({
           data: {
             actorType: "ADMIN", actorAdminId: adminId, action: "SYSTEM_DATA_IMPORTED", objectType: "SYSTEM_DATA_PACKAGE",
-            payload: { schemaVersion: snapshotVersion, sourceEnvironment: document.sourceEnvironment, targetEnvironment, categories: document.categories, importedCount, removedCount, operationId } as Prisma.InputJsonValue
+            payload: { schemaVersion: snapshotVersion, sourceEnvironment: snapshot.sourceEnvironment, targetEnvironment, categories: snapshot.categories, importedCount, removedCount, operationId } as Prisma.InputJsonValue
           }
         });
         await completeAdminIdempotentOperation(tx, operationId, "admin-system-data:import", adminId, requestHash, result);
@@ -491,17 +557,22 @@ export class AdminSystemDataSnapshotService {
     }
   }
 
-  private async countRows(document: SnapshotDocument, db: object = this.prisma, existingRows?: SnapshotDocument["data"]) {
+  private async countRows(document: SnapshotDocument, db: object = this.prisma, existingRows?: SnapshotDocument["data"], retainedUserIds: number[] = []) {
     const result: Record<string, { total: number; existing: number; new: number; removed: number }> = {};
+    const incomingUserIds = new Set((document.data.users?.User ?? []).map(row => Number(row.id)));
+    const retainedOnlyUserIds = new Set(retainedUserIds.filter(id => !incomingUserIds.has(id)));
     for (const category of document.categories) {
       const target = existingRows?.[category] ?? await collectCategoryRows(db, category);
       const incoming = document.data[category];
       let existing = 0;
       let current = 0;
       for (const [model, targetRows] of Object.entries(target)) {
-        current += targetRows.length;
+        const countableRows = model === "User" && retainedUserIds.length
+          ? targetRows.filter(row => !retainedOnlyUserIds.has(Number(row.id)))
+          : targetRows;
+        current += countableRows.length;
         const incomingKeys = new Set((incoming[model] ?? []).map(row => rowKey(model, row)));
-        existing += targetRows.filter(row => incomingKeys.has(rowKey(model, row))).length;
+        existing += countableRows.filter(row => incomingKeys.has(rowKey(model, row))).length;
       }
       const total = rowCount(incoming);
       result[category] = { total, existing, new: Math.max(0, total - existing), removed: Math.max(0, current - existing) };
@@ -509,7 +580,7 @@ export class AdminSystemDataSnapshotService {
     return result;
   }
 
-  private previewFingerprint(value: Buffer, environment: DataEnvironment, rows: SnapshotDocument["data"]) {
+  private previewFingerprint(value: Buffer, environment: DataEnvironment, rows: SnapshotDocument["data"], cleanupEffects: Array<{ model: string; action: string; count: number }> = [], retainedUserIds: number[] = [], userIdMappings: Array<[number, number]> = []) {
     const state = Object.fromEntries(Object.keys(rows).sort().map(category => {
       const models = rows[category as SnapshotCategory];
       return [category, Object.fromEntries(Object.keys(models).sort().map(model => [
@@ -517,16 +588,16 @@ export class AdminSystemDataSnapshotService {
         [...models[model]].sort((left, right) => rowKey(model, left).localeCompare(rowKey(model, right)))
       ]))];
     }));
-    return snapshotDigest(Buffer.from(JSON.stringify({ archive: snapshotDigest(value), environment, state }), "utf8"));
+    return snapshotDigest(Buffer.from(JSON.stringify({ archive: snapshotDigest(value), environment, state, cleanupEffects, retainedUserIds: [...retainedUserIds].sort((a, b) => a - b), userIdMappings }), "utf8"));
   }
 
   private async collectCurrentRows(document: SnapshotDocument, db: object) {
     const rows: SnapshotDocument["data"] = {} as SnapshotDocument["data"];
-    for (const category of document.categories) rows[category] = await collectCategoryRows(db, category);
+    for (const category of document.categories) rows[category] = await collectCategoryRows(db, category, { includePhoneLessUsers: currentEnvironment() === "TEST" && category === "users" });
     return rows;
   }
 
-  private async findRemovalReferences(document: SnapshotDocument, current: SnapshotDocument["data"], db: object) {
+  private async findRemovalReferences(document: SnapshotDocument, current: SnapshotDocument["data"], db: object, protectedUserIds?: number[]) {
     const incoming: SnapshotRows = {};
     const existing: SnapshotRows = {};
     for (const category of document.categories) {
@@ -535,16 +606,19 @@ export class AdminSystemDataSnapshotService {
     }
     const selectedModels = new Set(snapshotModels(document.categories));
     const modelNames = Prisma.dmmf.datamodel.models.map(model => model.name);
-    const allowedAuthCleanup = new Set(["AuthSession", "UserWechatIdentity", "PhoneChangeSession", "IdempotencyRecord"]);
+    const allowedAuthCleanup = new Set(["AuthSession", "UserWechatIdentity", "PhoneChangeSession"]);
     const conflicts = new Map<string, number>();
+    const cleanupRows = new Map<string, Set<string>>();
+    const protectedModels = new Set(["StorageLedger", "AuditEvent", "MembershipCode", "DiningGroup", "DiningGroupMember", "DiningGroupInvite", "PublicContentUserPoolMember"]);
+    const shouldRetainProtectedUsers = currentEnvironment() === "TEST" && document.categories.includes("users");
+    const retainedUserIds = new Set(protectedUserIds ?? (shouldRetainProtectedUsers ? await this.findProtectedUserIds(db) : []));
+    const incomingUserIds = new Set((incoming.User ?? []).map(row => Number(row.id)));
+    const retainedUserCount = Array.from(retainedUserIds).filter(id => (existing.User ?? []).some(row => Number(row.id) === id)).length;
     for (const [parentModel, parentRows] of Object.entries(existing)) {
       const wanted = new Set((incoming[parentModel] ?? []).map(row => rowKey(parentModel, row)));
-      const removed = parentRows.filter(row => !wanted.has(rowKey(parentModel, row)));
+      const removed = parentRows.filter(row => !wanted.has(rowKey(parentModel, row))
+        && !(parentModel === "User" && retainedUserIds.has(Number(row.id))));
       if (!removed.length) continue;
-      if (parentModel === "User") {
-        conflicts.set("User->local-account-protection", -1);
-        continue;
-      }
       for (const childModel of modelNames) {
         if (selectedModels.has(childModel) || allowedAuthCleanup.has(childModel)) continue;
         for (const relation of modelInfo(childModel).fields.filter(field => field.kind === "object" && field.type === parentModel && field.relationFromFields.length)) {
@@ -552,13 +626,40 @@ export class AdminSystemDataSnapshotService {
             .filter(tuple => Object.values(tuple).every(value => value !== null && value !== undefined));
           if (!tuples.length) continue;
           const delegate = modelDelegate(db, childModel);
-          let referenceCount = 0;
+          const referencedKeys = new Set<string>();
           for (let index = 0; index < tuples.length; index += 300) {
-            referenceCount += await delegate.count({ where: { OR: tuples.slice(index, index + 300) } });
+            const primary = primaryFields(childModel);
+            const references = await delegate.findMany({
+              where: { OR: tuples.slice(index, index + 300) },
+              select: Object.fromEntries(primary.map(field => [field, true]))
+            });
+            for (const row of references) referencedKeys.add(rowKey(childModel, row));
           }
+          const referenceCount = referencedKeys.size;
           if (referenceCount) {
-            const key = `${parentModel}->${childModel}`;
-            conflicts.set(key, (conflicts.get(key) ?? 0) + referenceCount);
+            if (childModel === "IdempotencyRecord") {
+              const key = `${childModel}:CASCADE_DELETE`;
+              const rows = cleanupRows.get(key) ?? new Set<string>();
+              referencedKeys.forEach(id => rows.add(id));
+              cleanupRows.set(key, rows);
+              continue;
+            }
+            if (protectedModels.has(childModel)) {
+              const key = `${parentModel}->${childModel}`;
+              conflicts.set(key, (conflicts.get(key) ?? 0) + referenceCount);
+              continue;
+            }
+            const onDelete = relation.relationOnDelete ?? (relation.isRequired ? "Cascade" : "SetNull");
+            if (onDelete === "Restrict" || onDelete === "NoAction") {
+              const key = `${parentModel}->${childModel}`;
+              conflicts.set(key, (conflicts.get(key) ?? 0) + referenceCount);
+              continue;
+            }
+            const action = onDelete === "Cascade" ? "CASCADE_DELETE" : "SET_NULL";
+            const key = `${childModel}:${action}`;
+            const rows = cleanupRows.get(key) ?? new Set<string>();
+            referencedKeys.forEach(id => rows.add(id));
+            cleanupRows.set(key, rows);
           }
         }
       }
@@ -601,9 +702,43 @@ export class AdminSystemDataSnapshotService {
       if (ingredientCount) conflicts.set("RecipeContentVersion->IngredientJson", ingredientCount);
       if (unitCount) conflicts.set("RecipeContentVersion->UnitJson", unitCount);
     }
-    return Array.from(conflicts, ([edge, count]) => count < 0
-      ? "用户快照不会清理目标环境独有账号；请取消勾选“用户及个人数据”并重新导出，再导入其他类别"
-      : `清理所选数据会影响未选数据关联 ${edge}（${count} 条），请同时选择相关类别`);
+    const labels: Record<string, string> = {
+      DiningEventShareInvite: "饭局分享邀请",
+      DiningEventMemoryShare: "饭局纪念册分享",
+      RecipeImportItem: "菜谱导入记录",
+      MealReminder: "饭局提醒",
+      IdempotencyRecord: "本地幂等记录"
+    };
+    for (const [key, rows] of cleanupRows) {
+      const [model, action] = key.split(":");
+      if (action !== "SET_NULL") continue;
+      const deleted = cleanupRows.get(`${model}:CASCADE_DELETE`);
+      if (deleted) rows.forEach(id => deleted.has(id) && rows.delete(id));
+      if (!rows.size) cleanupRows.delete(key);
+    }
+    const effects = Array.from(cleanupRows, ([key, rows]) => {
+      const [model, action] = key.split(":");
+      return { model, label: labels[model] ?? model, action, count: rows.size };
+    }).sort((left, right) => left.label.localeCompare(right.label));
+    const removalConflicts = Array.from(conflicts, ([edge, count]) =>
+      `清理所选数据会影响受保护关联 ${edge}（${count} 条），请先处理该关联`
+    );
+    return { conflicts: removalConflicts, effects, retainedUserIds: Array.from(retainedUserIds).sort((a, b) => a - b), retainedUserCount };
+  }
+
+  private async findProtectedUserIds(db: object) {
+    const relations = await Promise.all([
+      modelDelegate(db, "MembershipCode").findMany({ where: { redeemedByUserId: { not: null } }, select: { redeemedByUserId: true } }),
+      modelDelegate(db, "PublicContentUserPoolMember").findMany({ select: { userId: true } }),
+      modelDelegate(db, "StorageLedger").findMany({ select: { userId: true } }),
+      modelDelegate(db, "AuditEvent").findMany({ where: { actorUserId: { not: null } }, select: { actorUserId: true } })
+    ]);
+    const ids = new Set<number>();
+    for (const rows of relations) for (const row of rows) {
+      const id = Number(row.userId ?? row.redeemedByUserId ?? row.actorUserId);
+      if (Number.isSafeInteger(id) && id > 0) ids.add(id);
+    }
+    return ids;
   }
 
   private removedIds(model: string, incoming: SnapshotRows, existing: SnapshotRows) {
@@ -614,7 +749,7 @@ export class AdminSystemDataSnapshotService {
       .filter(Number.isSafeInteger));
   }
 
-  private async findUniqueConflicts(document: SnapshotDocument, current: SnapshotDocument["data"], conflicts: string[], db: object) {
+  private async findUniqueConflicts(document: SnapshotDocument, current: SnapshotDocument["data"], conflicts: string[], db: object, retainedUserIds: number[] = []) {
     const incoming = packageRows(document);
     const managed: SnapshotRows = {};
     for (const category of document.categories) mergeRows(managed, current[category]);
@@ -651,12 +786,95 @@ export class AdminSystemDataSnapshotService {
           });
           for (const found of matches) {
             const foundKey = rowKey(model, found);
+            if (model === "User" && retainedUserIds.includes(Number(found.id))) {
+              if (wantedIds.has(foundKey)) continue;
+              conflicts.push(`用户的 ${fields.join("/")} 与需要保留的本地关联账号冲突`);
+              continue;
+            }
             if (wantedIds.has(foundKey) || targetIds.has(foundKey)) continue;
-            conflicts.push(`${model} 的 ${fields.join("/")} 与目标环境未选数据冲突`);
+            if (["RecipeNutritionSnapshot", "RecipeVersionTag"].includes(model)) {
+              const category = await this.selectedRecipeDataCategory(document, found, db);
+              if (category) {
+                const rowsInCategory = current[category][model] ?? (current[category][model] = []);
+                if (!rowsInCategory.some(row => rowKey(model, row) === foundKey)) rowsInCategory.push(found);
+                continue;
+              }
+            }
+            const categoryHint = ["RecipeNutritionSnapshot", "RecipeVersionTag"].includes(model) && !document.categories.includes("recipes")
+              ? `；请在线上重新导出并同时选择“菜谱”类别`
+              : "";
+            conflicts.push(`${model} 的 ${fields.join("/")} 与目标环境未选数据冲突${categoryHint}`);
           }
         }
       }
     }
+  }
+
+  private async selectedRecipeDataCategory(document: SnapshotDocument, row: Record<string, unknown>, db: object) {
+    const versionId = Number(row.recipeVersionId);
+    if (!Number.isSafeInteger(versionId)) return null;
+    for (const category of ["recipes", "users"] as const) {
+      if (document.categories.includes(category)
+        && (document.data[category].RecipeContentVersion ?? []).some(version => Number(version.id) === versionId)) {
+        return category;
+      }
+    }
+    const recipes = await modelDelegate(db, "Recipe").findMany({
+      where: { OR: [{ currentVersionId: versionId }, { originVersionId: versionId }] },
+      select: { isInspiration: true, inspirationCategoryId: true }
+    });
+    if (!recipes.length) return null;
+    if (document.categories.includes("recipes") && recipes.some(recipe => recipe.isInspiration === true && recipe.inspirationCategoryId != null)) return "recipes";
+    if (document.categories.includes("users") && recipes.some(recipe => recipe.isInspiration === false)) return "users";
+    return null;
+  }
+
+  private async mapUsersToProtectedAccounts(document: SnapshotDocument, db: object) {
+    if (currentEnvironment() !== "TEST" || !document.categories.includes("users")) {
+      return { document, protectedUserIds: [] as number[], userIdMappings: [] as Array<[number, number]>, conflicts: [] as string[] };
+    }
+    const protectedUserIds = Array.from(await this.findProtectedUserIds(db)).sort((a, b) => a - b);
+    if (!protectedUserIds.length) return { document, protectedUserIds, userIdMappings: [] as Array<[number, number]>, conflicts: [] as string[] };
+    const protectedUsers = await modelDelegate(db, "User").findMany({
+      where: { id: { in: protectedUserIds } },
+      select: { id: true, phone: true }
+    });
+    const protectedByPhone = new Map(protectedUsers
+      .filter(row => typeof row.phone === "string" && row.phone.length > 0)
+      .map(row => [String(row.phone), Number(row.id)]));
+    const users = document.data.users?.User ?? [];
+    const sourceIds = new Set(users.map(row => Number(row.id)));
+    const userIdMappings = users.flatMap(row => {
+      const sourceId = Number(row.id);
+      const targetId = typeof row.phone === "string" ? protectedByPhone.get(row.phone) : undefined;
+      return targetId !== undefined && sourceId !== targetId ? [[sourceId, targetId] as [number, number]] : [];
+    });
+    const mappingTargets = new Map<number, number>();
+    for (const [sourceId, targetId] of userIdMappings) mappingTargets.set(targetId, (mappingTargets.get(targetId) ?? 0) + 1);
+    const conflicts = userIdMappings
+      .filter(([sourceId, targetId]) => mappingTargets.get(targetId)! > 1 || (sourceIds.has(targetId) && !userIdMappings.some(([id, mappedId]) => id === targetId && mappedId === targetId)))
+      .map(() => "手机号匹配到的受保护本地账号 ID 与快照中的其他账号 ID 冲突");
+    if (!userIdMappings.length) return { document, protectedUserIds, userIdMappings, conflicts };
+
+    const mapping = new Map(userIdMappings);
+    const data = Object.fromEntries(Object.entries(document.data).map(([category, rows]) => [category,
+      Object.fromEntries(Object.entries(rows).map(([model, modelRows]) => [model, modelRows.map(row => ({ ...row }))]))
+    ])) as SnapshotDocument["data"];
+    for (const row of data.users.User ?? []) {
+      const targetId = mapping.get(Number(row.id));
+      if (targetId !== undefined) row.id = targetId;
+    }
+    for (const rows of Object.values(data)) for (const [model, modelRows] of Object.entries(rows)) {
+      const userRelations = modelInfo(model).fields.filter(field => field.kind === "object" && field.type === "User" && field.relationFromFields.length);
+      for (const row of modelRows) for (const relation of userRelations) {
+        relation.relationFromFields.forEach((field, index) => {
+          if (relation.relationToFields[index] !== "id") return;
+          const targetId = mapping.get(Number(row[field]));
+          if (targetId !== undefined) row[field] = targetId;
+        });
+      }
+    }
+    return { document: { ...document, data }, protectedUserIds, userIdMappings, conflicts };
   }
 
   private async findDependencies(document: SnapshotDocument, db: object) {

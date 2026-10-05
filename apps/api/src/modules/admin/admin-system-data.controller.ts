@@ -7,7 +7,7 @@ import { AdminAuthGuard } from "../../common/admin-auth.guard";
 import { SuperAdminGuard } from "../../common/super-admin.guard";
 import type { RequestWithAdmin } from "../../common/auth-context";
 import { ApiIdempotencyKey, ReadIdempotencyKey } from "../../common/idempotency-key";
-import { AdminSystemDataCollectionCountModel, AdminSystemDataDependencyModel, AdminSystemDataImportResultModel, AdminSystemDataPreviewModel, ApiOkModel } from "../../contracts/openapi";
+import { AdminSystemDataCleanupEffectModel, AdminSystemDataCollectionCountModel, AdminSystemDataDependencyModel, AdminSystemDataImportResultModel, AdminSystemDataPreviewModel, ApiOkModel } from "../../contracts/openapi";
 import { AdminSystemDataService } from "./admin-system-data.service";
 const maxSnapshotBytes = 200 * 1024 * 1024;
 const snapshotUploadOptions = { limits: { fileSize: maxSnapshotBytes, files: 1 } };
@@ -47,7 +47,7 @@ export class AdminSystemDataController {
   }
 
   @Post("preview")
-  @ApiExtraModels(AdminSystemDataCollectionCountModel, AdminSystemDataDependencyModel, AdminSystemDataPreviewModel)
+  @ApiExtraModels(AdminSystemDataCleanupEffectModel, AdminSystemDataCollectionCountModel, AdminSystemDataDependencyModel, AdminSystemDataPreviewModel)
   @UseInterceptors(FilesInterceptor("file", 1, snapshotUploadOptions))
   @ApiBody({ schema: { type: "object", required: ["file"], properties: { file: { type: "string", format: "binary" } } } })
   @ApiConsumes("multipart/form-data")

@@ -2899,6 +2899,12 @@ export class AdminSystemDataDependencyModel {
   @ApiProperty({ type: Number, minimum: 0 }) count!: number;
 }
 
+export class AdminSystemDataCleanupEffectModel {
+  @ApiProperty({ type: String }) label!: string;
+  @ApiProperty({ type: String, enum: ["CASCADE_DELETE", "SET_NULL"] }) action!: string;
+  @ApiProperty({ type: Number, minimum: 0 }) count!: number;
+}
+
 export class AdminSystemDataPreviewModel {
   @ApiProperty({ type: String, example: "cook.data-snapshot.v2" }) schemaVersion!: string;
   @ApiProperty({ type: String, enum: ["TEST", "ONLINE"] }) targetEnvironment!: string;
@@ -2906,6 +2912,9 @@ export class AdminSystemDataPreviewModel {
   @ApiProperty({ type: [String] }) categories!: string[];
   @ApiProperty({ type: Object, additionalProperties: { $ref: getSchemaPath(AdminSystemDataCollectionCountModel) } }) counts!: Record<string, AdminSystemDataCollectionCountModel>;
   @ApiProperty({ type: [AdminSystemDataDependencyModel] }) missingDependencies!: AdminSystemDataDependencyModel[];
+  @ApiProperty({ type: [AdminSystemDataCleanupEffectModel] }) cleanupEffects!: AdminSystemDataCleanupEffectModel[];
+  @ApiProperty({ type: Number }) retainedUserCount!: number;
+  @ApiProperty({ type: Number }) remappedUserCount!: number;
   @ApiProperty({ type: Number, minimum: 0 }) assetCount!: number;
   @ApiProperty({ type: [String] }) conflicts!: string[];
   @ApiProperty({ type: String, pattern: "^[a-f0-9]{64}$" }) previewFingerprint!: string;
