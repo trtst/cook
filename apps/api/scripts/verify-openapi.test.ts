@@ -37,7 +37,7 @@ test("rejects a binary response without an explicit binary schema", () => {
         }
       }
     }),
-    /binary response must declare an image content type and binary schema/
+    /binary response must declare its binary content type and schema/
   );
 });
 

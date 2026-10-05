@@ -30,10 +30,10 @@ function validateDataSchema(path: string, method: string, data: Record<string, a
   assert(Object.keys(data.properties ?? {}).length > 0, `${method.toUpperCase()} ${path} data object has no properties`);
 }
 
-function isExplicitBinaryImageResponse(response: Record<string, any>) {
+function isExplicitBinaryResponse(response: Record<string, any>) {
   const content = Object.entries(response.content ?? {});
   return content.length > 0 && content.every(([contentType, media]) =>
-    contentType.startsWith("image/") &&
+    (contentType.startsWith("image/") || contentType === "application/zip") &&
     (media as Record<string, any>).schema?.type === "string" &&
     (media as Record<string, any>).schema?.format === "binary"
   );
@@ -50,11 +50,11 @@ export function validateOpenApiDocument(document: { paths?: Record<string, any>;
       operationCount += 1;
       const response = operation.responses?.["200"] as Record<string, any> | undefined;
       assert(response && "$ref" in response === false, `${method.toUpperCase()} ${path} has no inline 200 response`);
-      if (isExplicitBinaryImageResponse(response)) continue;
+      if (isExplicitBinaryResponse(response)) continue;
       const content = response.content as Record<string, any> | undefined;
       assert(
-        !Object.keys(content ?? {}).some(contentType => contentType.startsWith("image/")),
-        `${method.toUpperCase()} ${path} binary response must declare an image content type and binary schema`
+        !Object.keys(content ?? {}).some(contentType => contentType.startsWith("image/") || contentType === "application/zip"),
+        `${method.toUpperCase()} ${path} binary response must declare its binary content type and schema`
       );
       const schema = content?.["application/json"]?.schema as Record<string, any> | undefined;
       assert(schema?.type === "object", `${method.toUpperCase()} ${path} has no response envelope schema`);

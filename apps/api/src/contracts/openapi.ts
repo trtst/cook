@@ -2890,27 +2890,32 @@ export class AdminSystemDataCollectionCountModel {
   @ApiProperty({ type: Number, minimum: 0 }) total!: number;
   @ApiProperty({ type: Number, minimum: 0 }) existing!: number;
   @ApiProperty({ type: Number, minimum: 0 }) new!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) removed!: number;
 }
 
-export class AdminSystemDataExportModel {
-  @ApiProperty({ type: String, example: "cook.system-data.v1" }) schemaVersion!: string;
-  @ApiProperty({ type: String, enum: ["TEST", "ONLINE"] }) sourceEnvironment!: string;
-  @ApiProperty(dateTime) exportedAt!: string;
-  @ApiProperty({ type: Object, additionalProperties: { type: "array", items: { type: "object" } } }) data!: Record<string, unknown[]>;
+export class AdminSystemDataDependencyModel {
+  @ApiProperty({ type: String }) category!: string;
+  @ApiProperty({ type: String }) label!: string;
+  @ApiProperty({ type: Number, minimum: 0 }) count!: number;
 }
 
 export class AdminSystemDataPreviewModel {
-  @ApiProperty({ type: String, example: "cook.system-data.v1" }) schemaVersion!: string;
+  @ApiProperty({ type: String, example: "cook.data-snapshot.v2" }) schemaVersion!: string;
   @ApiProperty({ type: String, enum: ["TEST", "ONLINE"] }) targetEnvironment!: string;
   @ApiProperty(nullableString) sourceExportedAt!: string | null;
+  @ApiProperty({ type: [String] }) categories!: string[];
   @ApiProperty({ type: Object, additionalProperties: { $ref: getSchemaPath(AdminSystemDataCollectionCountModel) } }) counts!: Record<string, AdminSystemDataCollectionCountModel>;
+  @ApiProperty({ type: [AdminSystemDataDependencyModel] }) missingDependencies!: AdminSystemDataDependencyModel[];
+  @ApiProperty({ type: Number, minimum: 0 }) assetCount!: number;
   @ApiProperty({ type: [String] }) conflicts!: string[];
+  @ApiProperty({ type: String, pattern: "^[a-f0-9]{64}$" }) previewFingerprint!: string;
   @ApiProperty({ type: String }) behavior!: string;
 }
 
 export class AdminSystemDataImportResultModel {
-  @ApiProperty({ type: String, example: "cook.system-data.v1" }) schemaVersion!: string;
+  @ApiProperty({ type: String, example: "cook.data-snapshot.v2" }) schemaVersion!: string;
   @ApiProperty({ type: String, enum: ["TEST", "ONLINE"] }) targetEnvironment!: string;
   @ApiProperty({ type: Number, minimum: 0 }) importedCount!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) removedCount!: number;
   @ApiProperty({ type: Object, additionalProperties: { $ref: getSchemaPath(AdminSystemDataCollectionCountModel) } }) counts!: Record<string, AdminSystemDataCollectionCountModel>;
 }

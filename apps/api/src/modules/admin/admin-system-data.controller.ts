@@ -1,23 +1,30 @@
-import { BadRequestException, Controller, Get, Post, Req, UploadedFiles, UseGuards, UseInterceptors } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Get, Post, Query, Req, Res, UploadedFiles, UseGuards, UseInterceptors } from "@nestjs/common";
 import { FilesInterceptor } from "@nestjs/platform-express";
-import { ApiBearerAuth, ApiBody, ApiConsumes, ApiExtraModels, ApiTags } from "@nestjs/swagger";
+import { ApiBearerAuth, ApiBody, ApiConsumes, ApiExtraModels, ApiOkResponse, ApiProduces, ApiTags } from "@nestjs/swagger";
+import type { Writable } from "node:stream";
 import { ok } from "../../common/api-response";
 import { AdminAuthGuard } from "../../common/admin-auth.guard";
 import { SuperAdminGuard } from "../../common/super-admin.guard";
 import type { RequestWithAdmin } from "../../common/auth-context";
 import { ApiIdempotencyKey, ReadIdempotencyKey } from "../../common/idempotency-key";
-import { AdminSystemDataCollectionCountModel, AdminSystemDataExportModel, AdminSystemDataImportResultModel, AdminSystemDataPreviewModel, ApiOkModel } from "../../contracts/openapi";
+import { AdminSystemDataCollectionCountModel, AdminSystemDataDependencyModel, AdminSystemDataImportResultModel, AdminSystemDataPreviewModel, ApiOkModel } from "../../contracts/openapi";
 import { AdminSystemDataService } from "./admin-system-data.service";
-import { recipeJsonUploadLimits, recipeJsonUploadStorage } from "./recipe-import-upload";
+const maxSnapshotBytes = 200 * 1024 * 1024;
+const snapshotUploadOptions = { limits: { fileSize: maxSnapshotBytes, files: 1 } };
+
+type ResponseLike = Writable & {
+  setHeader: (name: string, value: string | number) => void;
+};
+
+type SnapshotRequest = RequestWithAdmin & {
+  protocol?: string;
+  get?: (name: string) => string | undefined;
+};
 
 function parsePackage(files?: Array<{ buffer?: Buffer }>) {
   const buffer = files?.[0]?.buffer;
-  if (!buffer) throw new BadRequestException("请上传 JSON 数据包");
-  try {
-    return JSON.parse(buffer.toString("utf8")) as unknown;
-  } catch {
-    throw new BadRequestException("JSON 数据包格式无效");
-  }
+  if (!buffer) throw new BadRequestException("请上传 ZIP 快照包");
+  return buffer;
 }
 
 @ApiTags("admin")
@@ -28,33 +35,41 @@ export class AdminSystemDataController {
   constructor(private readonly systemDataService: AdminSystemDataService) {}
 
   @Get("export")
-  @ApiOkModel(AdminSystemDataExportModel, "导出系统基础数据同步包")
-  exportPackage() {
-    return this.systemDataService.exportPackage().then(result => ok(result));
+  @ApiProduces("application/zip")
+  @ApiOkResponse({ description: "下载系统数据 ZIP 快照", content: { "application/zip": { schema: { type: "string", format: "binary" } } } })
+  async exportPackage(@Req() request: SnapshotRequest, @Query("categories") categories: string, @Res() response: ResponseLike) {
+    const selected = typeof categories === "string" ? categories.split(",").filter(Boolean) : [];
+    const archive = await this.systemDataService.exportPackage(selected, request);
+    response.setHeader("Content-Type", "application/zip");
+    response.setHeader("Content-Disposition", 'attachment; filename="cook-data-snapshot.zip"');
+    response.setHeader("Content-Length", archive.length);
+    response.end(archive);
   }
 
   @Post("preview")
-  @ApiExtraModels(AdminSystemDataCollectionCountModel, AdminSystemDataPreviewModel)
-  @UseInterceptors(FilesInterceptor("file", 1, { storage: recipeJsonUploadStorage, limits: recipeJsonUploadLimits }))
+  @ApiExtraModels(AdminSystemDataCollectionCountModel, AdminSystemDataDependencyModel, AdminSystemDataPreviewModel)
+  @UseInterceptors(FilesInterceptor("file", 1, snapshotUploadOptions))
   @ApiBody({ schema: { type: "object", required: ["file"], properties: { file: { type: "string", format: "binary" } } } })
   @ApiConsumes("multipart/form-data")
-  @ApiOkModel(AdminSystemDataPreviewModel, "校验系统基础数据同步包并返回导入预览")
+  @ApiOkModel(AdminSystemDataPreviewModel, "校验所选类别快照并返回导入预览")
   previewImport(@UploadedFiles() files?: Array<{ buffer?: Buffer }>) {
     return this.systemDataService.previewImport(parsePackage(files)).then(result => ok(result));
   }
 
   @Post("import")
   @ApiExtraModels(AdminSystemDataCollectionCountModel, AdminSystemDataImportResultModel)
-  @UseInterceptors(FilesInterceptor("file", 1, { storage: recipeJsonUploadStorage, limits: recipeJsonUploadLimits }))
+  @UseInterceptors(FilesInterceptor("file", 1, snapshotUploadOptions))
   @ApiIdempotencyKey()
-  @ApiBody({ schema: { type: "object", required: ["file"], properties: { file: { type: "string", format: "binary" } } } })
+  @ApiBody({ schema: { type: "object", required: ["file", "previewFingerprint"], properties: { file: { type: "string", format: "binary" }, previewFingerprint: { type: "string", pattern: "^[a-f0-9]{64}$" } } } })
   @ApiConsumes("multipart/form-data")
-  @ApiOkModel(AdminSystemDataImportResultModel, "事务性导入系统基础数据同步包")
+  @ApiOkModel(AdminSystemDataImportResultModel, "事务性替换快照中所选类别")
   importPackage(
-    @Req() request: RequestWithAdmin,
+    @Req() request: SnapshotRequest,
     @ReadIdempotencyKey() operationId: string,
-    @UploadedFiles() files?: Array<{ buffer?: Buffer }>
+    @UploadedFiles() files?: Array<{ buffer?: Buffer }>,
+    @Body("previewFingerprint") previewFingerprint?: string
   ) {
-    return this.systemDataService.importPackage(parsePackage(files), operationId, request.admin.adminId).then(result => ok(result));
+    if (typeof previewFingerprint !== "string") throw new BadRequestException("请先预览当前快照再导入");
+    return this.systemDataService.importPackage(parsePackage(files), operationId, request.admin.adminId, previewFingerprint, request).then(result => ok(result));
   }
 }
