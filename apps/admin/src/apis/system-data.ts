@@ -36,6 +36,12 @@ export interface SystemDataDependency {
   count: number;
 }
 
+export interface SystemDataCleanupEffect {
+  label: string;
+  action: "CASCADE_DELETE" | "SET_NULL";
+  count: number;
+}
+
 export interface SystemDataPreview {
   schemaVersion: "cook.data-snapshot.v2";
   targetEnvironment: "TEST" | "ONLINE";
@@ -43,6 +49,9 @@ export interface SystemDataPreview {
   categories: SystemDataCategory[];
   counts: Record<string, SystemDataCategoryCount>;
   missingDependencies: SystemDataDependency[];
+  cleanupEffects: SystemDataCleanupEffect[];
+  retainedUserCount: number;
+  remappedUserCount: number;
   assetCount: number;
   conflicts: string[];
   previewFingerprint: string;

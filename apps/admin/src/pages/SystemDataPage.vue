@@ -110,9 +110,12 @@ async function importPackage() {
   const updateCount = Object.values(preview.value.counts).reduce((sum, item) => sum + item.existing, 0);
   const newCount = Object.values(preview.value.counts).reduce((sum, item) => sum + item.new, 0);
   const removeCount = Object.values(preview.value.counts).reduce((sum, item) => sum + item.removed, 0);
+  const cleanupSummary = preview.value.cleanupEffects.map(item =>
+    `${item.label} ${item.count} 条${item.action === "CASCADE_DELETE" ? "将一并清理" : "将解除关联"}`
+  ).join("、");
   try {
     await ElMessageBox.confirm(
-      `将新增 ${newCount} 条、覆盖 ${updateCount} 条，并清理本地多出的 ${removeCount} 条所选类别记录；未选类别保持不变。确认导入快照吗？`,
+      `将新增 ${newCount} 条、覆盖 ${updateCount} 条，并清理本地多出的 ${removeCount} 条所选类别记录；保留 ${preview.value.retainedUserCount} 个有关联的本地账号及其受保护关联，按手机号匹配 ${preview.value.remappedUserCount} 个线上账号并保留本地关联 ID。未选类别保持不变。${cleanupSummary ? `另有：${cleanupSummary}。` : ""}确认导入快照吗？`,
       "确认替换所选数据",
       { confirmButtonText: "确认导入", cancelButtonText: "取消", type: "warning" }
     );
@@ -139,8 +142,8 @@ async function importPackage() {
     <el-card shadow="never" class="intro-card">
       <template #header><div class="card-title">数据快照同步</div></template>
       <p>选择要导出的类别，生成某一时间点的线上快照，再导入本地测试环境。首次只允许测试环境同步到线上；完成后只允许线上同步到测试环境。</p>
-      <p class="scope-note">导入会替换快照所选类别并清理本地多出的对应记录；未选类别保持不变。用户快照保留手机号和业务数据，不复制线上密码、微信身份、会话、提醒任务或分享凭据；测试环境已有本地分享记录保留。</p>
-      <p class="scope-note">用户快照包含快照账号自己的个人食材和单位；目标环境独有账号及其个人数据会受到保护。若用户快照可能清理本地独有账号，预览会阻止导入；要同步其他类别，请取消勾选“用户及个人数据”后重新导出。</p>
+      <p class="scope-note">导入会替换快照所选类别并清理本地多出的对应记录；未选类别保持不变。导入用户快照会清除本地密码、微信绑定和登录会话，不会复制线上的认证凭据。</p>
+      <p class="scope-note">导入到测试环境并选择“用户及个人数据”时，会用线上账号快照替换本地账号及其业务数据；测试环境独有账号会被清理。依赖这些账号或饭局的分享记录等关联项会在预览中单独列出。</p>
       <p class="scope-note">菜谱与文章所引用的图片文件会随快照复制到目标环境。低频更新的营养表和单位可按需选择。</p>
       <div class="category-selection">
         <div class="category-heading">导出类别</div>
@@ -179,6 +182,14 @@ async function importPackage() {
           </li>
         </ul>
       </el-alert>
+      <el-alert v-if="preview.cleanupEffects.length" class="conflict-alert" title="替换时还会处理这些本地关联" type="warning" :closable="false">
+        <ul>
+          <li v-for="effect in preview.cleanupEffects" :key="`${effect.label}:${effect.action}`">
+            {{ effect.label }}：{{ effect.count }} 条{{ effect.action === "CASCADE_DELETE" ? "会随所选数据一并清理" : "会解除与所选数据的关联" }}
+          </li>
+        </ul>
+      </el-alert>
+      <el-alert v-if="preview.retainedUserCount" class="conflict-alert" :title="`${preview.retainedUserCount} 个有关联的本地账号及其受保护关联会保留；${preview.remappedUserCount} 个线上账号按手机号沿用本地关联 ID`" type="info" :closable="false" />
       <el-alert v-if="preview.conflicts.length" class="conflict-alert" title="存在阻断项，不能安全导入" type="error" :closable="false">
         <ul>
           <li v-for="conflict in preview.conflicts" :key="conflict">{{ conflict }}</li>
@@ -192,7 +203,7 @@ async function importPackage() {
         <el-table-column prop="removed" label="清理本地" width="100" />
       </el-table>
       <div class="preview-footer">
-        <span>导入采用事务写入；任一数据冲突都会整体回滚。未选类别保持不变。</span>
+        <span>导入采用事务写入；上方列出的本地关联会按提示清理或解除，任一阻断项都会阻止导入。</span>
         <el-button type="danger" :loading="importing" :disabled="preview.conflicts.length > 0 || preview.missingDependencies.length > 0" @click="importPackage">确认替换</el-button>
       </div>
     </el-card>
