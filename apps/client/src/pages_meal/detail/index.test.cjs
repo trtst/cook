@@ -75,7 +75,7 @@ async function request(path, options = {}) {
               status: response.statusCode || 0,
               body: JSON.parse(rawBody || "null")
             });
-          } catch (error) {
+          } catch {
             reject(new Error(`invalid json response from ${path}: ${rawBody}`));
           }
         });
@@ -531,7 +531,7 @@ if (!hasAutomatorRuntime && nodeTest) {
 
   nodeTest("计划详情按食材缺口显示待购数量", () => {
     nodeAssert.match(detailPageSource, /shoppingApi\.previewPlanGap\(planDetail\.value!\.id\)/);
-    nodeAssert.match(detailPageSource, /planGapItems\.value\.length/);
+    nodeAssert.match(detailPageSource, /v-if="currentPlanGapItems\.length"/);
     nodeAssert.match(detailPageSource, /这顿饭需要准备 \$\{currentPlanShoppingCount\.value\} 样食材/);
     const targetEventBranchStart = detailPageSource.indexOf("if (!targetEventId) {");
     const targetEventBranchEnd = detailPageSource.indexOf("if (!eventDetail.value || eventDetail.value.id !== targetEventId)", targetEventBranchStart);
@@ -558,7 +558,7 @@ if (!hasAutomatorRuntime && nodeTest) {
     const confirmActionEnd = detailPageSource.indexOf("async function handleCompleteEventAction()", confirmActionStart);
     const confirmActionSource = detailPageSource.slice(confirmActionStart, confirmActionEnd);
 
-    nodeAssert.match(confirmActionSource, /if \(eventDetail\.value\) \{[\s\S]*?uniPlatform\.feedback\.confirm\(/);
+    nodeAssert.match(confirmActionSource, /uniPlatform\.feedback\.confirm\(/);
     nodeAssert.match(confirmActionSource, /title: "确认菜单"/);
     nodeAssert.match(confirmActionSource, /content: "确认后菜单将固定，不能再调整。要继续吗？"/);
     nodeAssert.match(confirmActionSource, /confirmText: "确认并固定"/);
@@ -597,7 +597,7 @@ if (!hasAutomatorRuntime && nodeTest) {
     const readyStageSource = detailPageSource.slice(readyStageStart, readyStageEnd);
 
     nodeAssert.match(readyStageSource, /key: "complete-event"/);
-    nodeAssert.match(readyStageSource, /label: "结束饭局"/);
+    nodeAssert.match(readyStageSource, /label: "完成用餐"/);
     nodeAssert.doesNotMatch(readyStageSource, /key: "cook-assistant"/);
     nodeAssert.match(detailPageSource, /title: "结束饭局"/);
     nodeAssert.match(detailPageSource, /mealApi\.completeDiningEvent\(eventDetail\.value\.id, createOperationId\(\)\)/);
@@ -609,9 +609,9 @@ if (!hasAutomatorRuntime && nodeTest) {
     const readyStageEnd = detailPageSource.indexOf("const footerPrimaryGapText", readyStageStart);
     const readyStageSource = detailPageSource.slice(readyStageStart, readyStageEnd);
 
-    nodeAssert.match(readyStageSource, /if \(!eventDetail\.value\) return \{ key: "complete-plan", label: "完成用餐" \}/);
+    nodeAssert.match(readyStageSource, /if \(!eventDetail\.value\) return \{ key: "complete-plan", label: "完成计划" \}/);
     nodeAssert.match(detailPageSource, /mealApi\.completePlan\(planDetail\.value\.id, createOperationId\(\)\)/);
-    nodeAssert.match(detailPageSource, /title: "确认完成用餐"/);
+    nodeAssert.match(detailPageSource, /title: "确认完成计划"/);
   });
 
   nodeTest("饭局未准备完成先去采购，准备完成后开始做饭", () => {
@@ -629,10 +629,10 @@ if (!hasAutomatorRuntime && nodeTest) {
     nodeAssert.match(detailPageSource, /scheduledAtMs\.value > nowMs\.value/);
   });
 
-  nodeTest("去采购直接追加当前进行中的清单，没有时自动创建", () => {
-    nodeAssert.doesNotMatch(detailPageSource, /ShoppingListPickerSheet/);
-    nodeAssert.match(detailPageSource, /async function openShoppingPage\([\s\S]*?listLists\("ACTIVE"\)[\s\S]*?createList\([\s\S]*?addEventToList[\s\S]*?addPlanToList/);
-    nodeAssert.doesNotMatch(detailPageSource, /shoppingSheetVisible/);
+  nodeTest("去采购进入清单选择器并按饭局或计划加入所选清单", () => {
+    nodeAssert.match(detailPageSource, /async function openShoppingPage\(\)[\s\S]*?if \(hasLinkedShoppingList\.value\) \{\s*await openLinkedShoppingList\(\);/);
+    nodeAssert.match(detailPageSource, /<ShoppingListPickerSheet[\s\S]*:visible="shoppingSheetVisible"[\s\S]*@create="createShoppingList"[\s\S]*@confirm="confirmAddToShoppingList"/);
+    nodeAssert.match(detailPageSource, /async function confirmAddToShoppingList\(\)[\s\S]*shoppingApi\.addEventToList[\s\S]*shoppingApi\.addPlanToList/);
   });
 
   nodeTest("饭局完成后可勾选食材并二次确认批量标记没有", () => {
@@ -648,7 +648,11 @@ if (!hasAutomatorRuntime && nodeTest) {
     nodeAssert.match(detailPageSource, /new Map<string, CompletedIngredientItem>/);
     nodeAssert.match(detailPageSource, /\.meal-footer__memory,\s*\.meal-sheet-actions__primary\s*\{[\s\S]*min-height: 84rpx;[\s\S]*border-radius: var\(--radius-pill\);/);
     nodeAssert.match(detailPageSource, /\.meal-sheet-actions__primary--disabled\s*\{[\s\S]*background: var\(--color-surface-muted\);[\s\S]*color: var\(--color-text-secondary\);/);
-    nodeAssert.match(detailPageSource, /button\.meal-sheet-actions__primary--disabled\[disabled\]:not\(\[type\]\),\s*button\.meal-sheet-actions__primary--disabled\[disabled\]\[type="default"\]/);
+    nodeAssert.doesNotMatch(detailPageSource, /button\.meal-sheet-actions__primary--disabled\[disabled\]/);
+    nodeAssert.match(
+      detailPageSource,
+      /async function removeSelectedCompletedIngredients\(\)\s*\{\s*if \(completedIngredientBusy\.value \|\| !completedIngredientSelectedKeys\.value\.size\) return;/
+    );
     nodeAssert.match(detailPageSource, /\.completed-ingredient-row__select\s*\{[\s\S]*flex: 0 0 40rpx;[\s\S]*height: 40rpx;/);
     nodeAssert.match(detailPageSource, /\.completed-ingredient-row__check-icon\s*\{[\s\S]*font-size: 30rpx;/);
     nodeAssert.match(detailPageSource, /\.completed-ingredient-row__cut-line\s*\{[\s\S]*transform: translateY\(-50%\) scaleX\(0\);[\s\S]*transition: transform 300ms ease;/);

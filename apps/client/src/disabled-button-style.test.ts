@@ -5,6 +5,8 @@ import test from "node:test";
 
 const membershipCodeSource = readFileSync(resolve(__dirname, "./pages_me/membership-code/index.vue"), "utf8");
 const recipeEditSource = readFileSync(resolve(__dirname, "./pages_recipe/edit/index.vue"), "utf8");
+const pantryTraceSource = readFileSync(resolve(__dirname, "./pages_pantry/index/index.vue"), "utf8");
+const ingredientPickerSource = readFileSync(resolve(__dirname, "./components/Ingredient/IngredientPickerContent.vue"), "utf8");
 const colorsSource = readFileSync(resolve(__dirname, "./styles/colors.scss"), "utf8");
 
 function collectStyleSources(dir: string): Array<{ file: string; source: string }> {
@@ -41,8 +43,10 @@ test("disabled button visuals use explicit disabled classes instead of disabled 
   }
 
   assert.match(membershipCodeSource, /'redeem-button--disabled': !canSubmit \|\| submitting/);
-  assert.match(recipeEditSource, /'sheet-confirm--disabled': ingredientConfirmDisabled/);
-  assert.match(recipeEditSource, /'sheet-confirm--disabled': ingredientCreateSubmitting/);
+  assert.match(recipeEditSource, /:confirm-disabled="ingredientConfirmDisabled"/);
+  assert.match(ingredientPickerSource, /'sheet-confirm--disabled': confirmDisabled/);
+  assert.match(ingredientPickerSource, /@click="handleConfirm"/);
+  assert.match(ingredientPickerSource, /function handleConfirm\(\)[\s\S]*if \(props\.confirmDisabled\) return;[\s\S]*emit\("confirm"\)/);
   assert.match(recipeEditSource, /'sheet-creator__button--disabled': categorySubmitting \|\| !categoryDraftName\.trim\(\)/);
 });
 
@@ -63,4 +67,11 @@ test("native button elements do not set disabled attributes", () => {
   for (const { file, source } of collectStyleSources(__dirname)) {
     assert.doesNotMatch(source, forbiddenButtonDisabled, file);
   }
+});
+
+test("pantry shopping action stays blocked while traces are updating", () => {
+  assert.match(
+    pantryTraceSource,
+    /async function openShoppingSheet\(\) \{\s*if \(!selectedTraceIds\.value\.size \|\| updatingTraces\.value \|\| shoppingSubmitting\.value\) return;/
+  );
 });

@@ -110,16 +110,16 @@ function handleFieldClick() {
 }
 
 .image-field--cover.image-field--empty {
-  height: 75vw;
+  height: 133.3333vw;
   min-height: 0;
-  max-height: 660rpx;
+  max-height: none;
   background: var(--page-cover-fresh-shell-bg);
 }
 
 .image-field--cover.image-field--filled {
-  height: 75vw;
-  min-height: 420rpx;
-  max-height: 660rpx;
+  height: 133.3333vw;
+  min-height: 0;
+  max-height: none;
 }
 
 .image-field--cover .image-field__preview {

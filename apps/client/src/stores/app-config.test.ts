@@ -1,13 +1,12 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import test from "node:test";
 
-const appSource = readFileSync(resolve(import.meta.dirname, "../App.vue"), "utf8");
-const homeSource = readFileSync(resolve(import.meta.dirname, "../pages/home/index.vue"), "utf8");
-const appConfigSource = readFileSync(resolve(import.meta.dirname, "./app-config.ts"), "utf8");
-const appConfigApiSource = readFileSync(resolve(import.meta.dirname, "../apis/app-config.ts"), "utf8");
-const loginModalSource = readFileSync(resolve(import.meta.dirname, "./login-modal.ts"), "utf8");
+const appSource = readFileSync(new URL("../App.vue", import.meta.url), "utf8");
+const homeSource = readFileSync(new URL("../pages/home/index.vue", import.meta.url), "utf8");
+const appConfigSource = readFileSync(new URL("./app-config.ts", import.meta.url), "utf8");
+const appConfigApiSource = readFileSync(new URL("../apis/app-config.ts", import.meta.url), "utf8");
+const loginModalSource = readFileSync(new URL("./login-modal.ts", import.meta.url), "utf8");
 
 test("app config loads on cold launch and refreshes once when home is shown after foreground", () => {
   assert.match(appSource, /useAppConfigStore/);

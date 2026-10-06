@@ -81,7 +81,7 @@ export interface ShoppingListSummaryResponse {
   pendingItemCount: number;
 }
 
-export interface ShoppingListDetail extends ShoppingListSummary {}
+export type ShoppingListDetail = ShoppingListSummary;
 
 export interface ShoppingListInviteSummary {
   id: UUID;

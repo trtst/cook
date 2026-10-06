@@ -215,7 +215,8 @@ function openTopicTarget() {
 
 .topic-hero {
   position: relative;
-  min-height: 540rpx;
+  aspect-ratio: 3 / 4;
+  min-height: 0;
 }
 
 .topic-hero__cover {
@@ -245,7 +246,7 @@ function openTopicTarget() {
   display: flex;
   flex-direction: column;
   gap: 14rpx;
-  min-height: 540rpx;
+  min-height: 100%;
   justify-content: flex-end;
   padding-right: 28rpx;
   padding-bottom: 36rpx;

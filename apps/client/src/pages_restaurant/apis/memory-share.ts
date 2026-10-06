@@ -1,5 +1,5 @@
 import { cfg } from "@/config";
-import { get, type IsoDateTime, type UUID } from "@/apis/http";
+import { get, type IsoDateTime } from "@/apis/http";
 import type { MealSlot } from "@/utils/meal-slot";
 
 export interface MemoryShareMenuItem {

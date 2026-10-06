@@ -69,7 +69,7 @@ import Skeleton from "@/components/Skeleton/Skeleton.vue";
 .recipe-detail-skeleton__cover {
   position: relative;
   height: 0;
-  padding-top: 75%;
+  padding-top: 133.3333%;
   background: var(--color-surface);
 }
 

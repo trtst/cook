@@ -119,7 +119,7 @@ function isLocalhostHost(hostname: string) {
 function assertMiniProgramUploadUrl(url: string) {
 	if (!isRealMiniProgramDevice()) return;
 
-	let hostname = "";
+	let hostname: string;
 	try {
 		hostname = new URL(url).hostname;
 	} catch {

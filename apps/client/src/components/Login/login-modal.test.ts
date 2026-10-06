@@ -20,19 +20,13 @@ function functionBody(name: string) {
   return source.slice(start, end === -1 ? source.length : end);
 }
 
-test("login modal keeps WeChat phone code hidden from the rendered entry", () => {
+test("login modal keeps WeChat identity binding separate from account login", () => {
   assert.doesNotMatch(source, /open-type="getPhoneNumber"/);
   assert.doesNotMatch(source, /@getphonenumber="handleWeChatPhoneLogin"/);
   assert.doesNotMatch(source, /微信手机号登录|微信快捷登录/);
-  assert.match(source, /uniPlatform\.auth\.getPhoneNumberCode/);
-  assert.match(source, /authApi\.wechatSession/);
-  assert.match(source, /authApi\.loginWithWechatPhone/);
-  assert.match(source, /uniPlatform\.auth\.getDeviceId/);
-  assert.ok(
-    source.indexOf("await uniPlatform.auth.login()") < source.indexOf("await uniPlatform.auth.getPhoneNumberCode(event)"),
-    "the identity session must be checked before requesting phone authorization"
-  );
-  assert.doesNotMatch(source, /authApi\.loginWithWechat\(/);
+  assert.doesNotMatch(source, /getPhoneNumberCode|loginWithWechatPhone/);
+  assert.match(source, /async function tryBindWechatIdentity\(\)[\s\S]*authApi\.bindWechatIdentity/);
+  assert.match(source, /if \(currentUser\.wechatLinked\)[\s\S]*await uniPlatform\.auth\.login\(\)/);
 });
 
 test("login modal opens from the local preferred login mode", () => {
@@ -53,7 +47,6 @@ test("login modal remembers the default method after three same successful login
   assert.ok(storeSource.includes("successCount >= LOGIN_METHOD_PREFERENCE_THRESHOLD ? method : current?.preferredMode ?? null"));
   assert.match(functionBody("handlePhoneLogin"), /loginModalStore\.recordLoginMethod\("phone"\)[\s\S]*await applySession\(result\.data\)/);
   assert.match(functionBody("handlePasswordLogin"), /loginModalStore\.recordLoginMethod\("password"\)[\s\S]*await applySession\(result\.data\)/);
-  assert.doesNotMatch(functionBody("handleWeChatPhoneLogin"), /recordLoginMethod/);
 });
 
 test("login modal treats only a user-triggered method switch as a second page", () => {
@@ -165,7 +158,6 @@ test("login modal copy uses a single background rule and no highlighted line", (
 });
 
 test("every login action keeps the agreement gate", () => {
-  assert.match(source, /handleWeChatPhoneLogin[\s\S]*ensureAgreementAccepted/);
   assert.match(source, /handlePhoneLogin[\s\S]*ensureAgreementAccepted/);
   assert.match(source, /handlePasswordLogin[\s\S]*ensureAgreementAccepted/);
 });
@@ -176,7 +168,7 @@ test("login failures show a Toast and stay in the current login mode", () => {
   assert.match(source, /if \(!result\.ok\) \{\s*await showAuthResultError\(result\);[\s\S]*return;\s*\}/);
   assert.match(source, /catch \(error\) \{\s*await showAuthError\(error\);\s*\}/);
 
-  for (const handler of ["handleWeChatPhoneLogin", "sendCode", "handlePhoneLogin", "handlePasswordLogin"]) {
+  for (const handler of ["sendCode", "handlePhoneLogin", "handlePasswordLogin"]) {
     const start = source.indexOf(`async function ${handler}`);
     const end = source.indexOf("\nasync function ", start + 1);
     const body = source.slice(start, end === -1 ? source.length : end);

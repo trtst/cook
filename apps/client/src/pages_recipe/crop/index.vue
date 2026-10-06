@@ -176,10 +176,10 @@ const CROP_PAGE_BG = "#101010";
 const CROP_NAV_COLOR = "#ffffff";
 
 const ratioOptions = [
-  { key: "4:3", label: "4:3", ratio: 4 / 3 },
+  { key: "3:4", label: "3:4", ratio: 3 / 4 },
   { key: "1:1", label: "1:1", ratio: 1 },
   { key: "16:9", label: "16:9", ratio: 16 / 9 },
-  { key: "reset", label: "还原", ratio: null }
+  { key: "reset", label: "原尺寸", ratio: null }
 ] as const;
 
 const pageStyle = usePageScrollStyle();
@@ -200,7 +200,7 @@ const exporting = ref(false);
 const errorText = ref("");
 const cropRequest = ref<ImageCropRequest | null>(null);
 const finished = ref(false);
-const activeRatioKey = ref<(typeof ratioOptions)[number]["key"]>("4:3");
+const activeRatioKey = ref<(typeof ratioOptions)[number]["key"]>("3:4");
 
 const image = reactive({
   src: "",
@@ -471,7 +471,7 @@ function resizeFixed(edge: Extract<DragEdge, "leftTop" | "rightTop" | "leftBotto
       : deltaY * activeAspectRatio.value;
   const deltaWidth = Math.abs(changeFromX) >= Math.abs(changeFromY) ? changeFromX : changeFromY;
 
-  let maxWidth = 0;
+  let maxWidth: number;
   if (edge === "rightBottom") {
     maxWidth = Math.min(
       image.displayWidth - startBox.left,
@@ -678,7 +678,9 @@ async function resolveReadyCropPath(tempFilePath: string) {
     try {
       const info = await uniPlatform.media.getImageInfo(tempFilePath);
       return preferLocalImagePath(tempFilePath, info.path);
-    } catch {}
+    } catch {
+      // 图片元数据尚未就绪时，按下一次延迟继续重试。
+    }
   }
   return tempFilePath;
 }
@@ -756,7 +758,7 @@ function wait(delay: number) {
 }
 
 function resetCropState() {
-  activeRatioKey.value = "4:3";
+  activeRatioKey.value = "3:4";
   image.src = "";
   image.naturalWidth = 0;
   image.naturalHeight = 0;

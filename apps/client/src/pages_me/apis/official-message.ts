@@ -20,7 +20,7 @@ export interface OfficialMessageSummary {
   channelName: string | null;
 }
 
-export interface OfficialMessageDetail extends OfficialMessageSummary {}
+export type OfficialMessageDetail = OfficialMessageSummary;
 
 const baseUrl = `${cfg.domain}/api/site-contents/official-messages`;
 const assetHost = cfg.domain.replace(/\/+$/u, "");

@@ -24,16 +24,6 @@ function expectSelectorIncludes(source: string, selector: string, snippets: stri
   }
 }
 
-function expectSelectorExcludes(source: string, selector: string, snippets: string[]) {
-  const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const match = source.match(new RegExp(`${escapedSelector}\\s*\\{([\\s\\S]*?)\\n\\}`, "m"));
-  assert.ok(match?.[1], `Expected selector block to exist: ${selector}`);
-
-  for (const snippet of snippets) {
-    assert.ok(!match[1].includes(snippet), `Expected selector ${selector} to exclude: ${snippet}`);
-  }
-}
-
 const recipePageSource = readFile("./index.vue");
 const recipeManageListSource = readFile("../../pages_recipe/list/index.vue");
 const recipeListRowSource = readFile("../../components/Recipe/RecipeListRow.vue");
@@ -75,7 +65,7 @@ expectExcludes(recipeManageListSource, 'mode !== "drafts"');
 expectExcludes(recipeListRowSource, "recipe-list-row--small");
 expectExcludes(recipeListRowSource, "min-height:");
 expectSelectorIncludes(recipeListRowSource, ".recipe-list-row__cover", [
-  "aspect-ratio: 4 / 3;"
+  "aspect-ratio: 3 / 4;"
 ]);
 
 expectIncludes(recipeSearchBarSource, 'class="cookfont icon-search recipe-search__icon"');

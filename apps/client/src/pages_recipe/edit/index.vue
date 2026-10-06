@@ -56,7 +56,7 @@
             class="hero__cover"
             variant="cover"
             :image-src="currentCoverImage"
-            title="菜谱封面图（4:3）"
+            title="菜谱封面图（3:4）"
             description="清晰的封面会让菜谱更容易被看到"
             :button-text="coverButtonText"
             @select="selectCoverImage"
@@ -888,7 +888,6 @@ let recipeEditCacheTimer: ReturnType<typeof setTimeout> | null = null;
 let recipeEditCacheBaseline = "";
 let recipeEditCacheSuspended = true;
 let advancedOptionsPromise: Promise<void> | null = null;
-let inspirationCategoriesPromise: Promise<void> | null = null;
 let ingredientCategoryPromise: Promise<void> | null = null;
 let ingredientSearchTimer: ReturnType<typeof setTimeout> | null = null;
 let ingredientRequestSeed = 0;
@@ -1095,9 +1094,6 @@ const unitGroups = computed(() => {
       items: groups.get(type) || []
     }))
     .filter(group => group.items.length > 0);
-});
-const difficultyText = computed(() => {
-  return recipeDifficultyText(form.difficulty, "未设置");
 });
 const durationText = computed(() => {
   return recipeDurationText(form.duration, "未设置");

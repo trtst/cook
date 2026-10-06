@@ -164,7 +164,6 @@ import { mealInvitePath } from "./routing";
 import { uniPlatform } from "@/platform/uni";
 import { createOperationId } from "@/utils/operation-id";
 import { useSessionStore } from "@/stores/session";
-import { useUserStore } from "@/stores/user";
 import { formatDateTimeMinute } from "../utils/date";
 import type { UUID } from "@/apis/http";
 
@@ -172,7 +171,6 @@ const pageStyle = usePageScrollStyle();
 const { themeVars, themeClasses } = useTheme();
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const sessionStore = useSessionStore();
-const userStore = useUserStore();
 const loginModalStore = useLoginModalStore();
 
 const shareToken = ref("");
@@ -242,8 +240,6 @@ const primaryActionState = computed(() =>
 
 const viewerAction = computed(() => primaryActionState.value.action);
 const primaryActionLabel = computed(() => primaryActionState.value.label);
-const primaryActionDisabled = computed(() => primaryActionState.value.disabled);
-
 const statusHint = computed(() => {
   if (!sessionStore.isLoggedIn) return "登录后查看饭局详情，并按你的权限继续操作。";
   if (viewerFailed.value) return "权限加载失败，请重试。";

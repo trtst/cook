@@ -28,7 +28,7 @@ test("poster view uses the activity cover and includes optional memory sections"
   assert.equal(view.coverImageUrl, "https://example.com/event-cover.jpg");
   assert.equal(view.showParticipants, true);
   assert.equal(view.showCaption, true);
-  assert.equal(view.height, 1730);
+  assert.equal(view.height, 1927);
   assert.deepEqual(view.menuRows, [["番茄炒蛋", "玉米排骨汤"]]);
 });
 

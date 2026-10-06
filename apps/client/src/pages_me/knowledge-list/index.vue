@@ -38,7 +38,9 @@
 
           <view v-if="showSkeleton" class="knowledge-list">
             <view v-for="index in 4" :key="index" class="knowledge-item knowledge-item--skeleton">
-              <Skeleton width="100%" height="360rpx" radius="0" />
+              <view class="knowledge-item__thumb">
+                <Skeleton width="100%" height="100%" radius="0" />
+              </view>
               <view class="knowledge-item__body knowledge-item__body--skeleton">
                 <Skeleton width="72%" height="34rpx" />
                 <Skeleton width="48%" height="34rpx" />
@@ -84,7 +86,7 @@
                 :src="item.coverImageUrl"
                 mode="aspectFill"
               />
-              <ImageEmpty v-else class="knowledge-item__thumb knowledge-item__thumb--empty" copy="封面图" ratio="16-9" />
+              <ImageEmpty v-else class="knowledge-item__thumb knowledge-item__thumb--empty" copy="封面图" ratio="4-3" />
 
               <view class="knowledge-item__body">
                 <text class="knowledge-item__title">{{ item.title }}</text>
@@ -418,7 +420,7 @@ function splitKeywords(value: string | null) {
   align-items: center;
   justify-content: center;
   width: 100%;
-  aspect-ratio: 16 / 9;
+  aspect-ratio: 4 / 3;
   overflow: hidden;
   border-radius: var(--radius-xs);
   background: var(--color-surface-soft-panel);

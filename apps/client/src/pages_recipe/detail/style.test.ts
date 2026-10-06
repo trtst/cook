@@ -39,7 +39,7 @@ assert.match(recipeApiSource, /get<InspirationRecipeDetail>\([\s\S]*auth: "optio
 
 const tipsIndex = source.indexOf('<text class="tips-text">{{ detailContent.tips }}</text>');
 const curatedIndex = source.indexOf('<text v-if="attributionText" class="detail-curated">{{ attributionText }}</text>');
-const planLinksIndex = source.indexOf('<view v-if="primaryPlanLink" class="section section--plan-links">');
+const planLinksIndex = source.indexOf('<view v-if="primaryPlanLink" id="detail-plan-links" class="section section--plan-links">');
 assert.ok(tipsIndex >= 0 && tipsIndex < curatedIndex && curatedIndex < planLinksIndex, "Expected curated attribution to follow tips and precede later detail sections.");
 assert.ok(source.includes("const attributionName = computed(() => {"), "Expected recipe detail attribution to have one name source.");
 assert.ok(source.includes('myPersonal.value?.owner : inspirationDetail.value?.owner'), "Expected all recipe details to read their frozen owner summary.");

@@ -342,7 +342,7 @@ function roleLabel(role: MemoryPosterView["participants"][number]["role"]) {
 
 .poster__cover {
   width: 100%;
-  height: 330rpx;
+  aspect-ratio: 4 / 3;
   margin-top: 28rpx;
 }
 

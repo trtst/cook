@@ -461,7 +461,7 @@ function closePlanSheet() {
 
 .topic-summary__cover {
   width: 200rpx;
-  height: 200rpx;
+  height: 267rpx;
   flex: 0 0 auto;
   border-radius: var(--radius-xs);
   overflow: hidden;
@@ -696,7 +696,7 @@ function closePlanSheet() {
 
 .recipe-card__cover {
   width: 100%;
-  height: 400rpx;
+  aspect-ratio: 3 / 4;
   border-radius: var(--radius-xs);
   overflow: hidden;
   background: var(--color-surface-muted);
@@ -794,7 +794,7 @@ function closePlanSheet() {
 
 .history-card__cover {
   width: 100%;
-  height: 300rpx;
+  aspect-ratio: 3 / 4;
   background: var(--color-surface-muted);
 }
 

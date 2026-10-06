@@ -43,7 +43,7 @@ const emit = defineEmits<{
   flex: 0 0 240rpx;
   width: 240rpx;
   overflow: hidden;
-  aspect-ratio: 4 / 3;
+  aspect-ratio: 3 / 4;
   background: var(--page-cover-fresh-bg);
 }
 

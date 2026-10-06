@@ -1,7 +1,6 @@
 const http = require("http");
 const https = require("https");
 const { URL } = require("url");
-const { loginWithPassword } = require("../../test-utils/auth-fixture");
 
 const API_BASE_URL = process.env.API_BASE_URL || "http://127.0.0.1:3100/api";
 const ADMIN_USERNAME = process.env.ADMIN_SEED_USERNAME || "admin";
@@ -29,10 +28,6 @@ async function collectTexts(page) {
   }
 
   return texts;
-}
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 async function request(path, options = {}, admin = false) {
@@ -71,7 +66,7 @@ async function request(path, options = {}, admin = false) {
               status: response.statusCode || 0,
               body: JSON.parse(rawBody || "null")
             });
-          } catch (error) {
+          } catch {
             reject(new Error(`invalid json response from ${path}: ${rawBody}`));
           }
         });
@@ -183,21 +178,6 @@ async function createPublishedArticle() {
     keywords: ["焯水", "去腥"],
     phone: createFreshPhone()
   };
-}
-
-async function loginWithCode(phone) {
-  return loginWithPassword(phone);
-}
-
-async function waitForButtonText(node, expectedText, timeout = 5000) {
-  const startedAt = Date.now();
-
-  while (Date.now() - startedAt < timeout) {
-    if ((await node.text()).trim() === expectedText) return;
-    await sleep(200);
-  }
-
-  throw new Error(`未在 ${timeout}ms 内等到按钮文本: ${expectedText}`);
 }
 
 describe("pages_me/knowledge-detail/index", () => {

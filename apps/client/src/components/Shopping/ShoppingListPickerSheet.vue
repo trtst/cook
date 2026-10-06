@@ -26,7 +26,6 @@
           <button
             class="shopping-create__button"
             :class="{ 'shopping-create__button--disabled': !canCreate }"
-            :disabled="!canCreate"
             @click="handleCreate"
           >
             新建

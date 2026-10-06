@@ -27,6 +27,7 @@ function setup(pages: Array<Array<ReturnType<typeof historyItem>>>) {
     pageSize: { value: 20 },
     hasNext: { value: false },
     loadedMoreOnce: { value: false },
+    openHistoryId: { value: null as string | null },
     recipeApi: {
       async listRecipeViewHistory(query: { page: number }) {
         assert.ok(query.page <= pages.length, "must stop at the last page");

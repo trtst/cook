@@ -811,11 +811,6 @@ const selectedReportReasonLabel = computed(
   () => reportReasonOptions.find(item => item.value === selectedReportReason.value)?.label || ""
 );
 const needsReportDetail = computed(() => selectedReportReason.value === "OTHER");
-const canSubmitReport = computed(() => {
-  if (!selectedReportReason.value) return false;
-  if (!needsReportDetail.value) return true;
-  return Boolean(reportReason.value.trim());
-});
 const recommendActionLabel = computed(() => {
 	const status = currentRecommendation.value?.status;
 	if (status === "PENDING") return "审核中";
@@ -1982,7 +1977,7 @@ defineExpose({
   position: relative;
   overflow: hidden;
   min-height: 0;
-  padding-top: 75%;
+  padding-top: 125%;
   border-radius: 0;
   background: var(--color-surface);
   box-shadow: none;

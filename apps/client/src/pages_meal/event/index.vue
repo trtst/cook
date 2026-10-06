@@ -411,7 +411,7 @@ async function loadEvents(options: { reset: boolean; syncStage?: boolean }) {
       hasLoadedMoreOnce.value = true;
     }
     eventCards.value = options.reset ? nextItems : [...eventCards.value, ...nextItems];
-  } catch (error) {
+  } catch {
     await uniPlatform.feedback.toast({ title: "饭局同步失败，请稍后重试", icon: "none" });
   } finally {
     if (options.reset) {
@@ -639,10 +639,6 @@ async function submitCreateEvent() {
   } finally {
     creatingEvent.value = false;
   }
-}
-
-function goBack() {
-  void uniPlatform.navigation.navigateBack();
 }
 
 function openLogin(action: (() => void) | null = null) {

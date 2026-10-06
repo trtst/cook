@@ -1,12 +1,8 @@
-const http = require("http");
-const https = require("https");
-const { URL } = require("url");
 const { readFileSync } = require("fs");
 const { resolve } = require("path");
 const nodeAssert = require("assert").strict;
 const { loginWithPassword } = require("../../test-utils/auth-fixture");
 
-const API_BASE_URL = process.env.API_BASE_URL || "http://127.0.0.1:3100/api";
 const hasJestRuntime =
   (typeof process !== "undefined" && Boolean(process.env.JEST_WORKER_ID)) ||
   (typeof globalThis.describe === "function" && typeof globalThis.it === "function");
@@ -21,62 +17,6 @@ if (!hasAutomatorRuntime && !hasJestRuntime) {
 }
 
 globalThis.jest?.setTimeout?.(30000);
-
-function assert(condition, message) {
-  if (!condition) throw new Error(message);
-}
-
-async function request(path, options = {}) {
-  const target = new URL(`${API_BASE_URL}${path}`);
-  const transport = target.protocol === "https:" ? https : http;
-
-  return new Promise((resolve, reject) => {
-    const requestTask = transport.request(
-      target,
-      {
-        method: options.method || "GET",
-        headers: {
-          "content-type": "application/json",
-          "x-cook-from": "mini_program",
-          "x-cook-version": "0.1.0",
-          ...(options.headers || {})
-        }
-      },
-      response => {
-        let rawBody = "";
-        response.setEncoding("utf8");
-        response.on("data", chunk => {
-          rawBody += chunk;
-        });
-        response.on("end", () => {
-          try {
-            resolve({
-              status: response.statusCode || 0,
-              body: JSON.parse(rawBody || "null")
-            });
-          } catch (error) {
-            reject(new Error(`invalid json response from ${path}: ${rawBody}`));
-          }
-        });
-      }
-    );
-
-    requestTask.on("error", reject);
-
-    if (options.body) {
-      requestTask.write(options.body);
-    }
-
-    requestTask.end();
-  });
-}
-
-async function requestData(path, options = {}) {
-  const result = await request(path, options);
-  assert(result.status >= 200 && result.status < 300, `${path} HTTP ${result.status}: ${result.body.message}`);
-  assert(result.body.code === 0, `${path} code ${result.body.code}: ${result.body.message}`);
-  return result.body.data;
-}
 
 function createFreshPhone() {
   const suffix = `${Date.now()}`.slice(-8).padStart(8, "0");

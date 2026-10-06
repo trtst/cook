@@ -32,12 +32,12 @@ expectIncludes(fontSource, 'content: "\\e6cf";');
 expectIncludes(fontSource, '.icon-calendar-switch::before');
 expectIncludes(fontSource, 'content: "\\e6a8";');
 expectIncludes(fontSource, '.icon-dining-event::before');
-expectIncludes(fontSource, 'content: "\\e626";');
+expectIncludes(fontSource, 'content: "\\e65d";');
 expectIncludes(fontSource, '.icon-plan::before');
 expectIncludes(fontSource, 'content: "\\e61f";');
 assert.notStrictEqual(
-  fontSource.match(/\.icon-dining-event::before\s*\{\s*content:\s*"([^\"]+)"/)?.[1],
-  fontSource.match(/\.icon-plan::before\s*\{\s*content:\s*"([^\"]+)"/)?.[1]
+  fontSource.match(/\.icon-dining-event::before\s*\{\s*content:\s*"([^"]+)"/)?.[1],
+  fontSource.match(/\.icon-plan::before\s*\{\s*content:\s*"([^"]+)"/)?.[1]
 );
 
 expectIncludes(profilePage, 'class="profile-edit__avatar"');

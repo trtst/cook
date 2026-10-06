@@ -507,24 +507,6 @@ watch(
   { immediate: true }
 );
 
-function resetPageState() {
-  categories.value = [];
-  ingredients.value = [];
-  units.value = [];
-  ingredientKeyword.value = "";
-  ingredientSearchKeyword.value = "";
-  ingredientCategoryId.value = "";
-  categoryErrorText.value = "";
-  ingredientErrorText.value = "";
-  ingredientMoreErrorText.value = "";
-  unitErrorText.value = "";
-  ingredientPage.value = 1;
-  ingredientHasNext.value = false;
-  ingredientLoadingMore.value = false;
-  ingredientLoadedMoreOnce.value = false;
-  closeSheet();
-}
-
 async function loadActiveTab(options: { source?: LoadSource; force?: boolean } = {}) {
   const source = options.source ?? "initial";
   loadSource.value = source;
@@ -547,10 +529,6 @@ function switchTab(tab: IngredientUnitsTab) {
   if (activeTab.value === tab) return;
   activeTab.value = tab;
   void loadActiveTab({ source: "switch" });
-}
-
-function goBack() {
-  void uniPlatform.navigation.navigateBack();
 }
 
 function openLogin(nextAction: (() => void) | null = null) {

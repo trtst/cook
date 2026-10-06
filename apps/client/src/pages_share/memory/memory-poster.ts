@@ -92,7 +92,7 @@ export function buildMemoryPosterView(source: MemoryPosterSource): MemoryPosterV
   const showParticipants = source.participants.length > 0;
   const showCaption = Boolean(source.caption?.trim());
   let contentY = 300;
-  if (showCover) contentY += 611;
+  if (showCover) contentY += 808;
   contentY += 37 + 68 + menuRows.length * 96;
   if (showParticipants) contentY += 20 + 62 + participantRows.length * 90;
   if (showCaption) contentY += 14 + 48 + Math.max(70, captionLines.length * 46);

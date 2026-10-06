@@ -61,7 +61,7 @@ async function request(path, options = {}) {
               status: response.statusCode || 0,
               body: JSON.parse(rawBody || "null")
             });
-          } catch (error) {
+          } catch {
             reject(new Error(`invalid json response from ${path}: ${rawBody}`));
           }
         });
@@ -239,33 +239,6 @@ async function createFutureMealPlanFixture(session) {
   }
 
   throw new Error("failed to create notification meal plan fixture");
-}
-
-async function updateNotificationSettings(session, overrides = {}) {
-  return requestData("/users/me/notification-settings", {
-    method: "PUT",
-    headers: buildAuthHeaders(session),
-    body: JSON.stringify({
-      meal: {
-        enabled: true,
-        times: {
-          breakfast: "08:00",
-          lunch: "12:00",
-          afternoonTea: "15:30",
-          dinner: "18:30",
-          lateNight: "21:30"
-        }
-      },
-      fridge: {
-        enabled: true,
-        days: 3
-      },
-      recommend: {
-        enabled: false
-      },
-      ...overrides
-    })
-  });
 }
 
 async function waitForState(page, matcher, timeoutMs = 8000) {

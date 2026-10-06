@@ -84,8 +84,8 @@ export function drawMemoryPoster(ctx: PosterContext, view: MemoryPosterView, ass
   let y = 300;
 
   if (view.showCover && assets.cover) {
-    ctx.drawImage(assets.cover, 72, y, 936, 505);
-    y += 535;
+    ctx.drawImage(assets.cover, 72, y, 936, 702);
+    y += 732;
     label(ctx, "从厨房的热气，到餐桌上的相聚。", 72, y, 23, colors.muted);
     y += 76;
   }

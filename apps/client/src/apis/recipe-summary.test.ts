@@ -1,10 +1,9 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import test from "node:test";
 import { normalizeRecipeKeywords } from "./recipe-keywords";
 
-const recipeApiSource = readFileSync(resolve(import.meta.dirname, "./recipe.ts"), "utf8");
+const recipeApiSource = readFileSync(new URL("./recipe.ts", import.meta.url), "utf8");
 
 test("normalizes a missing recipe keyword list before cards read its length", () => {
   assert.deepEqual(normalizeRecipeKeywords(undefined), []);

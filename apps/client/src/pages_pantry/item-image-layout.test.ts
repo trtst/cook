@@ -9,17 +9,13 @@ function readPage(relativePath: string) {
 const pantryHomeSource = readPage("./index/index.vue");
 const shoppingDetailSource = readPage("./list-detail/index.vue");
 
-assert.match(pantryHomeSource, /只做参考，不做库存记账/);
-assert.match(pantryHomeSource, /最近买过或用过的食材痕迹/);
+assert.match(pantryHomeSource, /最近买过、用过的食材会记在这里，家里有变化时也可以随手更新/);
+assert.match(pantryHomeSource, /不需要维护精确库存/);
 assert.match(pantryHomeSource, /trace\.presence/);
-assert.match(pantryHomeSource, />确认还有<\/button>/);
-assert.match(pantryHomeSource, />标记没有<\/button>/);
-assert.match(pantryHomeSource, /很久没记录（\{\{ archivedTraces\.length \}\} 项）/);
+assert.doesNotMatch(pantryHomeSource, />确认还有<\/button>|>标记没有<\/button>/);
+assert.match(pantryHomeSource, /很久没记录（\{\{ filteredArchivedTraces\.length \}\} 项）/);
 assert.match(pantryHomeSource, /超过 30 天未更新/);
-assert.match(pantryHomeSource, /loadAllFridgeTraces\(\(page, pageSize\) => fridgeApi\.list\(page, pageSize\)\)/);
-assert.ok(
-  shoppingDetailSource.includes('<ImageLoader class="item-row__image" :src="group.imageUrl" />'),
-  "Shopping-list ingredients should render their image through ImageLoader"
-);
+assert.match(pantryHomeSource, /fridgeApi\.list\(1, 20, categoryFilter\.value \?\? undefined\)/);
+assert.doesNotMatch(shoppingDetailSource, /ImageLoader|item-row__image/, "Shopping-list detail keeps the confirmed text-first layout without ingredient images");
 
 console.log("pantry low-maintenance layout tests passed");

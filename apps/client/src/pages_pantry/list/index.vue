@@ -360,11 +360,6 @@ const shareSheetSubtitle = computed(() => {
   if (!sharePreview.value.canJoin) return "当前协作者名额已满，暂时不能继续加入。";
   return "确认加入后，这张清单会出现在你的采购清单首页里，后续可一起维护。";
 });
-const shareJoinDisabled = computed(() => {
-  if (!sharePreview.value || Boolean(shareErrorText.value)) return true;
-  if (sharePreview.value.joined) return false;
-  return joiningShare.value || !sharePreview.value.canJoin;
-});
 const shareJoinText = computed(() => {
   if (joiningShare.value) return sharePreview.value?.joined ? "进入中..." : "加入中...";
   if (!sharePreview.value) return "加入清单";
@@ -523,14 +518,6 @@ function changeStatus(nextStatus: ShoppingListStatus) {
   if (status.value === nextStatus) return;
   status.value = nextStatus;
   void loadPage();
-}
-
-async function goBack() {
-  try {
-    await uniPlatform.navigation.navigateBack();
-  } catch {
-    await uniPlatform.navigation.reLaunch("/pages/home/index");
-  }
 }
 
 function progressPercent(item: ShoppingListSummary) {

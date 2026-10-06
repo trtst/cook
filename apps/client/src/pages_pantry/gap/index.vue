@@ -252,11 +252,6 @@ const sheetSubtitle = computed(() => {
   return "先选一张当前要维护的采购清单。";
 });
 const shoppingCreateDisabled = computed(() => shoppingCreatingList.value || !newListName.value.trim());
-const sheetSubmitDisabled = computed(() => {
-  if (shoppingCreatingList.value || shoppingSubmitting.value) return true;
-  if (pendingGapItem.value) return !selectedListId.value;
-  return false;
-});
 const navProgress = computed(() => Math.min(1, Math.max(0, gapScrollTop.value / GAP_NAV_FADE_DISTANCE)));
 const navBackdropStyle = computed(() => ({
   height: `${navBarTotalHeight.value}px`,

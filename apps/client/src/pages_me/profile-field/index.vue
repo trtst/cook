@@ -65,7 +65,7 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { onLoad } from "@dcloudio/uni-app";
-import { userApi, type MeResponse, type UpdateCurrentUserRequest, type UserGender } from "@/apis/user";
+import { userApi, type UpdateCurrentUserRequest, type UserGender } from "@/apis/user";
 import Layout from "@/components/Layout/Layout.vue";
 import MealMonthCalendar from "@/components/MealMonthCalendar.vue";
 import { buildThemePageStyle } from "@/composables/theme-page-style";

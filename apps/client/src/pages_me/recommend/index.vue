@@ -302,14 +302,6 @@ async function markUnreadFeedOnLeave(beforeTime: string) {
   }
 }
 
-function handleBack() {
-  if (getCurrentPages().length > 1) {
-    void uniPlatform.navigation.navigateBack();
-    return;
-  }
-  void uniPlatform.navigation.switchTab("/pages/home/index");
-}
-
 function showLoginState() {
   loadingMore.value = false;
   page.value = 1;

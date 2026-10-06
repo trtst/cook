@@ -143,7 +143,7 @@ export interface ChangeCurrentPasswordRequest {
 	newPassword: string;
 }
 
-export interface UpdateNotificationSettingsRequest extends NotificationSettingsResponse {}
+export type UpdateNotificationSettingsRequest = NotificationSettingsResponse;
 
 export interface ChangeCurrentPasswordResult {
 	changedAt: IsoDateTime;

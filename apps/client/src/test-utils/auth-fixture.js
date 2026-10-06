@@ -54,7 +54,7 @@ async function request(path, options = {}, admin = false) {
               status: response.statusCode || 0,
               body: JSON.parse(rawBody || "null")
             });
-          } catch (_error) {
+          } catch {
             reject(new Error(`invalid json response from ${path}: ${rawBody}`));
           }
         });

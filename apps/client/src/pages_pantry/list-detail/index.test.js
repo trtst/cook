@@ -61,7 +61,7 @@ async function request(path, options = {}) {
               status: response.statusCode || 0,
               body: JSON.parse(rawBody || "null")
             });
-          } catch (error) {
+          } catch {
             reject(new Error(`invalid json response from ${path}: ${rawBody}`));
           }
         });
@@ -127,7 +127,7 @@ async function createShoppingListFixture(authHeaders) {
     })
   });
   const quantityText = `2${ingredient.defaultUnit.name}`;
-  const updated = await requestData(`/shopping-lists/${created.id}/items`, {
+  await requestData(`/shopping-lists/${created.id}/items`, {
     method: "POST",
     headers: withIdempotencyKey(authHeaders),
     body: JSON.stringify({

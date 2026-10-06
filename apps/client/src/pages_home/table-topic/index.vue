@@ -217,7 +217,7 @@ function openTopic(topicId: number) {
 .topic-card__cover {
   display: block;
   width: 100%;
-  height: 320rpx;
+  aspect-ratio: 3 / 4;
   background: var(--color-surface-muted);
 }
 

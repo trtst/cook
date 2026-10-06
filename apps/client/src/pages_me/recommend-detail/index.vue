@@ -637,14 +637,6 @@ function openInviteList(item: ShoppingListInviteSummary) {
   void uniPlatform.navigation.navigateTo(`/pages_pantry/list-detail/index?id=${encodeURIComponent(String(item.listId))}`);
 }
 
-function goBack() {
-  if (getCurrentPages().length > 1) {
-    void uniPlatform.navigation.navigateBack();
-    return;
-  }
-  void uniPlatform.navigation.navigateTo("/pages_me/recommend/index");
-}
-
 async function openEditor(item: IngredientRecommendationSummary) {
   if (!isRecommendType.value) return;
   try {

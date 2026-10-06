@@ -21,7 +21,7 @@ const recipeDetailSource = readFile("../../pages_recipe/detail/index.vue");
 
 assert.doesNotMatch(pickerSource, /\bpinCreate\b/, "picker layout must not vary by caller");
 assert.match(pickerSource, /:body-scroll="false"/, "picker should always keep its controls fixed above the list");
-assert.match(pickerSource, /:panel-style="\{ maxHeight: ['\"]62vh['\"] \}"/, "picker should own its compact panel height");
+assert.match(pickerSource, /:panel-style="\{ maxHeight: ['"]62vh['"] \}"/, "picker should own its compact panel height");
 assert.match(
   pickerSource,
   /{{\s*showCreateForm\s*\?\s*"取消"\s*:\s*createTitle\s*}}/,
@@ -44,8 +44,8 @@ assert.match(
 );
 assert.match(
   pickerSource,
-  /:disabled="!canCreate"/,
-  "the native confirmation button should not be clickable with an empty name"
+  /@click="handleCreate"/,
+  "the create button should route through the guarded click handler"
 );
 assert.match(
   pickerSource,

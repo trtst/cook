@@ -326,7 +326,6 @@ const { themeVars, themeClasses, effectiveSkin, effectivePalette, themeMode, can
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const currentThemeText = computed(() => formatThemeText(themeMode.value, effectiveSkin.value, effectivePalette.value, canSwitchPalette.value));
 
-const HOME_NAV_GAP = 16;
 const HOME_NAV_FADE_DISTANCE = 96;
 const HIDDEN_HOME_TARGET_PREFIXES = ["/pages_restaurant/", "/pages_meal/poll/index", "/pages_meal/wish/index", "/pages_meal/result/index"];
 const { navBarTotalHeight } = useSystemInfo();

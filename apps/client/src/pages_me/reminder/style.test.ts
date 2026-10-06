@@ -51,8 +51,8 @@ expectSelectorIncludes(reminderPageSource, ".setting-toggle--on .setting-toggle_
   "transform: translateX(32rpx);"
 ]);
 
-expectSelectorIncludes(reminderPageSource, ".setting-group--paired .setting-row + .setting-row", [
-  "border-top: 0;"
+expectSelectorIncludes(reminderPageSource, ".setting-group .setting-row + .setting-row", [
+  "border-top: 1rpx solid var(--color-divider);"
 ]);
 
 expectSelectorIncludes(reminderPageSource, ".setting-row__desc", [
@@ -61,14 +61,11 @@ expectSelectorIncludes(reminderPageSource, ".setting-row__desc", [
   "font-size: var(--font-size-xs);"
 ]);
 
-expectSelectorIncludes(reminderPageSource, ".day-chip-list", [
-  "display: flex;",
-  "margin-top: 18rpx;"
+expectSelectorIncludes(reminderPageSource, ".setting-group + .setting-group", [
+  "margin-top: 20rpx;",
+  "padding-top: 20rpx;"
 ]);
-
-expectSelectorIncludes(reminderPageSource, ".day-chip--active .day-chip__text", [
-  "color: var(--color-support-action);"
-]);
+assert.ok(reminderPageSource.includes("推荐提醒"), "Expected the settings page to retain the recommendation reminder toggle.");
 
 expectSelectorIncludes(reminderPageSource, ".reminder-footer", [
   "position: fixed;",

@@ -5,7 +5,7 @@ import { resolve } from "node:path";
 function createFunction(relativePath: string) {
   const source = readFileSync(resolve(__dirname, relativePath), "utf8");
   const start = source.indexOf("async function createShoppingList() {");
-  const end = source.indexOf("async function confirmAddToShoppingList()", start);
+  const end = source.indexOf("\nasync function ", start + 1);
   assert.ok(start >= 0 && end > start, `Expected create flow in ${relativePath}`);
   return source.slice(start, end);
 }

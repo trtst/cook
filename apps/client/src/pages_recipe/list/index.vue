@@ -396,14 +396,6 @@ function createRecipe() {
 	void uniPlatform.navigation.navigateTo("/pages_recipe/edit/index");
 }
 
-function goBack() {
-	if (getCurrentPages().length > 1) {
-		void uniPlatform.navigation.navigateBack();
-		return;
-	}
-	void uniPlatform.navigation.switchTab("/pages/recipe/index");
-}
-
 function openItem(item: DisplayItem) {
 	if ((deletingDraftId.value && deletingDraftId.value === item.id) || (deletingRecipeId.value && deletingRecipeId.value === item.id)) return;
 	if (mode.value === "recipes") {

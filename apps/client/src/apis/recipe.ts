@@ -573,7 +573,7 @@ export interface UploadRecipeImageRequest {
 	filePath: string;
 }
 
-export interface DeleteRecipeDraftRequest extends PublishRecipeDraftRequest {}
+export type DeleteRecipeDraftRequest = PublishRecipeDraftRequest;
 
 export interface RenameTagRequest extends PublishRecipeDraftRequest {
 	name: string;

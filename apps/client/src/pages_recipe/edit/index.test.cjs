@@ -56,7 +56,7 @@ async function request(path, options = {}) {
               status: response.statusCode || 0,
               body: JSON.parse(rawBody || "null")
             });
-          } catch (error) {
+          } catch {
             reject(new Error(`invalid json response from ${path}: ${rawBody}`));
           }
         });
@@ -248,7 +248,7 @@ if (!hasAutomatorRuntime) {
   nodeTest("ingredient search confirmation reloads the current keyword", () => {
     nodeAssert.match(
       editSource,
-      /@confirm="handleIngredientSearchConfirm"/,
+      /@search="handleIngredientSearchConfirm"/,
       "ingredient search should bind confirmation to an explicit search handler"
     );
     nodeAssert.match(

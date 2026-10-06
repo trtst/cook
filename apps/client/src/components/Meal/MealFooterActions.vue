@@ -5,9 +5,8 @@
         v-if="quickAsButton"
         class="meal-footer__quick meal-footer__quick--button"
         :class="{ 'meal-footer__quick--disabled': quickAction.disabled || submitting }"
-        :disabled="quickAction.disabled || submitting"
         :open-type="quickOpenType"
-        @click="emit('quick')"
+        @click="handleQuick"
       >
         <text class="cookfont meal-footer__quick-icon" :class="quickAction.iconClass" />
         <text class="meal-footer__quick-label">{{ quickAction.label }}</text>
@@ -16,7 +15,7 @@
         v-else
         class="meal-footer__quick"
         :class="{ 'meal-footer__quick--disabled': quickAction.disabled || submitting }"
-        @click="quickBlocked || quickAction.disabled || submitting ? undefined : emit('quick')"
+        @click="handleQuick"
       >
         <text class="cookfont meal-footer__quick-icon" :class="quickAction.iconClass" />
         <text class="meal-footer__quick-label">{{ quickAction.label }}</text>
@@ -36,8 +35,7 @@
         v-if="primaryAction"
         class="meal-footer__button meal-footer__button--primary"
         :class="{ 'meal-footer__button--disabled': primaryAction.disabled || (primaryVisualDisabled ?? submitting) }"
-        :disabled="primaryNativeDisabled"
-        @click="emit('primary')"
+        @click="handlePrimary"
       >
         <text class="meal-footer__button-content">{{ primaryAction.label }}</text>
         <text v-if="primaryGapText" class="meal-footer__button-badge">{{ primaryGapText }}</text>
@@ -47,7 +45,7 @@
 </template>
 
 <script setup lang="ts">
-defineProps<{
+const props = defineProps<{
   quickAction?: { label: string; iconClass?: string; disabled?: boolean } | null;
   secondaryAction?: { label: string; disabled?: boolean } | null;
   primaryAction?: { label: string; disabled?: boolean } | null;
@@ -67,6 +65,16 @@ const emit = defineEmits<{
   (event: "secondary"): void;
   (event: "primary"): void;
 }>();
+
+function handleQuick() {
+  if (props.quickBlocked || props.quickAction?.disabled || props.submitting) return;
+  emit("quick");
+}
+
+function handlePrimary() {
+  if (props.primaryNativeDisabled) return;
+  emit("primary");
+}
 </script>
 
 <style scoped lang="scss">

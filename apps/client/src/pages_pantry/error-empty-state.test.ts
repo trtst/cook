@@ -24,7 +24,7 @@ expectIncludes(
 );
 expectIncludes(
   pantryHomeSource,
-  '<Empty\n                v-if="errorText"\n                class="pantry-empty"\n                :art="emptyStateArt"\n                clickable\n                title="食材加载遇到问题"\n                description="请检查网络后重新加载。"\n                @click="loadPage"'
+  '<view v-else-if="errorText" class="trace-state trace-state--error" @click="loadPage()">{{ errorText }}，点此重试</view>'
 );
 
 console.log("pantry error empty-state tests passed");

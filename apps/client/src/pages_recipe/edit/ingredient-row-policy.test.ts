@@ -1,11 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import { applyIngredientSelection, chooseFuzzyAmount } from "./ingredient-row-policy";
 
 test("the edit page exposes 适量 in the unit sheet for every ingredient category", () => {
-  const source = readFileSync(resolve(import.meta.dirname, "index.vue"), "utf8");
+  const source = readFileSync(new URL("./index.vue", import.meta.url), "utf8");
 
   assert.match(source, /<text class="sheet-section__title">模糊用量<\/text>/);
   assert.doesNotMatch(source, /v-if="activeUnitRow\?\.categoryCode === 'SEASONING'"/);

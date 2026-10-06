@@ -1430,7 +1430,7 @@ defineExpose({
 .recipe-card__cover {
   position: relative;
   width: 100%;
-  aspect-ratio: 4 / 3;
+  aspect-ratio: 3 / 4;
   background: var(--page-cover-fresh-bg);
 }
 

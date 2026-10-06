@@ -51,6 +51,7 @@
               <ImageField
                 v-if="canUpdateCover"
                 class="meal-hero__cover-field"
+                :style="{ height: '100%' }"
                 variant="cover"
                 :image-src="heroCoverUrl || ''"
                 :title="eventCoverTitle"
@@ -259,7 +260,6 @@
                       v-else-if="canChooseWish"
                       class="wish-list__action"
                       :class="{ 'wish-list__action--ghost': item.supportedByMe, 'wish-list__action--disabled': wishActionLoadingId === item.id || (item.suggestedByMe && item.inCurrentMenu) }"
-                      :disabled="wishActionLoadingId === item.id || (item.suggestedByMe && item.inCurrentMenu)"
                       @click="toggleWishSupport(item)"
                     >
                       {{
@@ -576,8 +576,7 @@
                 v-for="(action, index) in detailDockActions"
                 :key="action.key"
                 class="detail-manage-dock__action"
-                :open-type="action.key === 'share-invite' && inviteShareReady && !inviteSharing ? 'share' : ''"
-                :disabled="action.disabled || submitting"
+                :open-type="action.key === 'share-invite' && inviteShareReady && !inviteSharing && !submitting ? 'share' : ''"
                 :class="{
                   'detail-manage-dock__action--open': detailDockOpen,
                   'detail-manage-dock__action--disabled': action.disabled || submitting
@@ -900,7 +899,6 @@
               <button
                 class="meal-sheet-actions__primary"
                 :class="{ 'meal-sheet-actions__primary--disabled': completedIngredientBusy || !completedIngredientSelectedKeys.size }"
-                :disabled="completedIngredientBusy || !completedIngredientSelectedKeys.size"
                 @click="removeSelectedCompletedIngredients"
               >
                 {{ completedIngredientBusy ? "更新中..." : "家里没有了" }}
@@ -1007,11 +1005,6 @@ type FactItem = {
   label: string;
   value: string;
   iconClass: string;
-};
-type ProgressStep = {
-  label: string;
-  done: boolean;
-  current: boolean;
 };
 type ParticipantAvatarItem = {
   key: string;
@@ -1441,52 +1434,6 @@ const canInviteParticipants = computed(() => {
 const showParticipantAvatarGroup = computed(() =>
   Boolean(visibleParticipantAvatarItems.value.length || participantAvatarOverflow.value > 0 || canInviteParticipants.value)
 );
-const progressSteps = computed<ProgressStep[]>(() => {
-  if (eventDetail.value) {
-    const eventSteps = eventDetail.value.status === "CANCELLED"
-      ? [
-          { label: "饭局已创建", done: true },
-          { label: "流程已取消", done: true }
-        ]
-      : [
-          { label: "饭局已创建", done: true },
-          { label: "时间已定", done: Boolean(eventDetail.value.scheduledAt) },
-          { label: "菜单已定", done: currentMenuItems.value.length > 0 },
-          { label: "有人响应", done: displayParticipants.value.length > 0 || acceptedCount.value > 0 || pendingCount.value > 0 },
-          { label: "饭局已结束", done: eventClosed.value }
-        ];
-    const firstUndoneIndex = eventSteps.findIndex(item => !item.done);
-    return eventSteps.map((item, index) => ({
-      ...item,
-      current: firstUndoneIndex >= 0 && index === firstUndoneIndex
-    }));
-  }
-
-  const planSteps = [
-    { label: "餐次已创建", done: Boolean(planDetail.value) },
-    { label: "菜单已定", done: Boolean(planDetail.value?.menuLocked) },
-    { label: "饭局已发起", done: hasDiningEvent.value },
-    { label: "做饭助手已就绪", done: Boolean(cookAssistant.value?.unlocked) },
-    { label: "计划已结束", done: planClosed.value }
-  ];
-  const firstUndoneIndex = planSteps.findIndex(item => !item.done);
-  return planSteps.map((item, index) => ({
-    ...item,
-    current: firstUndoneIndex >= 0 && index === firstUndoneIndex
-  }));
-});
-const progressDoneCount = computed(() => progressSteps.value.filter(item => item.done).length);
-const progressTitle = computed(() => (eventDetail.value ? "饭局进度" : "计划进度"));
-const progressDesc = computed(() => {
-  if (eventDetail.value?.status === "COMPLETED") return "这场饭局已经收尾，后续分享和回看还可以继续处理。";
-  if (eventAutoEnded.value) return "已经到开饭时间，这场饭局当前按结束态收口，后续只保留回看和分享。";
-  if (eventDetail.value?.status === "CANCELLED") return "这场饭局已取消，当前不再继续推进。";
-  if (eventDetail.value) return "时间、菜单和参与反馈会沿着这里继续往下推进。";
-  if (planClosed.value) return "这顿饭已经过时，当前不再继续补菜单、发起饭局或生成做饭安排。";
-  if (planDetail.value?.menuLocked) return "菜单已固定，这顿饭现在可以直接开始做饭，或继续补发起饭局与分享。";
-  if (hasDiningEvent.value) return "这顿饭已经挂上饭局，菜单定好后就能继续准备食材和做饭安排。";
-  return "先把这顿饭安排起来，菜单、饭局和做饭安排会按顺序补齐。";
-});
 const canEditPlan = computed(() => Boolean(planDetail.value && !eventClosed.value && !planClosed.value));
 const canManageMenu = computed(() =>
   Boolean(canEditPlan.value && !planDetail.value?.menuLocked && (!eventDetail.value || isEventOrganizer.value))
@@ -2123,7 +2070,7 @@ async function loadDetail() {
         activeSharePath.value = eventDetail.value.shareTokenPath || "";
         showEventEditor.value = false;
         await loadMealReminderState("event", eventDetail.value.id);
-      } catch (error) {
+      } catch {
         eventDetail.value = null;
         activeSharePath.value = "";
         eventGapItems.value = null;
@@ -2191,7 +2138,7 @@ async function loadDetail() {
         activeSharePath.value = eventDetail.value.shareTokenPath || "";
         showEventEditor.value = false;
         await loadMealReminderState("event", nextEvent.id);
-      } catch (error) {
+      } catch {
         eventDetail.value = null;
         activeSharePath.value = "";
         eventGapItems.value = null;
@@ -2204,7 +2151,7 @@ async function loadDetail() {
 
     await loadGapPreview();
     await applyEntryFocus();
-  } catch (error) {
+  } catch {
     if (!eventDetail.value) {
       await showLoadErrorToast("餐次暂时没加载出来");
     }
@@ -3319,10 +3266,6 @@ async function submitParticipantNote() {
   }
 }
 
-function resolveMenuMeta(item: MenuEntry) {
-  return item.servings ? `${item.servings}人份` : "";
-}
-
 function resolveMenuStatusText(item: MenuEntry) {
   return menuItemMetaText(Boolean(eventDetail.value), item.keywords, item.servings);
 }
@@ -3424,10 +3367,6 @@ function handleMenuDeadlineAction() {
   if (canCreateEvent.value) {
     openEventEditor();
   }
-}
-
-function openTimePicker() {
-  // no-op placeholder for click target; actual time picker is handled by the native picker wrapper
 }
 
 async function handleConfirmMenuAction() {
@@ -3863,12 +3802,6 @@ function handleShoppingSheetAfterClose() {
   shoppingCreateName.value = "";
 }
 
-function goBack() {
-  void uniPlatform.navigation.navigateBack().catch(() => {
-    void uniPlatform.navigation.navigateTo("/pages_meal/plan/index");
-  });
-}
-
 function handleScroll(event: { detail: { scrollTop?: number } }) {
   scrollTop.value = event.detail.scrollTop ?? 0;
 }
@@ -4103,9 +4036,8 @@ function clearFocusedSection() {
 }
 
 .meal-hero--event {
-  height: 75vw;
-  min-height: 420rpx;
-  max-height: 660rpx;
+  aspect-ratio: 4 / 3;
+  min-height: 0;
   padding-right: 0;
   padding-bottom: 0;
   padding-left: 0;
@@ -6242,13 +6174,6 @@ function clearFocusedSection() {
 
 .meal-sheet-actions__primary--disabled {
   background: var(--color-surface-muted);
-  box-shadow: none;
-  color: var(--color-text-secondary);
-}
-
-button.meal-sheet-actions__primary--disabled[disabled]:not([type]),
-button.meal-sheet-actions__primary--disabled[disabled][type="default"] {
-  background-color: var(--color-surface-muted);
   box-shadow: none;
   color: var(--color-text-secondary);
 }

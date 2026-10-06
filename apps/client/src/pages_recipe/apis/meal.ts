@@ -53,12 +53,12 @@ export const mealApi = {
   async listAllPlans(query: MealPlanQuery) {
     const items: MealPlanSummary[] = [];
     let page = 1;
-    do {
+    for (;;) {
       const result = await this.listPlans({ ...query, page, pageSize: 100 });
       items.push(...result.items);
       if (!result.hasNext) return items;
       page += 1;
-    } while (true);
+    }
   },
   addPlanItem(body: AddMealPlanItemRequest) {
     const { operationId, ...payload } = body;

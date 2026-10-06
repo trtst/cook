@@ -82,8 +82,7 @@
           <button
             class="sheet-confirm"
             :class="{ 'sheet-confirm--disabled': confirmDisabled }"
-            :disabled="confirmDisabled"
-            @click="emit('confirm')"
+            @click="handleConfirm"
           >
             {{ confirmText }}
           </button>
@@ -173,8 +172,7 @@
           <button
             class="sheet-confirm"
             :class="{ 'sheet-confirm--disabled': confirmDisabled }"
-            :disabled="confirmDisabled"
-            @click="emit('confirm')"
+            @click="handleConfirm"
           >
             {{ confirmText }}
           </button>
@@ -189,7 +187,7 @@ import RecipeSearchBar from "@/components/Recipe/RecipeSearchBar.vue";
 import type { IngredientCategorySummary, IngredientSummary } from "@/apis/recipe";
 import type { UUID } from "@/apis/http";
 
-defineProps<{
+const props = defineProps<{
   hintText: string;
   keyword: string;
   searchMode: boolean;
@@ -229,6 +227,11 @@ const emit = defineEmits<{
   (event: "create"): void;
   (event: "confirm"): void;
 }>();
+
+function handleConfirm() {
+  if (props.confirmDisabled) return;
+  emit("confirm");
+}
 </script>
 
 <style scoped lang="scss">

@@ -113,7 +113,7 @@
                     @click="openPlanDetail(plan)"
                   >
                     <text v-if="plan.hasDiningEvent" class="meal-card__event-badge">
-                      {{ planDiningText(plan) }}
+                      {{ planDiningText() }}
                     </text>
 
                     <view class="meal-card__panel">
@@ -675,10 +675,6 @@ function openPlanDetail(plan: MealPlanSummary) {
   );
 }
 
-function reloadWeek() {
-  void loadWeekPlans();
-}
-
 function openRecipe() {
   closeEmptyDock();
   void uniPlatform.navigation.switchTab("/pages/recipe/index");
@@ -969,7 +965,7 @@ function planDurationText(plan: MealPlanSummary) {
   return formatPlanDuration(planDurationMinutes(plan));
 }
 
-function planDiningText(plan: MealPlanSummary) {
+function planDiningText() {
   return "约了饭";
 }
 

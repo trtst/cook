@@ -191,7 +191,6 @@
           <button
             class="trace-actions__button trace-actions__button--secondary"
             :class="{ 'trace-actions__button--disabled': !selectedTraceIds.size || updatingTraces || shoppingSubmitting }"
-            :disabled="!selectedTraceIds.size || updatingTraces || shoppingSubmitting"
             @click="openShoppingSheet"
           >
             添加清单
@@ -199,7 +198,6 @@
           <button
             class="trace-actions__button trace-actions__button--secondary"
             :class="{ 'trace-actions__button--disabled': !selectedTraceIds.size || updatingTraces || shoppingSubmitting }"
-            :disabled="!selectedTraceIds.size || updatingTraces || shoppingSubmitting"
             @click="confirmRemoveSelectedTraces"
           >
             {{ updatingTraces ? "处理中..." : "家里没有了" }}
@@ -887,7 +885,7 @@ async function loadShoppingLists(force = false) {
 }
 
 async function openShoppingSheet() {
-  if (!selectedTraceIds.value.size || shoppingSubmitting.value) return;
+  if (!selectedTraceIds.value.size || updatingTraces.value || shoppingSubmitting.value) return;
   await loadShoppingLists(true);
   if (!shoppingCreateName.value.trim()) {
     shoppingCreateName.value = buildDefaultShoppingListName();
@@ -1333,9 +1331,4 @@ async function addSelectedToShoppingList() {
   color: var(--color-text-secondary);
 }
 
-button.trace-actions__button--disabled[disabled]:not([type]),
-button.trace-actions__button--disabled[disabled][type="default"] {
-  background-color: var(--color-surface-muted);
-  color: var(--color-text-secondary);
-}
 </style>

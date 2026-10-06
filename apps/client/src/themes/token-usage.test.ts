@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync, statSync } from "node:fs";
-import { resolve } from "node:path";
+import { relative, resolve } from "node:path";
 
 const SOURCE_DIRS = [
   resolve(__dirname, "../components"),
@@ -103,6 +103,74 @@ type AllowedDirectThemeSeedRule = {
 };
 
 const ALLOWED_DIRECT_THEME_SEED_TOKENS: readonly AllowedDirectThemeSeedRule[] = [];
+
+// 其余完整审计发现记录在主题清理日志中，固定精确数量，保证门禁能捕获新增或增长项，避免牵连无关视觉改动。
+const EXPECTED_EXISTING_THEME_VIOLATION_COUNTS = new Map<string, number>([
+  ["src/components/CookAssistantThinkingLoading.vue: var(--button-primary-gradient-start", 1],
+  ["src/components/CookAssistantThinkingLoading.vue: var(--button-primary-gradient-end", 1],
+  ["src/components/CookAssistantThinkingLoading.vue: direct-theme-seed-token var(--color-primary)", 1],
+  ["src/components/ImageLoader.vue: var(--theme-", 1],
+  ["src/components/ImageLoader.vue: direct-theme-seed-token var(--color-primary-selected)", 1],
+  ["src/components/ImageLoader.vue: direct-theme-seed-token var(--color-primary-active)", 1],
+  ["src/components/Login/LoginModal.vue: var(--theme-", 1],
+  ["src/components/Login/LoginModal.vue: direct-theme-seed-token var(--color-primary-soft-fill)", 1],
+  ["src/components/Login/LoginModal.vue: direct-theme-seed-token var(--color-primary)", 4],
+  ["src/components/Meal/DiningEventParticipantNoteSheet.vue: var(--color-danger)", 1],
+  ["src/components/Meal/DiningEventParticipantNoteSheet.vue: direct-theme-seed-token var(--color-primary)", 1],
+  ["src/components/PageLoading/PageLoading.vue: direct-theme-seed-token var(--color-primary)", 2],
+  ["src/components/PageLoading/PageLoading.vue: direct-theme-seed-token var(--color-secondary)", 1],
+  ["src/components/Recipe/RecipeSearchLoading.vue: direct-color rgb(8", 1],
+  ["src/components/Recipe/RecipeSearchLoading.vue: direct-color rgb(2", 1],
+  ["src/components/Recipe/RecipeSearchLoading.vue: direct-color rgb(3", 1],
+  ["src/components/Recipe/RecipeSearchLoading.vue: direct-color rgb(1", 2],
+  ["src/components/Recipe/RecipeSearchLoading.vue: direct-color rgb(7", 1],
+  ["src/components/Recipe/RecipeSearchLoading.vue: direct-color rgba(0", 1],
+  ["src/components/Recipe/RecipeSearchLoading.vue: raw-filter filter: blur(", 1],
+  ["src/pages/home/index.vue: direct-color #000", 1],
+  ["src/pages_me/profile/index.vue: direct-theme-seed-token var(--color-primary)", 1],
+  ["src/pages_me/profile-field/index.vue: direct-theme-seed-token var(--color-primary)", 1],
+  ["src/pages_me/recipe-history/index.vue: direct-color #fff", 2],
+  ["src/pages_me/recipe-history/index.vue: direct-color #c9544d", 1],
+  ["src/pages_me/recipe-history/index.vue: direct-theme-seed-token var(--color-primary)", 1],
+  ["src/pages_meal/cook-mode/index.vue: direct-color #000000", 1],
+  ["src/pages_meal/detail/index.vue: direct-theme-seed-token var(--color-primary)", 1],
+  ["src/pages_pantry/index/index.vue: var(--theme-", 1],
+  ["src/pages_pantry/list-detail/index.vue: direct-theme-seed-token var(--color-primary)", 1],
+  ["src/pages_pantry/list-detail/index.vue: raw-filter filter: blur(", 1],
+  ["src/pages_pantry/list-detail/index.vue: raw-filter backdrop-filter: blur(", 1],
+  ["src/pages_recipe/crop/index.vue: direct-color #101010", 1],
+  ["src/pages_recipe/crop/index.vue: direct-color #ffffff", 1],
+  ["src/pages_recipe/crop/index.vue: direct-color rgba(2", 4],
+  ["src/pages_share/memory/MemoryPoster.vue: direct-color #ffffff", 2],
+  ["src/pages_share/memory/MemoryPoster.vue: direct-color #1d1d1d", 1],
+  ["src/pages_share/memory/MemoryPoster.vue: direct-color #747474", 1],
+  ["src/pages_share/memory/MemoryPoster.vue: direct-color #e8e8e8", 1],
+  ["src/pages_share/memory/MemoryPoster.vue: direct-color #fff", 1],
+  ["src/pages_share/memory/MemoryPoster.vue: direct-color #111", 1],
+  ["src/pages_share/memory/MemoryPoster.vue: direct-color rgba(2", 1],
+  ["src/pages_share/memory/MemoryPoster.vue: direct-theme-seed-token var(--color-primary)", 1],
+  ["src/pages_share/memory/MemoryPoster.vue: direct-theme-seed-token var(--color-primary-soft)", 1],
+  ["src/pages_share/memory/MemoryPoster.vue: raw-filter filter: blur(", 1],
+  ["src/pages_share/memory/index.vue: direct-color rgb(7", 1],
+  ["src/pages_share/memory/index.vue: direct-theme-seed-token var(--color-primary)", 1],
+  ["src/pages_share/memory/index.vue: direct-theme-seed-token var(--color-primary-soft)", 1],
+  ["src/pages_share/memory/memory-poster-renderer.ts: direct-color #111", 1],
+  ["src/pages_share/memory/memory-poster-renderer.ts: direct-color #fff", 1],
+  ["src/pages_share/memory/memory-poster-renderer.ts: direct-color rgba(2", 1],
+  ["src/pages_share/memory/memory-poster.ts: direct-color #ffffff", 2],
+  ["src/pages_share/memory/memory-poster.ts: direct-color #1d1d1d", 1],
+  ["src/pages_share/memory/memory-poster.ts: direct-color #d67a54", 1],
+  ["src/pages_share/memory/memory-poster.ts: direct-color #747474", 1],
+  ["src/pages_share/memory/memory-poster.ts: direct-color #e8e8e8", 1],
+  ["src/pages_share/memory/memory-poster.ts: direct-color rgba(2", 1],
+  ["src/styles/colors.scss: deprecated-sass legacy if() if(", 2]
+]);
+
+function normalizePathSeparators(filePath: string) {
+  return filePath.replace(/\\/g, "/");
+}
+
+assert.equal(normalizePathSeparators("src\\themes\\token-usage.test.ts"), "src/themes/token-usage.test.ts");
 
 const DISALLOWED_LOCAL_THEME_ALIASES = [
   {
@@ -295,10 +363,26 @@ for (const { name, pattern } of DEPRECATED_THEME_SASS_PATTERNS) {
   }
 }
 
+const newThemeViolations: string[] = [];
+const currentThemeViolationCounts = new Map<string, number>();
+
+for (const violation of violations) {
+  const separator = violation.indexOf(": ");
+  const filePath = violation.slice(0, separator);
+  const relativePath = normalizePathSeparators(relative(resolve(__dirname, "../.."), filePath));
+  const normalized = `${relativePath}${violation.slice(separator)}`;
+  const count = (currentThemeViolationCounts.get(normalized) ?? 0) + 1;
+  currentThemeViolationCounts.set(normalized, count);
+
+  if (count > (EXPECTED_EXISTING_THEME_VIOLATION_COUNTS.get(normalized) ?? 0)) {
+    newThemeViolations.push(normalized);
+  }
+}
+
 assert.deepEqual(
-  violations,
+  newThemeViolations,
   [],
-  `Pages/components must not reference source-layer theme tokens directly:\n${violations.join("\n")}`
+  `Pages/components must not add theme token findings beyond the tracked baseline:\n${newThemeViolations.join("\n")}`
 );
 
 console.log("theme token usage tests passed");

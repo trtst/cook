@@ -205,7 +205,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from "vue";
+import { computed, nextTick, ref } from "vue";
 import { onShow } from "@dcloudio/uni-app";
 import { userApi } from "@/apis/user";
 import Layout from "@/components/Layout/Layout.vue";
@@ -213,7 +213,6 @@ import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { buildThemePageStyle } from "@/composables/theme-page-style";
 import Skeleton from "@/components/Skeleton/Skeleton.vue";
 import TierBadge from "@/components/TierBadge/TierBadge.vue";
-import { usePageScrollLock } from "@/composables/usePageScrollLock";
 import { KNOWLEDGE_CHANNELS, buildKnowledgeListPath, type KnowledgeChannelCode } from "@/config/knowledge-articles";
 import { uniPlatform } from "@/platform/uni";
 import { useSystemInfo } from "@/composables/useSystemInfo";
@@ -517,10 +516,6 @@ async function doLoadMe() {
 	}
 
 	profileLoading.value = false;
-}
-
-function handleMealHubOpen() {
-	requireLogin(() => navigateTo("/pages_meal/event/index"));
 }
 
 function handleBenefitCenter() {
