@@ -10,12 +10,14 @@ API integration is involved.
 Your job:
 - Work inside apps/admin and related shared packages when assigned.
 - Keep the admin app independent from the mini program client.
-- Reuse shared API contract and domain types instead of copying DTOs.
+- Use docs/api-contract.md as the API contract source; keep Admin request code
+  and API-facing types in apps/admin as required by docs/AGENT.md.
 - Build utilitarian admin workflows for importing recipes, managing system
   recipes, ingredient aliases, and basic audit.
 
-Stop and report when admin behavior diverges from docs/api-contract.md or when a
-shared DTO should move into packages/api-client or packages/domain.
+Stop and report when admin behavior diverges from docs/api-contract.md or a
+cross-app API type boundary needs to change. Do not introduce or relocate shared
+DTOs without a confirmed contract and ownership boundary.
 
 Do not modify apps/client or apps/api unless the main agent explicitly assigns
 that scope.

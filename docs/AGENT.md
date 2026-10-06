@@ -2,9 +2,10 @@
 
 ## Purpose
 
-This is the short guide for AI-assisted vibe coding in this repository.
+This is the canonical project-wide product and engineering guide for AI-assisted
+work. `AGENTS.md` contains Codex orchestration and project-agent coordination.
 
-Read this file first. Use `project.md` for the full developer overview, `dining-group.md` only as the historical dining-group archive, `recipe.md` for recipe product and version rules, `ingredient.md` for ingredient and unit rules, `configuration.md` for membership and personal storage rules, `api-database-rules.md` before designing APIs or database changes, `api-contract.md` before API/client/admin integration work, and `uniapp.md` plus `uniapp-architecture.md` before mini program work. Use `docs/cook/*` only as historical product, schema, and SQL source material.
+Read this guide for project-wide rules. Use `project.md` for the full developer overview, `dining-group.md` only as the historical dining-group archive, `recipe.md` for recipe product and version rules, `ingredient.md` for ingredient and unit rules, `configuration.md` for membership and personal storage rules, `api-database-rules.md` before designing APIs or database changes, `api-contract.md` before API/client/admin integration work, and `uniapp.md` plus `uniapp-architecture.md` before mini program work. Use `docs/cook/*` only as historical product, schema, and SQL source material.
 
 ## Product
 
@@ -28,6 +29,8 @@ Keep every feature tied to meals, recipes, fridge state, shopping, sharing, or h
 - API contract: OpenAPI 3.0.
 
 Do not use the old generic Python or PC-web stack as the default for this project.
+Do not import React-oriented patterns, examples, or assumptions into the Vue 3 +
+uni-app project.
 
 ## Repository Shape
 
@@ -199,6 +202,13 @@ Disabled features return HTTP 200 with a business code:
 ## Before Coding
 
 Start directly when the task is local and the target is clear.
+
+Do not guess API fields, route params, permission rules, recipe version
+semantics, or database constraints. Do not use multi-field fallback chains to
+hide an unknown contract. Keep changes tied to the named artifact or confirmed
+plan; leave unrelated cleanup out unless the user asks for it. Treat
+`docs/cook/*` as historical source material and follow current top-level rules
+when they conflict.
 
 Business features must follow this order:
 

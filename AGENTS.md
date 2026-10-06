@@ -2,22 +2,9 @@
 
 This repository is the **炊火记** workspace.
 
-Read `docs/AGENT.md` first. It is the current short AI coding guide for this
-project. Use this file as the Codex entrypoint for orchestration rules and
-project-scoped agents.
-
-## Project Context
-
-- Product: family meal planning mini program.
-- Client: `apps/client`, uni-app + Vue 3 + TypeScript + Pinia, WeChat mini program.
-- API: `apps/api`, NestJS + TypeScript.
-- Admin: `apps/admin`, Vue 3 + Element Plus.
-- API contracts are described centrally, while each app owns its request code and types.
-- Product, schema, and SQL source material lives under `docs/cook/`.
-
-Do not let one app import source code from another app. Client, admin, and API
-must keep their API types and implementation inside their own app. Mini-program
-platform calls go through `apps/client/src/platform/uni.ts`.
+Read `docs/AGENT.md` first for the canonical project-wide product and engineering
+rules. Keep this file focused on Codex orchestration, subagent coordination, and
+the project-agent entrypoint.
 
 ## Main Agent Workflow
 
@@ -27,9 +14,8 @@ to manually choose subagents for normal work.
 Default flow:
 
 1. Understand the requirement, scope, boundaries, and acceptance criteria.
-2. If the requirement affects V1 scope, module state, API contracts, recipe
-   version semantics, permission rules, database constraints, payment, points,
-   membership, public UGC, or compliance gates, stop and confirm first.
+2. Stop for user confirmation whenever `docs/AGENT.md` requires a product,
+   module, contract, permission, data, payment, or compliance decision.
 3. Before code changes, discuss the plan with the user when the task is not a
    small local edit with an obvious target.
 4. After the plan is confirmed, the main agent decides whether subagents are
@@ -100,13 +86,9 @@ the patch.
 
 ## Available Project Agents
 
-- `cook-product`: requirement boundary, V1 scope, user flow, acceptance criteria.
-- `cook-codebase-reader`: read-only codebase orientation and real path tracing.
-- `cook-ui-designer`: UI/UX review, design consistency, screenshots, Figma-aligned feedback.
-- `cook-frontend`: mini program client pages, components, state, request layer.
-- `cook-backend`: API, service logic, DTOs, permissions, database-facing behavior.
-- `cook-admin`: admin app pages, Element Plus UI, admin API integration.
-- `cook-reviewer`: release risk review, regressions, missing tests, contract drift.
+Project-scoped agent definitions and responsibilities live in `.codex/agents/*.toml`.
+Current agents: `cook-product`, `cook-codebase-reader`, `cook-ui-designer`,
+`cook-frontend`, `cook-backend`, `cook-admin`, and `cook-reviewer`.
 
 Use parallel subagents mainly for read-heavy work: exploration, contract
 checking, UI review, test review, and risk review. Be conservative with
@@ -114,7 +96,7 @@ parallel code edits.
 
 ## Documentation Map
 
-- `docs/AGENT.md`: short AI execution guide. Read first.
+- `docs/AGENT.md`: canonical project-wide product and engineering rules. Read first.
 - `docs/project.md`: full developer overview.
 - `docs/technical.md`: technical rules, naming, style, validation.
 - `docs/api-database-rules.md`: mandatory API, field, schema, constraint, security, performance, cache, and migration rules.
@@ -137,6 +119,7 @@ parallel code edits.
 ## Commands
 
 - Install dependencies: `pnpm install`
+- Full automated gate: `pnpm gate:ci`
 - Type check all packages/apps: `pnpm type-check`
 - Check alias: `pnpm check`
 - API dev: `pnpm dev:api`
@@ -150,34 +133,3 @@ parallel code edits.
 
 Run the smallest relevant command for the change. Use full `pnpm type-check`
 when shared contracts, cross-app types, or broad TypeScript behavior changed.
-
-## Hard Rules
-
-1. Do not guess API fields, route params, permission rules, recipe version
-   semantics, or database constraints.
-2. Do not use defensive multi-field fallback chains to hide an unknown contract.
-3. Do not expand V1 scope without user confirmation.
-4. Do not introduce generic manager/adapter/center abstractions without real
-   boundary pressure.
-5. Keep folder, route, and API path shapes flat unless a documented rule says
-   otherwise.
-6. Keep changes tied to the named artifact or confirmed plan.
-7. Preserve `docs/cook/` as source material; put current project execution
-   rules in top-level `docs/*.md` or this file.
-8. Do not import React-oriented patterns, examples, or assumptions into this
-   Vue 3 + uni-app project.
-9. Do not add "while here" cleanup, modernization, or consistency edits unless
-   the user explicitly includes them in scope.
-10. Treat `docs/cook/` Prisma v0.1, SQL, and older product plans as historical
-    source material when they conflict with `docs/dining-group.md`,
-    `docs/recipe.md`, `docs/ingredient.md`, or `docs/configuration.md`; create a
-    new schema/SQL version instead of overwriting history.
-11. Do not implement or advertise OCR, AI, receipt scanning, owner transfer,
-    shared fridge, shared shopping, or a generic permission center unless the
-    user explicitly reopens them.
-12. Before designing or changing APIs, DTOs, Prisma models, SQL constraints,
-    indexes, caches, or migrations, read and apply `docs/api-database-rules.md`.
-    Its pre-commit checklist is mandatory for that change surface.
-13. Every completed change must update `docs/plans/minor_change_log.md` as the
-    central timeline. Large work also uses an independent execution document,
-    but the independent document does not replace the central log entry.

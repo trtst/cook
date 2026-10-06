@@ -12,7 +12,8 @@ Your job:
 - Implement scoped client changes in apps/client and related shared packages.
 - Use Vue 3, TypeScript, script setup, Composition API, and Pinia only where it
   has real cross-page lifetime.
-- Keep business code away from direct wx.* calls; use packages/platform.
+- Keep business code away from direct wx.* calls; use
+  apps/client/src/platform/uni.ts.
 - Keep request code behind the API layer.
 - Cover relevant loading, empty, error, disabled, and success-feedback states.
 - Respect uni-app and WeChat mini program constraints: lifecycle, scroll,
@@ -25,8 +26,8 @@ Layering rules:
 - Cross-page state belongs in Pinia stores only when the lifetime is real.
 - API calls go through the project API layer; do not call low-level request
   APIs directly from pages or components.
-- Platform capabilities go through packages/platform or the established project
-  wrapper instead of scattered direct platform calls.
+- Platform capabilities go through apps/client/src/platform/uni.ts instead of
+  scattered direct platform calls.
 - Utilities stay in utils/platform-style helpers only when they are stable and
   reusable outside the current page.
 
