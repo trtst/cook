@@ -473,7 +473,7 @@ onMounted(() => {
               <img v-if="getCoverUrl(form)" :src="getCoverUrl(form)" alt="专题封面" class="topic-cover__image" />
               <span v-else class="topic-cover__empty">
                 <el-icon size="24"><Picture /></el-icon>
-                <span>{{ imageBusy ? "上传中..." : "上传封面" }}</span>
+                <span>{{ imageBusy ? "上传中..." : "上传封面（3:4）" }}</span>
               </span>
             </button>
 
@@ -709,7 +709,9 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 224px;
+  width: 168px;
+  height: 224px;
+  min-height: 0;
   border: 1px dashed rgba(47, 111, 78, 0.28);
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.78);

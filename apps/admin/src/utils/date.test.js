@@ -1,9 +1,8 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
-import { resolve } from "node:path";
 
-const source = readFileSync(resolve(import.meta.dirname, "date.ts"), "utf8")
+const source = readFileSync(new URL("./date.ts", import.meta.url), "utf8")
   .replaceAll("export function", "function")
   .replace(/value: string/g, "value")
   .replace(/value\?: string \| null/g, "value")

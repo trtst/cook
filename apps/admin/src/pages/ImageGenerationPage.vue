@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue"
 import { ElMessage, ElMessageBox } from "element-plus";
 import { ingredientApi, type AdminIngredientCategorySummary } from "@/apis/ingredient";
 import { recipeApi, type AdminInspirationCategorySummary } from "@/apis/recipe";
-import { imageGenerationApi, type ImageGenerationCandidate, type ImageGenerationProviderId, type ImageGenerationSettings, type ImageGenerationSlot, type ImageGenerationTarget, type ImageGenerationType, type RecipeImageFilter } from "@/apis/image-generation";
+import { imageGenerationApi, type ImageGenerationAspectRatio, type ImageGenerationCandidate, type ImageGenerationProviderId, type ImageGenerationSettings, type ImageGenerationSlot, type ImageGenerationTarget, type ImageGenerationType, type RecipeImageFilter } from "@/apis/image-generation";
 import { requestBlob } from "@/apis/http";
 import { createOperationId } from "@/utils/operation-id";
 
@@ -22,6 +22,7 @@ const settings = ref<ImageGenerationSettings>({ provider: "ARK_SEEDREAM", versio
 const selectedProvider = ref<ImageGenerationProviderId>("ARK_SEEDREAM");
 const keywordDrafts = reactive({ ingredientKeywords: "", recipeCoverKeywords: "", recipeStepKeywords: "" });
 const promptDrafts = reactive<Record<string, string>>({});
+const ratioDrafts = reactive<Record<string, ImageGenerationAspectRatio>>({});
 const previewUrls = ref(new Map<number, string>());
 const loading = ref(false);
 const savingSettings = ref(false);
@@ -55,6 +56,7 @@ const selectAllVisible = computed({
 const hasPartialSelection = computed(() => selectedVisibleCount.value > 0 && selectedVisibleCount.value < rows.value.length);
 
 function slotKey(slot: ImageGenerationSlot) { return `${slot.targetType}:${slot.targetId}:${slot.contentVersionId}:${slot.stepOrder}`; }
+function slotAspectRatio(slot: ImageGenerationSlot) { return slot.targetType === "INGREDIENT" ? "1:1" : ratioDrafts[slotKey(slot)] ?? "3:4"; }
 function keywordFor(slot: ImageGenerationSlot) {
   if (slot.targetType === "INGREDIENT") return keywordDrafts.ingredientKeywords;
   return slot.targetType === "RECIPE_COVER" ? keywordDrafts.recipeCoverKeywords : keywordDrafts.recipeStepKeywords;
@@ -167,7 +169,7 @@ async function generateSlot(slot: ImageGenerationSlot, notify = true, failures?:
   const prompt = promptFor(slot).trim();
   if (!prompt) return reportFailure("请先填写当前图片的关键词");
   try {
-    const candidate = await imageGenerationApi.generate({ targetType: slot.targetType, targetId: slot.targetId, ...(slot.contentVersionId > 0 ? { contentVersionId: slot.contentVersionId } : {}), ...(slot.stepOrder > 0 ? { stepOrder: slot.stepOrder } : {}), prompt, operationId: createOperationId() });
+    const candidate = await imageGenerationApi.generate({ targetType: slot.targetType, targetId: slot.targetId, ...(slot.contentVersionId > 0 ? { contentVersionId: slot.contentVersionId } : {}), ...(slot.stepOrder > 0 ? { stepOrder: slot.stepOrder } : {}), ...(slot.targetType !== "INGREDIENT" ? { aspectRatio: slotAspectRatio(slot) } : {}), prompt, operationId: createOperationId() });
     const url = await loadCandidatePreview(candidate);
     const existingId = slot.candidate?.id;
     if (existingId) releasePreview(existingId);
@@ -366,9 +368,15 @@ onBeforeUnmount(() => { [...previewUrls.value.keys()].forEach(releasePreview); }
           <article v-for="slot in row.slots" :key="slotKey(slot)" class="slot-card">
             <div class="slot-label">{{ slot.label }}</div>
             <div class="image-pair">
-              <div class="image-preview"><img v-if="slot.imageUrl" :src="slot.imageUrl" alt="当前图片"><div v-else class="image-empty">暂无图片</div><span>当前</span></div>
-              <div class="image-preview"><img v-if="slot.candidate && previewUrls.get(slot.candidate.id)" :src="previewUrls.get(slot.candidate.id)" alt="生图候选"><div v-else class="image-empty">暂无候选</div><span>候选预览</span></div>
+              <div class="image-preview" :class="{ 'image-preview--ingredient': slot.targetType === 'INGREDIENT' }"><img v-if="slot.imageUrl" :src="slot.imageUrl" alt="当前图片"><div v-else class="image-empty">暂无图片</div><span>当前</span></div>
+              <div class="image-preview" :class="{ 'image-preview--ingredient': slot.targetType === 'INGREDIENT' }"><img v-if="slot.candidate && previewUrls.get(slot.candidate.id)" :src="previewUrls.get(slot.candidate.id)" alt="生图候选"><div v-else class="image-empty">暂无候选</div><span>候选预览</span></div>
             </div>
+            <el-select v-if="slot.targetType === 'RECIPE_STEP' || slot.targetType === 'WIKI_STEP'" v-model="ratioDrafts[slotKey(slot)]" :placeholder="`图片比例（默认 ${slotAspectRatio(slot)}）`" aria-label="步骤图片比例">
+              <el-option label="3:4（默认）" value="3:4" />
+              <el-option label="1:1" value="1:1" />
+              <el-option label="16:9" value="16:9" />
+              <el-option label="原尺寸" value="ORIGINAL" />
+            </el-select>
             <el-input :model-value="promptFor(slot)" type="textarea" :rows="2" maxlength="1000" placeholder="当前图片关键词，可修改" @update:model-value="onPromptChange(slot, $event)" />
             <div class="slot-actions">
               <el-button size="small" type="primary" :loading="batchRunning" :disabled="batchReplacing || replacingRecipeIds.has(row.id)" @click="generateSlot(slot)">{{ slot.candidate ? "重新生成" : "生成" }}</el-button>
@@ -385,4 +393,6 @@ onBeforeUnmount(() => { [...previewUrls.value.keys()].forEach(releasePreview); }
 
 <style scoped>
 .image-generation-page{display:flex;flex-direction:column;gap:16px}.page-heading,.toolbar-row,.filter-row,.target-heading,.keywords-row,.slot-actions{display:flex;align-items:center;gap:12px}.page-heading{justify-content:space-between}.page-heading h1{margin:0;font-size:22px}.page-heading p{margin:6px 0 0;color:var(--el-text-color-secondary)}.toolbar-card{position:sticky;top:0;z-index:2}.toolbar-row{flex-wrap:wrap}.toolbar-spacer{flex:1}.category-select{width:150px}.image-filter-select{width:180px}.provider-select{width:160px}.keywords-row{margin-top:18px;align-items:flex-end}.keywords-label{display:flex;flex-direction:column;gap:5px;min-width:220px}.keywords-label span,.target-id{font-size:12px;color:var(--el-text-color-secondary)}.keywords-row :deep(.el-textarea){flex:1}.recipe-keywords-row{align-items:flex-end}.keyword-field{display:flex;flex:1;min-width:220px;flex-direction:column;gap:7px}.filter-row{margin-top:14px;padding-top:12px;border-top:1px solid var(--el-border-color-lighter);font-size:13px;color:var(--el-text-color-secondary)}.progress-text{margin-left:auto;color:var(--el-color-primary)}.target-list{display:flex;flex-direction:column;gap:12px}.target-list--ingredients{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}.target-list--ingredients .target-card{min-width:0}.target-heading{min-width:0}.target-heading strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.target-id{margin-left:auto}.target-heading :deep(.el-button){flex-shrink:0}.slot-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:14px}.slot-card{display:flex;flex-direction:column;gap:10px;padding:12px;border:1px solid var(--el-border-color-lighter);border-radius:8px}.slot-label{font-weight:600}.image-pair{display:grid;grid-template-columns:1fr 1fr;gap:10px}.image-preview{position:relative;display:flex;align-items:center;justify-content:center;min-height:135px;aspect-ratio:4/3;background:var(--el-fill-color-lighter);border-radius:6px;overflow:hidden}.image-preview img{width:100%;height:100%;object-fit:contain}.image-preview>span{position:absolute;left:6px;top:6px;padding:2px 6px;border-radius:4px;background:#0009;color:white;font-size:11px}.image-empty{color:var(--el-text-color-placeholder);font-size:12px}.slot-actions{flex-wrap:wrap}.recipe-type-switch :deep(.el-radio-button__inner){font-size:14px}@media(max-width:760px){.toolbar-row{align-items:flex-start}.keywords-row{align-items:stretch;flex-direction:column}.keywords-label{min-width:0}.keyword-field{min-width:0}.target-list--ingredients{grid-template-columns:1fr}}
+
+.image-preview{aspect-ratio:3/4}.image-preview--ingredient{aspect-ratio:1/1}
 </style>

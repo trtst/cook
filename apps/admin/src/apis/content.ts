@@ -194,9 +194,10 @@ export const contentApi = {
       idempotencyKey: body.operationId
     });
   },
-  uploadImage(file: File, operationId: OperationId) {
+  uploadImage(file: File, operationId: OperationId, scene: "ARTICLE_COVER" | "OTHER") {
     const formData = new FormData();
     formData.append("file", file);
+    formData.append("scene", scene);
     return uploadForm<AdminSiteContentImageUploadResult>("/admin/content/images", formData, {
       idempotencyKey: operationId
     });

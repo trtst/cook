@@ -352,7 +352,7 @@ onMounted(() => {
           <div class="cover-head">
             <div>
               <h4>封面</h4>
-              <p>列表卡和详情页头图共用同一张封面。</p>
+              <p>列表卡和详情页头图共用同一张封面；新上传图片会居中裁剪并保存为 3:4。</p>
             </div>
             <div class="cover-actions">
               <el-button :icon="Picture" :disabled="!isEditing" :loading="imageSaving" @click="chooseImage">上传封面</el-button>
@@ -500,6 +500,8 @@ onMounted(() => {
 }
 
 .cover-preview {
+  width: min(240px, 100%);
+  aspect-ratio: 3 / 4;
   border-radius: 20px;
   overflow: hidden;
   background: #f3f4f6;
@@ -508,7 +510,7 @@ onMounted(() => {
 .cover-preview img {
   display: block;
   width: 100%;
-  height: 240px;
+  height: 100%;
   object-fit: cover;
 }
 
@@ -516,7 +518,8 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 240px;
+  width: min(240px, 100%);
+  aspect-ratio: 3 / 4;
   border: 1px dashed #d7dee7;
   border-radius: 20px;
   background: #f9fbfd;

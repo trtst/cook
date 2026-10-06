@@ -1,8 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 
-const source = readFileSync(resolve(import.meta.dirname, "RichTextEditor.vue"), "utf8");
+const source = readFileSync(new URL("./RichTextEditor.vue", import.meta.url), "utf8");
 
 function expectIncludes(snippet) {
   assert.ok(source.includes(snippet), `Expected RichTextEditor.vue to include: ${snippet}`);

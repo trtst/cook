@@ -34,7 +34,7 @@ const updatedAt = ref<string | null>(null);
 const fileInputRef = ref<HTMLInputElement | null>(null);
 const markdownInputRef = ref<HTMLInputElement | null>(null);
 const publicArticleChannelCodes = new Set(["KITCHEN", "COOK", "FOOD"]);
-// 内容图片先在浏览器端统一处理为 4:3，最大宽度 1875 像素后再上传。
+// 正文图片沿用 4:3；普通文章封面单独裁成 3:4。
 const contentImageMaxWidth = 375 * 5;
 const contentImageQuality = 0.8;
 const sourceMode = computed(() => {
@@ -412,7 +412,7 @@ async function updateStatus(status: SiteContentStatus) {
   }
 }
 
-async function uploadImage(file: File) {
+async function uploadImage(file: File, isCover = false) {
   if (saving.value || statusSaving.value) {
     throw new Error("内容正在保存，请稍后再上传图片");
   }
@@ -424,15 +424,29 @@ async function uploadImage(file: File) {
       const image = await loadImage(sourceUrl);
       const width = image.naturalWidth || image.width;
       const height = image.naturalHeight || image.height;
-      if (width * 3 !== height * 4) {
-        throw new Error("图片必须为 4:3 比例，否则无法上传");
+      const articleCover = isCover && form.type === "ARTICLE" && !isOfficialMessage.value;
+      const ratio = articleCover ? 3 / 4 : 4 / 3;
+      let sourceX = 0;
+      let sourceY = 0;
+      let sourceWidth = width;
+      let sourceHeight = height;
+      if (articleCover) {
+        if (width / height > ratio) {
+          sourceWidth = height * ratio;
+          sourceX = (width - sourceWidth) / 2;
+        } else {
+          sourceHeight = width / ratio;
+          sourceY = (height - sourceHeight) / 2;
+        }
+      } else if (width * 3 !== height * 4) {
+        throw new Error("正文图片必须为 4:3 比例，否则无法上传");
       }
 
-      const outputWidth = Math.floor(Math.min(width, contentImageMaxWidth) / 4) * 4;
-      const outputHeight = (outputWidth * 3) / 4;
+      const outputWidth = Math.floor(Math.min(sourceWidth, contentImageMaxWidth) / 4) * 4;
+      const outputHeight = Math.round(outputWidth / ratio);
       processedFile = await processImageFile({
         source: image,
-        sourceRect: { x: 0, y: 0, width, height },
+        sourceRect: { x: sourceX, y: sourceY, width: sourceWidth, height: sourceHeight },
         outputWidth,
         outputHeight,
         quality: contentImageQuality,
@@ -442,7 +456,8 @@ async function uploadImage(file: File) {
       URL.revokeObjectURL(sourceUrl);
     }
 
-    const result = await contentApi.uploadImage(processedFile, createOperationId());
+    const articleCover = isCover && form.type === "ARTICLE" && !isOfficialMessage.value;
+    const result = await contentApi.uploadImage(processedFile, createOperationId(), articleCover ? "ARTICLE_COVER" : "OTHER");
     return result.imageUrl;
   } finally {
     pendingImageUploads.value -= 1;
@@ -471,7 +486,7 @@ async function handleCoverFileChange(event: Event) {
   const file = input?.files?.[0] ?? null;
   if (!file) return;
   try {
-    form.coverImageUrl = await uploadImage(file);
+    form.coverImageUrl = await uploadImage(file, true);
     ElMessage.success("封面图已上传");
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : "上传封面图失败");
@@ -592,7 +607,7 @@ onMounted(() => {
             </el-form-item>
             <el-form-item v-if="!isLegalPage" class="editor-grid__full" label="封面图">
               <div class="cover-editor">
-                <div class="cover-editor__preview">
+                <div class="cover-editor__preview" :class="{ 'cover-editor__preview--article': form.type === 'ARTICLE' && !isOfficialMessage }">
                   <img v-if="form.coverImageUrl" :src="form.coverImageUrl" alt="封面图预览" class="cover-editor__image" />
                   <div v-else class="cover-editor__empty">当前未设置封面图</div>
                 </div>
@@ -600,7 +615,7 @@ onMounted(() => {
                   <el-button type="primary" :icon="Upload" :loading="imageUploading" :disabled="formLocked" @click="chooseCoverImage">上传封面</el-button>
                   <el-button :icon="Picture" :disabled="formLocked" @click="form.coverImageUrl = ''">清空</el-button>
                   <el-input v-model="form.coverImageUrl" :disabled="formLocked" placeholder="也可直接粘贴图片 URL" />
-                  <div class="table-hint">原图大小不限，必须为 4:3；宽度超过 1875px 会等比例缩小，比例不符会拒绝上传。封面和正文图片都适用。</div>
+                  <div class="table-hint">普通文章封面会裁剪并保存为 3:4；正文图片沿用 4:3 规则。官方消息封面规则不变。</div>
                 </div>
               </div>
             </el-form-item>
@@ -652,7 +667,7 @@ onMounted(() => {
             <h1>{{ form.title || "未设置标题" }}</h1>
             <p class="content-preview__summary">{{ form.summary || "未设置摘要" }}</p>
             <p v-if="form.heroNote" class="content-preview__note">{{ form.heroNote }}</p>
-            <img v-if="form.coverImageUrl" :src="form.coverImageUrl" alt="封面图预览" class="content-preview__cover" />
+            <img v-if="form.coverImageUrl" :src="form.coverImageUrl" alt="封面图预览" class="content-preview__cover" :class="{ 'content-preview__cover--article': form.type === 'ARTICLE' && !isOfficialMessage }" />
           </template>
           <div class="content-preview__body" v-html="previewHtml" />
         </article>
@@ -717,6 +732,17 @@ onMounted(() => {
   width: 100%;
   height: auto;
   display: block;
+}
+
+.cover-editor__preview--article {
+  aspect-ratio: 3 / 4;
+}
+
+.cover-editor__preview--article .cover-editor__image,
+.content-preview__cover--article {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .cover-editor__empty {

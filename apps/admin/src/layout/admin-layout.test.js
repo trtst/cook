@@ -1,9 +1,8 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 
-const layoutSource = readFileSync(resolve(import.meta.dirname, "AdminLayout.vue"), "utf8");
-const routerSource = readFileSync(resolve(import.meta.dirname, "../router/index.ts"), "utf8");
+const layoutSource = readFileSync(new URL("./AdminLayout.vue", import.meta.url), "utf8");
+const routerSource = readFileSync(new URL("../router/index.ts", import.meta.url), "utf8");
 
 assert.ok(layoutSource.includes("<span>内容治理</span>"), "Expected sidebar to expose content governance group.");
 assert.ok(

@@ -1,8 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 
-const source = readFileSync(resolve(import.meta.dirname, "content-html.ts"), "utf8");
+const source = readFileSync(new URL("./content-html.ts", import.meta.url), "utf8");
 const bannedProcessName = ["norm", "alize"].join("");
 
 function expectIncludes(snippet) {

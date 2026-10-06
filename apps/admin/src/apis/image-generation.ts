@@ -3,6 +3,7 @@ import { requestData, type PageResult, type OperationId, type UUID } from "./htt
 export type ImageGenerationType = "INGREDIENT" | "RECIPE";
 export type ImageGenerationTargetType = "INGREDIENT" | "RECIPE_COVER" | "RECIPE_STEP" | "WIKI_STEP";
 export type RecipeImageFilter = "ALL" | "ANY" | "COVER" | "STEP" | "WIKI_STEP";
+export type ImageGenerationAspectRatio = "3:4" | "1:1" | "16:9" | "ORIGINAL";
 export type ImageGenerationProviderId = "ARK_SEEDREAM" | "VOLCENGINE_CV";
 
 export interface ImageGenerationCandidate {
@@ -60,7 +61,7 @@ export const imageGenerationApi = {
     if (query.categoryId) params.set("categoryId", String(query.categoryId));
     return requestData<PageResult<ImageGenerationTarget>>(`/admin/image-generation/targets?${params.toString()}`);
   },
-  generate(payload: { targetType: ImageGenerationTargetType; targetId: UUID; contentVersionId?: UUID; stepOrder?: number; prompt: string; operationId: OperationId }) {
+  generate(payload: { targetType: ImageGenerationTargetType; targetId: UUID; contentVersionId?: UUID; stepOrder?: number; aspectRatio?: ImageGenerationAspectRatio; prompt: string; operationId: OperationId }) {
     const { operationId, ...body } = payload;
     return requestData<ImageGenerationCandidate>("/admin/image-generation/generate", { method: "POST", body, idempotencyKey: operationId });
   },

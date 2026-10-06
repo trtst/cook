@@ -1,10 +1,9 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 
-const source = readFileSync(resolve(import.meta.dirname, "UsersPage.vue"), "utf8");
-const userApiSource = readFileSync(resolve(import.meta.dirname, "../apis/user.ts"), "utf8");
-const mainSource = readFileSync(resolve(import.meta.dirname, "../main.ts"), "utf8");
+const source = readFileSync(new URL("./UsersPage.vue", import.meta.url), "utf8");
+const userApiSource = readFileSync(new URL("../apis/user.ts", import.meta.url), "utf8");
+const mainSource = readFileSync(new URL("../main.ts", import.meta.url), "utf8");
 
 function expectIncludes(snippet, content = source) {
   assert.ok(content.includes(snippet), `Expected source to include: ${snippet}`);

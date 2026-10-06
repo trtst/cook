@@ -275,8 +275,8 @@ onMounted(() => {
 }
 
 .topic-row__cover {
-  width: 132px;
-  height: 96px;
+  width: 96px;
+  height: 128px;
   border-radius: 16px;
   object-fit: cover;
   background: #f3f4f6;

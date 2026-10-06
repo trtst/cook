@@ -83,8 +83,8 @@ interface IngredientOptionItem {
   disabled?: boolean;
 }
 
-const coverFrameWidth = 320;
-const coverFrameHeight = 240;
+const coverFrameWidth = 300;
+const coverFrameHeight = 400;
 
 const fuzzyOptions: FuzzyText[] = ["适量"];
 
@@ -382,6 +382,7 @@ const cropTarget = reactive({
   scene: "COVER" as CropScene,
   stepIndex: -1
 });
+const stepCropRatio = ref<"3:4" | "1:1" | "16:9" | "original">("3:4");
 
 const cropState = reactive({
   sourceUrl: "",
@@ -917,6 +918,7 @@ function resetCropState() {
   cropState.y = 0;
   cropTarget.scene = "COVER";
   cropTarget.stepIndex = -1;
+  stepCropRatio.value = "3:4";
   dragState.active = false;
 }
 
@@ -944,8 +946,19 @@ function applyCropScene(scene: CropScene, width: number, height: number) {
     return;
   }
 
-  const maxFrame = 320;
-  const ratio = width / height;
+  stepCropRatio.value = "3:4";
+  applyStepCropRatio(width, height);
+}
+
+function applyStepCropRatio(width: number, height: number) {
+  const maxFrame = 300;
+  const ratio = stepCropRatio.value === "original"
+    ? width / height
+    : stepCropRatio.value === "1:1"
+      ? 1
+      : stepCropRatio.value === "16:9"
+        ? 16 / 9
+        : 3 / 4;
   if (ratio >= 1) {
     cropState.frameWidth = maxFrame;
     cropState.frameHeight = maxFrame / ratio;
@@ -953,6 +966,12 @@ function applyCropScene(scene: CropScene, width: number, height: number) {
     cropState.frameHeight = maxFrame;
     cropState.frameWidth = maxFrame * ratio;
   }
+}
+
+function selectStepCropRatio(value: typeof stepCropRatio.value) {
+  stepCropRatio.value = value;
+  applyStepCropRatio(cropState.sourceWidth, cropState.sourceHeight);
+  centerCropImage(cropState.sourceWidth, cropState.sourceHeight);
 }
 
 function chooseCoverFile() {
@@ -983,14 +1002,17 @@ async function handleImageFileChange(event: Event) {
     return;
   }
 
+  const { scene, stepIndex } = cropTarget;
   const sourceUrl = URL.createObjectURL(file);
   try {
     const image = await loadImage(sourceUrl);
     resetCropState();
+    cropTarget.scene = scene;
+    cropTarget.stepIndex = stepIndex;
     cropState.sourceUrl = sourceUrl;
     cropState.sourceWidth = image.naturalWidth || image.width;
     cropState.sourceHeight = image.naturalHeight || image.height;
-    applyCropScene(cropTarget.scene, cropState.sourceWidth, cropState.sourceHeight);
+    applyCropScene(scene, cropState.sourceWidth, cropState.sourceHeight);
     centerCropImage(cropState.sourceWidth, cropState.sourceHeight);
     cropDialogVisible.value = true;
   } catch {
@@ -1039,7 +1061,7 @@ function updateCropScale(nextScale: number) {
   clampCropPosition();
 }
 
-async function renderCropFile() {
+async function renderCropFile(scene: CropScene) {
   const image = await loadImage(cropState.sourceUrl);
   cropState.outputWidth = Math.max(1, Math.round(cropState.frameWidth / cropState.scale));
   cropState.outputHeight = Math.max(1, Math.round(cropState.frameHeight / cropState.scale));
@@ -1059,28 +1081,29 @@ async function renderCropFile() {
 
   const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, "image/jpeg", 0.92));
   if (!blob) throw new Error("裁图失败");
-  return new File([blob], `recipe-${cropTarget.scene.toLowerCase()}.jpg`, { type: "image/jpeg" });
+  return new File([blob], `recipe-${scene.toLowerCase()}.jpg`, { type: "image/jpeg" });
 }
 
 async function submitRecipeImage() {
   if (imageSaving.value || !cropState.sourceUrl) return;
+  const { scene, stepIndex } = cropTarget;
   imageSaving.value = true;
   try {
-    const file = await renderCropFile();
-    const result = await recipeApi.uploadImage(cropTarget.scene, file, createOperationId());
+    const file = await renderCropFile(scene);
+    const result = await recipeApi.uploadImage(scene, file, createOperationId());
     const previewUrl = URL.createObjectURL(file);
-    if (cropTarget.scene === "COVER") {
+    if (scene === "COVER") {
       form.coverImageTempKey = result.image.tempKey;
       replaceCoverPreviewUrl(previewUrl);
     } else {
-      const step = form.content.steps[cropTarget.stepIndex];
+      const step = form.content.steps[stepIndex];
       if (!step) throw new Error("步骤不存在");
       step.imageTempKey = result.image.tempKey;
       replaceStepPreviewUrl(step, previewUrl);
     }
     cropDialogVisible.value = false;
     resetCropState();
-    ElMessage.success(cropTarget.scene === "COVER" ? "封面图已更新" : "步骤图已更新");
+    ElMessage.success(scene === "COVER" ? "封面图已更新" : "步骤图已更新");
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : "上传菜谱图片失败");
   } finally {
@@ -1434,7 +1457,7 @@ onBeforeUnmount(() => {
               <div class="image-editor__actions">
                 <el-button type="primary" :icon="Upload" :loading="imageSaving" @click="chooseCoverFile">上传 / 替换封面</el-button>
                 <el-button v-if="coverPreviewUrl" @click="clearCoverImage">删除封面</el-button>
-                <div class="image-editor__hint">封面图上传前裁成 `4:3`，系统菜谱列表与详情统一展示封面图。</div>
+                <div class="image-editor__hint">封面图上传前裁成 3:4；步骤图支持 3:4、1:1、16:9 和原尺寸。</div>
               </div>
             </div>
           </el-form-item>
@@ -1574,6 +1597,12 @@ onBeforeUnmount(() => {
             @pointerdown.prevent="beginCropDrag"
           />
         </div>
+        <el-radio-group v-if="cropTarget.scene === 'STEP'" :model-value="stepCropRatio" @update:model-value="selectStepCropRatio">
+          <el-radio-button label="3:4">3:4</el-radio-button>
+          <el-radio-button label="1:1">1:1</el-radio-button>
+          <el-radio-button label="16:9">16:9</el-radio-button>
+          <el-radio-button label="original">原尺寸</el-radio-button>
+        </el-radio-group>
         <el-slider
           :model-value="cropState.scale"
           :min="cropState.minScale"
@@ -1582,7 +1611,7 @@ onBeforeUnmount(() => {
           @update:model-value="updateCropScale"
         />
         <div class="crop-dialog__hint">
-          {{ cropTarget.scene === "COVER" ? "封面固定 4:3" : "步骤图保持当前图片比例" }}
+          {{ cropTarget.scene === "COVER" ? "封面固定 3:4" : "步骤图裁剪比例可选" }}
         </div>
       </div>
       <template #footer>
@@ -1662,7 +1691,7 @@ onBeforeUnmount(() => {
   border: 1px solid #ece7df;
   border-radius: 6px;
   background: #f7f5ef;
-  aspect-ratio: 4 / 3;
+  aspect-ratio: 3 / 4;
 }
 
 .detail-basic-media .detail-cover {
@@ -1854,7 +1883,7 @@ onBeforeUnmount(() => {
 }
 
 .image-editor__preview--cover {
-  aspect-ratio: 4 / 3;
+  aspect-ratio: 3 / 4;
 }
 
 .image-editor__image {
