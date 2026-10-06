@@ -42,6 +42,7 @@ function createService() {
     recipeCookAssistantRequest: {
       groupBy: async () => [{ recipeVersionId: 201, _count: { _all: 1 } }]
     },
+    recipeImportItem: { findMany: async () => [] },
     $transaction: async (input: unknown) => Array.isArray(input) ? Promise.all(input as Promise<unknown>[]) : input
   };
   return new AdminService(prisma as never, {} as never, {} as never, {} as never, {} as never, {} as never);
@@ -61,6 +62,7 @@ test("Wiki backfill list only includes active current versions without READY Wik
     ownerNickname: "小明",
     sourceType: "USER",
     wikiStatus: "NEEDS_REVIEW",
+    hasImportWiki: false,
     hasPendingRequest: true,
     latestRequestAt: "2026-09-21T11:00:00.000Z",
     latestRequestUserUid: 8001,

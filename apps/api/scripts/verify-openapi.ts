@@ -85,7 +85,7 @@ export async function main() {
     app = await NestFactory.create(AppModule, { logger: false });
     app.setGlobalPrefix("api");
     app.useGlobalPipes(new ValidationPipe({ forbidNonWhitelisted: true, whitelist: true, transform: true }));
-    await app.init();
+    // OpenAPI 只读取模块元数据；跳过初始化，避免静态校验触发数据库生命周期钩子。
 
     const config = new DocumentBuilder().setTitle(API_DOC_TITLE).setVersion("0.1.0").build();
     const document = SwaggerModule.createDocument(app, config);

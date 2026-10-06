@@ -521,7 +521,7 @@ test("deleting a created pending import item also deletes its unused ingredient"
     },
     ingredientRecommendation: { count: async () => 0 },
     ingredientFeedback: { count: async () => 0 },
-    fridgeItem: { count: async () => 0 },
+    fridgeTrace: { count: async () => 0 },
     shoppingItem: { count: async () => 0 },
     ingredientImportJob: { update: async () => undefined },
     auditEvent: { create: async () => undefined }

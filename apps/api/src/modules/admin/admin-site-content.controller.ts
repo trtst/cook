@@ -10,6 +10,7 @@ import { OptionalUserAuthGuard } from "../../common/optional-user-auth.guard";
 import { SuperAdminGuard } from "../../common/super-admin.guard";
 import { UserAuthGuard } from "../../common/user-auth.guard";
 import {
+  AdminSiteContentImageUploadDto,
   AdminSiteContentArticleQueryDto,
   AdminSiteContentChannelQueryDto,
   CreateAdminSiteContentChannelDto,
@@ -181,12 +182,13 @@ export class AdminSiteContentController {
   uploadImage(
     @Req() request: AssetRequest,
     @ReadIdempotencyKey() operationId: string,
+    @Body() body: AdminSiteContentImageUploadDto,
     @UploadedFile() file?: { buffer?: Buffer; size?: number }
   ) {
     if (!file) {
       throw new BadRequestException("请上传图片");
     }
-    return this.siteContentImageService.uploadImage(request, request.admin.adminId, operationId, file).then(result => ok(result));
+    return this.siteContentImageService.uploadImage(request, request.admin.adminId, operationId, body.scene, file).then(result => ok(result));
   }
 }
 

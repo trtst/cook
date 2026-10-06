@@ -74,7 +74,7 @@ test("participant note endpoint and batch recipe contract are present", () => {
   assert.doesNotMatch(controllerSource, /参与人把一道菜加入当前饭局的我想吃池/);
 });
 
-test("dining event cancellation releases the plan for a later relaunch", () => {
+test("dining event cancellation deletes the event and its linked plan", () => {
   const controllerSource = readFileSync(resolve(process.cwd(), "src/modules/meal/meal.controller.ts"), "utf8");
   const dtoSource = readFileSync(resolve(process.cwd(), "src/contracts/dtos.ts"), "utf8");
   const serviceSource = readFileSync(resolve(process.cwd(), "src/modules/meal/meal.service.ts"), "utf8");
@@ -89,8 +89,9 @@ test("dining event cancellation releases the plan for a later relaunch", () => {
   assert.match(cancelSource, /current\.participants\.some\(item => item\.status === "ACCEPTED"\)/);
   assert.match(cancelSource, /isDiningEventTimeUp\(current\)/);
   assert.match(cancelSource, /status: "CANCELLED"/);
-  assert.match(cancelSource, /mealPlanItemId: null/);
-  assert.match(cancelSource, /status: \{ in: \["ACTIVE", "OPENED"\] \}/);
+  assert.match(cancelSource, /await tx\.diningEvent\.delete\(\{ where: \{ id: current\.id \} \}\)/);
+  assert.match(cancelSource, /await tx\.mealPlanItem\.delete\(\{ where: \{ id: planItemId \} \}\)/);
+  assert.match(cancelSource, /current\.status === "COMPLETED"[\s\S]*已完成饭局不能取消/);
 
   const createStart = serviceSource.indexOf("async createDiningEvent(");
   const createEnd = serviceSource.indexOf("\n  async createDirectDiningEvent(", createStart);

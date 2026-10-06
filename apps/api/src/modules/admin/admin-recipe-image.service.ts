@@ -32,7 +32,7 @@ const maxOutputImageBytes = 500 * 1024;
 const maxImagePixels = 40_000_000;
 const remoteImageTimeoutMs = 15_000;
 const maxRemoteRedirects = 3;
-const coverRatio = 4 / 3;
+const coverRatio = 3 / 4;
 const coverRatioTolerance = 0.02;
 const tempKeyPattern = /^[a-z0-9-]+(?:\.original)?\.(png|jpg|jpeg|webp)$/i;
 const logger = new Logger("AdminRecipeImageService");
@@ -109,7 +109,7 @@ function assertSceneMeta(scene: AdminRecipeImageScene, meta: ImageMeta) {
   if (scene !== "COVER") return;
   const ratio = meta.width / meta.height;
   if (!Number.isFinite(ratio) || Math.abs(ratio - coverRatio) > coverRatioTolerance) {
-    throw new BadRequestException("系统菜谱封面图必须为 4:3");
+    throw new BadRequestException("系统菜谱封面图必须为 3:4");
   }
 }
 
@@ -342,9 +342,9 @@ export class AdminRecipeImageService {
     let buffer = source;
     if (scene === "COVER") {
       try {
-        buffer = await imageSharp(source).rotate().resize(1200, 900, { fit: "cover", position: "attention" }).jpeg({ quality: 88, mozjpeg: true }).toBuffer();
+        buffer = await imageSharp(source).rotate().resize(900, 1200, { fit: "cover", position: "attention" }).jpeg({ quality: 88, mozjpeg: true }).toBuffer();
       } catch {
-        throw new BadRequestException("生成的封面图无法裁切到 4:3，请重新生成");
+        throw new BadRequestException("生成的封面图无法裁切到 3:4，请重新生成");
       }
     }
     return this.stageTempImage({}, scene, { buffer, size: buffer.length });

@@ -2863,6 +2863,11 @@ export class AdminImageGenerationTargetDto {
   @Min(1)
   stepOrder?: number;
 
+  @ApiPropertyOptional({ enum: ["3:4", "1:1", "16:9", "ORIGINAL"], default: "3:4" })
+  @IsOptional()
+  @IsIn(["3:4", "1:1", "16:9", "ORIGINAL"])
+  aspectRatio?: "3:4" | "1:1" | "16:9" | "ORIGINAL";
+
   @ApiProperty({ maxLength: 1000 })
   @Transform(({ value }) => trimString(value))
   @IsString()
@@ -4565,6 +4570,12 @@ export class ScheduleAdminSiteContentDto extends OperationDto {
   @IsInt()
   @Min(1)
   expectedVersion!: number;
+}
+
+export class AdminSiteContentImageUploadDto {
+  @ApiProperty({ enum: ["ARTICLE_COVER", "OTHER"] })
+  @IsIn(["ARTICLE_COVER", "OTHER"])
+  scene!: "ARTICLE_COVER" | "OTHER";
 }
 
 export class DeleteAdminSiteContentDto extends VersionedOperationDto {}

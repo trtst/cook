@@ -3,7 +3,7 @@ import { Pool, type PoolClient } from "pg";
 
 export const IMAGE_GENERATION_PROVIDERS = Symbol("IMAGE_GENERATION_PROVIDERS");
 
-export type ImageGenerationAspectRatio = "1:1" | "4:3" | "16:9";
+export type ImageGenerationAspectRatio = "1:1" | "3:4" | "16:9" | "ORIGINAL";
 export type ImageGenerationProviderId = "ARK_SEEDREAM" | "VOLCENGINE_CV";
 
 export interface ImageGenerationProvider {
@@ -13,9 +13,9 @@ export interface ImageGenerationProvider {
 export type ImageGenerationProviderMap = Readonly<Record<ImageGenerationProviderId, ImageGenerationProvider>>;
 
 const imageSizes = {
-  "1K": { "1:1": "1024x1024", "4:3": "1152x864", "16:9": "1424x800" },
-  "1.5K": { "1:1": "1536x1536", "4:3": "1792x1344", "16:9": "2048x1152" },
-  "2K": { "1:1": "2048x2048", "4:3": "2368x1776", "16:9": "2816x1584" }
+  "1K": { "1:1": "1024x1024", "3:4": "864x1152", "16:9": "1424x800" },
+  "1.5K": { "1:1": "1536x1536", "3:4": "1344x1792", "16:9": "2048x1152" },
+  "2K": { "1:1": "2048x2048", "3:4": "1776x2368", "16:9": "2816x1584" }
 } as const;
 
 @Injectable()
@@ -32,13 +32,13 @@ export class ArkImageGenerationProvider implements ImageGenerationProvider {
     const watermarkValue = process.env.ARK_IMAGE_WATERMARK?.trim().toLowerCase();
     if (watermarkValue && watermarkValue !== "true" && watermarkValue !== "false") throw new ServiceUnavailableException("ARK_IMAGE_WATERMARK 仅支持 true 或 false");
     const watermark = watermarkValue ? watermarkValue === "true" : true;
-    const size = imageSizes[resolution as keyof typeof imageSizes][options.aspectRatio];
+    const size = options.aspectRatio === "ORIGINAL" ? undefined : imageSizes[resolution as keyof typeof imageSizes][options.aspectRatio];
     let response: Response;
     try {
       response = await fetch(endpoint, {
         method: "POST",
         headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ model, prompt, size, output_format: outputFormat, response_format: "url", stream: false, watermark }),
+        body: JSON.stringify({ model, prompt, ...(size ? { size } : {}), output_format: outputFormat, response_format: "url", stream: false, watermark }),
         signal: AbortSignal.timeout(120_000)
       });
     } catch {
@@ -52,9 +52,9 @@ export class ArkImageGenerationProvider implements ImageGenerationProvider {
   }
 }
 
-const visualImageSizes: Record<ImageGenerationAspectRatio, { width: number; height: number }> = {
+const visualImageSizes: Record<Exclude<ImageGenerationAspectRatio, "ORIGINAL">, { width: number; height: number }> = {
   "1:1": { width: 1328, height: 1328 },
-  "4:3": { width: 1472, height: 1104 },
+  "3:4": { width: 1104, height: 1472 },
   "16:9": { width: 1664, height: 936 }
 };
 
@@ -75,7 +75,7 @@ export class VolcengineVisualImageGenerationProvider implements ImageGenerationP
   async generate(prompt: string, options: { aspectRatio: ImageGenerationAspectRatio }) {
     const apiKey = process.env.VOLCENGINE_CV_API_KEY?.trim();
     if (!apiKey) throw new ServiceUnavailableException("请在 API 服务配置 VOLCENGINE_CV_API_KEY");
-    const { width, height } = visualImageSizes[options.aspectRatio];
+    const dimensions = options.aspectRatio === "ORIGINAL" ? {} : visualImageSizes[options.aspectRatio];
     return this.runSerially(() => this.runWithGlobalLock(async () => {
       let response: Response;
       try {
@@ -85,8 +85,7 @@ export class VolcengineVisualImageGenerationProvider implements ImageGenerationP
           body: JSON.stringify({
             req_key: "high_aes_general_v30l_zt2i",
             prompt,
-            width,
-            height,
+            ...dimensions,
             return_url: true,
             logo_info: { add_logo: true, position: 0, language: 0, opacity: 1, logo_text_content: "炊火记" }
           }),

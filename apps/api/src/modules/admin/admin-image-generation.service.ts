@@ -9,7 +9,7 @@ import type { AdminRecipeImageScene } from "../../contracts/types";
 
 type ImageType = "INGREDIENT" | "RECIPE";
 type TargetType = "INGREDIENT" | "RECIPE_COVER" | "RECIPE_STEP" | "WIKI_STEP";
-type GenerateTarget = { targetType: TargetType; targetId: number; contentVersionId?: number; stepOrder?: number; prompt: string };
+type GenerateTarget = { targetType: TargetType; targetId: number; contentVersionId?: number; stepOrder?: number; aspectRatio?: "3:4" | "1:1" | "16:9" | "ORIGINAL"; prompt: string };
 type RecipeImageTargetRow = Prisma.RecipeGetPayload<{ include: { currentVersion: { include: { cookAssistant: true } }; inspirationCategory: true; owner: { include: { publicContentPoolMember: true } } } }>;
 type CandidateResult = { id: number; targetType: TargetType; targetId: number; contentVersionId: number; stepOrder: number; prompt: string; tempKey: string };
 type ApplyResult = { candidateId: number; applied: true; targetType: TargetType; targetId: number };
@@ -210,7 +210,7 @@ export class AdminImageGenerationService {
     const cached = await this.reserveGeneration(operationId, requestHash, adminId);
     if (cached) return cached;
     const scene: AdminRecipeImageScene = target.targetType === "INGREDIENT" ? "INGREDIENT" : target.targetType === "RECIPE_COVER" ? "COVER" : "STEP";
-    const aspectRatio = target.targetType === "INGREDIENT" ? "1:1" : target.targetType === "RECIPE_COVER" ? "4:3" : "16:9";
+    const aspectRatio = target.targetType === "INGREDIENT" ? "1:1" : target.aspectRatio ?? "3:4";
     let tempKey: string | null = null;
     try {
       await this.assertGenerationTarget(normalizedTarget);

@@ -29,7 +29,7 @@ type ImageMeta = {
 
 const maxRecipeImageBytes = 5 * 1024 * 1024;
 const maxAvatarImageBytes = 2 * 1024 * 1024;
-const recipeCoverRatio = 4 / 3;
+const recipeCoverRatio = 3 / 4;
 const recipeCoverRatioTolerance = 0.02;
 const tempTtlMs = 24 * 60 * 60 * 1000;
 
@@ -273,7 +273,7 @@ export class UploadService {
       outputSizeMessage: "菜谱图片无法压缩到 500 KB 以内，请更换图片"
     });
     if (scene === "RECIPE_COVER" && Math.abs(image.width / image.height - recipeCoverRatio) > recipeCoverRatioTolerance) {
-      throw new BadRequestException("菜谱封面图必须为 4:3");
+      throw new BadRequestException("菜谱封面图必须为 3:4");
     }
     const requestHash = `${draftId}:${scene}:${slotKey}:${sourceMeta.sourceHash}`;
 
@@ -410,6 +410,7 @@ export class UploadService {
     return compressUploadedImage(file.buffer as Buffer, {
       maxInputBytes: 5 * 1024 * 1024,
       maxOutputBytes: 500 * 1024,
+      cropRatio: 4 / 3,
       inputSizeMessage: "饭局封面图片不能超过 5 MB",
       outputSizeMessage: "饭局封面图片无法压缩到 500 KB 以内，请更换图片"
     });

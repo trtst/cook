@@ -4,9 +4,9 @@ import test from "node:test";
 
 const script = readFileSync(new URL("./reset-recipe-fixtures.ts", import.meta.url), "utf8");
 
-test("fixture reset clears nullable recipe references before deleting recipes", () => {
+test("fixture reset clears linked recipe references before deleting recipes", () => {
   const clearPlanReference = script.indexOf("tx.mealPlanDish.updateMany");
-  const clearEventReference = script.indexOf("tx.diningEventParticipant.updateMany");
+  const clearEventReference = script.indexOf("tx.diningEventParticipantBringRecipe.deleteMany");
   const deleteRecipes = script.indexOf("await tx.recipe.deleteMany({});");
 
   assert.ok(clearPlanReference >= 0, "Expected meal plan recipe references to be cleared");

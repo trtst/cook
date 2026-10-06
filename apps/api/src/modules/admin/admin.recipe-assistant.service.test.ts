@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { Prisma } from "@prisma/client";
 import { AdminService } from "./admin.service";
 import type { RecipeContentSnapshot, RecipeImportRecipeBody } from "../../contracts/types";
 
@@ -135,11 +136,11 @@ test("admin imported assistant sync publishes READY only after candidate validat
   const state = await (service as any).syncRecipeAssistant(tx, 100, content(), importedSteps());
 
   assert.equal(writes[0]?.status, "READY");
-  assert.ok(writes[0]?.candidateJson, "Expected imported Wiki to keep a candidate copy");
+  assert.equal(writes[0]?.candidateJson, Prisma.DbNull, "Published assistants should clear the validated candidate copy");
   assert.ok(writes[0]?.snapshotJson, "Expected validated imported Wiki to publish a snapshot");
   assert.ok(writes[0]?.generatedAt instanceof Date);
   assert.equal(state.status, "READY");
-  assert.equal(state.hasCandidate, true);
+  assert.equal(state.hasCandidate, false);
   assert.equal(state.hasSnapshot, true);
 });
 

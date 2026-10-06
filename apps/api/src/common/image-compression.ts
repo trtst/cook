@@ -5,6 +5,7 @@ type ImageCompressionLimit = {
   maxInputBytes: number;
   maxOutputBytes: number;
   maxDimension?: number;
+  cropRatio?: number;
   inputSizeMessage: string;
   outputSizeMessage: string;
 };
@@ -43,8 +44,15 @@ export async function compressUploadedImage(buffer: Buffer, limit: ImageCompress
     const dimensionScale = limit.maxDimension
       ? Math.min(1, limit.maxDimension / Math.max(sourceWidth, sourceHeight))
       : 1;
-    const targetWidth = Math.max(1, Math.round(sourceWidth * dimensionScale));
-    const targetHeight = Math.max(1, Math.round(sourceHeight * dimensionScale));
+    let targetWidth = Math.max(1, Math.round(sourceWidth * dimensionScale));
+    let targetHeight = Math.max(1, Math.round(sourceHeight * dimensionScale));
+    if (limit.cropRatio && Number.isFinite(limit.cropRatio) && limit.cropRatio > 0) {
+      if (targetWidth / targetHeight > limit.cropRatio) {
+        targetWidth = Math.max(1, Math.round(targetHeight * limit.cropRatio));
+      } else {
+        targetHeight = Math.max(1, Math.round(targetWidth / limit.cropRatio));
+      }
+    }
 
     // 先保持裁切比例，再逐级降低尺寸和质量，直到满足成品大小限制。
     for (let pass = 0; pass < maxResizePasses; pass += 1) {
@@ -55,7 +63,13 @@ export async function compressUploadedImage(buffer: Buffer, limit: ImageCompress
       for (const quality of outputQualities) {
         const result = await sharp(buffer, { failOn: "truncated", limitInputPixels: pixelLimit })
           .rotate()
-          .resize({ width, height, fit: "inside", withoutEnlargement: true })
+          .resize({
+            width,
+            height,
+            fit: limit.cropRatio ? "cover" : "inside",
+            position: "centre",
+            withoutEnlargement: true
+          })
           .toFormat(metadata.hasAlpha ? "webp" : "jpeg", metadata.hasAlpha ? { quality } : { quality, mozjpeg: true })
           .toBuffer({ resolveWithObject: true });
 

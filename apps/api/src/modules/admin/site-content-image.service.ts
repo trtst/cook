@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException } from "@nestjs/common";
 import { assetKey, AssetStorageService } from "../../common/asset-storage.service";
+import { compressUploadedImage } from "../../common/image-compression";
 import { completeAdminIdempotentOperation, getAdminIdempotentResult, startAdminIdempotentOperation } from "../../common/idempotency";
 import { PrismaService } from "../../common/prisma.service";
 import type { AdminSiteContentImageUploadResult, OperationId, UUID } from "../../contracts/types";
@@ -61,6 +62,7 @@ export class SiteContentImageService {
     request: RequestLike,
     adminId: UUID,
     operationId: OperationId,
+    scene: "ARTICLE_COVER" | "OTHER",
     file: { buffer?: Buffer; size?: number } | undefined
   ): Promise<AdminSiteContentImageUploadResult> {
     await this.requireSuperAdmin(adminId);
@@ -71,13 +73,26 @@ export class SiteContentImageService {
       throw new BadRequestException("图片大小不能超过 8 MB");
     }
 
-    const kind = detectImageKind(file.buffer);
-    if (!kind) {
+    const sourceKind = detectImageKind(file.buffer);
+    if (!sourceKind) {
       throw new BadRequestException("仅支持 JPG、PNG、WEBP 图片");
     }
 
-    const buffer = file.buffer;
-    const requestHash = `${kind}:${file.size}:${Buffer.from(buffer).toString("base64url")}`;
+    let buffer = file.buffer;
+    let kind = sourceKind;
+    if (scene === "ARTICLE_COVER") {
+      const image = await compressUploadedImage(buffer, {
+        maxInputBytes: maxImageBytes,
+        maxOutputBytes: maxImageBytes,
+        maxDimension: 1875,
+        cropRatio: 3 / 4,
+        inputSizeMessage: "图片大小不能超过 8 MB",
+        outputSizeMessage: "文章封面无法处理，请更换图片"
+      });
+      buffer = image.buffer;
+      kind = image.extension === "jpg" ? "jpeg" : "webp";
+    }
+    const requestHash = `${scene}:${kind}:${file.size}:${Buffer.from(file.buffer).toString("base64url")}`;
     return this.prisma.$transaction(async tx => {
       const repeated = await getAdminIdempotentResult<AdminSiteContentImageUploadResult>(
         tx,

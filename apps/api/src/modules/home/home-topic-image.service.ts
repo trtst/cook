@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { BadRequestException, Inject, Injectable, NotFoundException } from "@nestjs/common";
 import { assetKey, AssetStorageService } from "../../common/asset-storage.service";
+import { compressUploadedImage } from "../../common/image-compression";
 import type { UUID } from "../../contracts/types";
 
 type ImageKind = "jpeg" | "png" | "webp";
@@ -72,13 +73,19 @@ export class HomeTopicImageService {
       throw new BadRequestException("图片大小不能超过 5 MB");
     }
 
-    const kind = detectKind(file.buffer);
-    if (!kind) {
+    if (!detectKind(file.buffer)) {
       throw new BadRequestException("仅支持 JPG、PNG、WEBP 图片");
     }
-
+    const image = await compressUploadedImage(file.buffer, {
+      maxInputBytes: maxImageBytes,
+      maxOutputBytes: maxImageBytes,
+      cropRatio: 3 / 4,
+      inputSizeMessage: "图片大小不能超过 5 MB",
+      outputSizeMessage: "专题封面图片无法处理，请更换图片"
+    });
+    const kind: ImageKind = image.extension === "jpg" ? "jpeg" : "webp";
     const tempPath = this.tempKey(kind);
-    await this.assetStorage.writeObject(tempPath, file.buffer, getType(kind));
+    await this.assetStorage.writeObject(tempPath, image.buffer, getType(kind));
     return { tempPath, kind };
   }
 
