@@ -88,7 +88,8 @@ test("饭局完成写入用过痕迹后清理更旧的同食材痕迹", async ()
         }
         return { count: where.id.in.length };
       }
-    }
+    },
+    homeFridgeRecommendationCache: { findUnique: async () => null }
   };
   const service = new PantryService({
     $transaction: async (run: (client: typeof tx) => Promise<unknown>) => run(tx)

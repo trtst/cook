@@ -54,7 +54,7 @@ import { EntitlementService } from "../entitlement/entitlement.service";
 import { formatRecipeAmount, fromJson, versionToContent } from "../recipe/recipe-content";
 import { isPublicInspirationRecipe } from "../recipe/public-content-user-pool";
 import { IngredientImageService } from "../admin/ingredient-image.service";
-import { fridgeTraceLabel, fridgeTraceWindowDays, isFridgeTraceVisible, type FridgeTraceKind } from "./pantry.fridge-trace";
+import { fridgePresenceState, fridgeTraceLabel, fridgeTraceWindowDays, isFridgeTraceVisible, type FridgeTraceKind } from "./pantry.fridge-trace";
 import { MedalService } from "../user/medal.service";
 
 function toIsoDate(value: Date) {
@@ -397,6 +397,7 @@ export class PantryService {
           }
         });
         await this.compactFridgeTraceHistory(tx, userId, [{ ingredientId: item.ingredientId, name: normalizedName }]);
+        await this.invalidateFridgeRecommendationCacheIfChanged(tx, userId, [item.ingredientId]);
         if (item.maintenanceEligible) {
           await this.recordFridgeMaintenance(tx, userId, operationId, "ADDED", now);
         }
@@ -457,6 +458,7 @@ export class PantryService {
       }
       if (changedItems.length) {
         await this.compactFridgeTraceHistory(tx, userId, changedItems);
+        await this.invalidateFridgeRecommendationCacheIfChanged(tx, userId, changedItems.map(item => item.ingredientId));
       }
       if (hasMaintenanceChange) {
         await this.recordFridgeMaintenance(tx, userId, operationId, "ADDED", now);
@@ -539,6 +541,7 @@ export class PantryService {
       : { ingredientId: item.ingredientId });
     if (!identities.length) return 0;
     const result = await tx.fridgeTrace.deleteMany({ where: { userId, OR: identities } });
+    await this.invalidateFridgeRecommendationCacheIfChanged(tx, userId, items.map(item => item.ingredientId));
     return result.count;
   }
 
@@ -650,6 +653,73 @@ export class PantryService {
     if (removeIds.length) {
       await tx.fridgeTrace.deleteMany({ where: { userId, id: { in: removeIds } } });
     }
+    await this.invalidateFridgeRecommendationCacheIfChanged(tx, userId, ingredientIds);
+  }
+
+  private async invalidateFridgeRecommendationCacheIfChanged(
+    tx: Prisma.TransactionClient,
+    userId: UUID,
+    ingredientIds: Array<UUID | null>
+  ) {
+    const affectedIds = Array.from(new Set(ingredientIds.filter((id): id is UUID => id !== null)));
+    if (!affectedIds.length) return;
+    const cache = await tx.homeFridgeRecommendationCache.findUnique({
+      where: { userId },
+      select: { activeIngredientIds: true }
+    });
+    if (!cache || !Array.isArray(cache.activeIngredientIds)) return;
+    const cachedIds = new Set(cache.activeIngredientIds.map(Number).filter(id => Number.isInteger(id) && id > 0));
+    const traces = await tx.fridgeTrace.findMany({
+      where: {
+        userId,
+        ingredientId: { in: affectedIds },
+        createdAt: { gte: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000) }
+      },
+      select: {
+        id: true,
+        ingredientId: true,
+        kind: true,
+        createdAt: true,
+        categoryName: true,
+        categoryCode: true,
+        ingredient: {
+          select: {
+            categoryId: true,
+            category: { select: { name: true, code: true } }
+          }
+        }
+      }
+    });
+    const grouped = new Map<number, typeof traces>();
+    for (const trace of traces) {
+      if (trace.ingredientId === null) continue;
+      const rows = grouped.get(trace.ingredientId) ?? [];
+      rows.push(trace);
+      grouped.set(trace.ingredientId, rows);
+    }
+    const now = new Date();
+    for (const ingredientId of affectedIds) {
+      const facts = grouped.get(ingredientId) ?? [];
+      const categoryId = facts[0]?.ingredient?.categoryId;
+      const latest = facts.reduce<(typeof facts)[number] | null>((current, item) =>
+        !current || item.createdAt > current.createdAt || (item.createdAt.getTime() === current.createdAt.getTime() && item.id > current.id) ? item : current,
+        null
+      );
+      const state = latest && categoryId && [5001, 5002, 5003, 5004].includes(categoryId)
+        ? fridgePresenceState(facts.map(item => ({
+          id: item.id,
+          kind: item.kind,
+          createdAt: item.createdAt,
+          categoryName: item.categoryName ?? item.ingredient?.category.name ?? null,
+          categoryCode: item.categoryCode ?? item.ingredient?.category.code ?? null
+        })), now)
+        : null;
+      const isActive = state?.status === "PRESENT";
+      if (isActive !== cachedIds.has(ingredientId) || isActive) {
+        await tx.homeFridgeRecommendationCache.deleteMany({ where: { userId } });
+        return;
+      }
+    }
   }
 
   private toFridgeTraceSummary(trace: {
@@ -701,6 +771,7 @@ export class PantryService {
       }
     });
     await this.compactFridgeTraceHistory(tx, userId, [{ ingredientId, name: item.name }]);
+    await this.invalidateFridgeRecommendationCacheIfChanged(tx, userId, [ingredientId]);
     return created;
   }
 
@@ -803,6 +874,7 @@ export class PantryService {
           }))
         });
         await this.compactFridgeTraceHistory(tx, userId, facts.map(fact => ({ ingredientId: fact.ingredientId, name: fact.name })));
+        await this.invalidateFridgeRecommendationCacheIfChanged(tx, userId, facts.map(fact => fact.ingredientId));
       }
       const result: CookingTraceResponse = {
         planItemId,
@@ -1353,6 +1425,7 @@ export class PantryService {
         await tx.fridgeTrace.deleteMany({
           where: { sourceShoppingItemId: itemId, kind: "PURCHASED" }
         });
+        await this.invalidateFridgeRecommendationCacheIfChanged(tx, userId, [item.ingredientId]);
       }
       await tx.shoppingList.update({
         where: { id: listId },
@@ -1384,7 +1457,7 @@ export class PantryService {
       const itemIds = changes.map(change => change.itemId);
       const items = await tx.shoppingItem.findMany({
         where: { listId, id: { in: itemIds }, status: { not: "DELETED" } },
-        select: { id: true, userId: true, status: true, checkedAt: true }
+        select: { id: true, userId: true, status: true, checkedAt: true, ingredientId: true }
       });
       if (items.length !== itemIds.length) {
         throw new NotFoundException("购物项不存在或已移除");
@@ -1411,6 +1484,7 @@ export class PantryService {
           await tx.fridgeTrace.deleteMany({
             where: { sourceShoppingItemId: item.id, kind: "PURCHASED" }
           });
+          await this.invalidateFridgeRecommendationCacheIfChanged(tx, userId, [item.ingredientId]);
         }
         changed = true;
       }
@@ -1535,6 +1609,7 @@ export class PantryService {
         });
         await tx.fridgeTrace.createMany({ data: traces });
         await this.compactFridgeTraceHistory(tx, userId, traces.map(trace => ({ ingredientId: trace.ingredientId, name: trace.name })));
+        await this.invalidateFridgeRecommendationCacheIfChanged(tx, userId, traces.map(trace => trace.ingredientId));
       }
 
       const updated = await tx.shoppingList.updateMany({

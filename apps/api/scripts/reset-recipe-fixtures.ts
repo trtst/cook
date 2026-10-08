@@ -11,6 +11,7 @@ import type { RecipeContentSnapshot, RecipeIngredientSnapshot } from "../src/con
 import { loadLocalEnv } from "../src/common/load-env";
 import { assetKey, AssetStorageService } from "../src/common/asset-storage.service";
 import { buildRecipeSearchText, buildRecipeAssistantSnapshot, contentSizeBytes, toJson } from "../src/modules/recipe/recipe-content";
+import { indexRecipeVersionIngredients } from "../src/modules/recipe/recipe-version-ingredients";
 import { seedResourceId } from "../src/modules/recipe/seed-resource-ids";
 
 loadLocalEnv();
@@ -237,24 +238,28 @@ async function main() {
       steps: [{ text: "鸡蛋打散后与米饭一起翻炒。", imageUrl: null }]
     };
 
-    const createVersion = (ownerId: number, content: RecipeContentSnapshot, images: unknown) => tx.recipeContentVersion.create({
-      data: {
-        createdByUserId: ownerId,
-        name: content.name,
-        story: content.story,
-        baseServings: content.baseServings,
-        difficulty: content.difficulty,
-        duration: content.duration,
-        estimatedCalories: content.estimatedCalories,
-        tips: content.tips,
-        keywordsJson: toJson(content.keywords),
-        ingredientsJson: toJson(content.ingredients),
-        stepsJson: toJson(content.steps),
-        imagesJson: toJson(images),
-        searchText: buildRecipeSearchText(content),
-        contentSizeBytes: Math.max(1024, contentSizeBytes(content))
-      }
-    });
+    const createVersion = async (ownerId: number, content: RecipeContentSnapshot, images: unknown) => {
+      const version = await tx.recipeContentVersion.create({
+        data: {
+          createdByUserId: ownerId,
+          name: content.name,
+          story: content.story,
+          baseServings: content.baseServings,
+          difficulty: content.difficulty,
+          duration: content.duration,
+          estimatedCalories: content.estimatedCalories,
+          tips: content.tips,
+          keywordsJson: toJson(content.keywords),
+          ingredientsJson: toJson(content.ingredients),
+          stepsJson: toJson(content.steps),
+          imagesJson: toJson(images),
+          searchText: buildRecipeSearchText(content),
+          contentSizeBytes: Math.max(1024, contentSizeBytes(content))
+        }
+      });
+      await indexRecipeVersionIngredients(tx, version.id, version.ingredientsJson);
+      return version;
+    };
 
     const completeVersion = await createVersion(systemUserId, completeContent, {
       coverUploadId: null,

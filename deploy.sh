@@ -34,6 +34,7 @@ Notes:
   - api 模式会在停止 cook-api 后执行迁移预检和迁移；迁移失败时服务保持停止，等待数据库恢复处理
   - full/api 模式要求 apps/api/.env 配置 ARK_API_KEY 和 ARK_IMAGE_MODEL；预检只报告缺项，不输出密钥
   - 完整发布要求 apps/worker/.env 配置生产 DATABASE_URL 和 ARTICLE_SCHEDULED_PUBLISH_WORKER_ENABLED=true；迁移成功后自动构建并通过 PM2 启动/重载 cook-worker
+  - API 迁移成功后会自动分批回填菜谱版本食材索引，无需单独执行脚本
   - admin/site 模式会重新构建对应前端并重启 nginx
 EOF
 }
@@ -207,6 +208,12 @@ deploy_api() {
   log "verify prisma migrations"
   pnpm --filter @next-meal/api exec prisma migrate status --schema prisma/schema.prisma
   DATABASE_STATUS="up_to_date"
+
+  log "backfill recipe-version ingredient index"
+  if ! pnpm --filter @next-meal/api run backfill:recipe-version-ingredients -- --apply; then
+    log "recipe-version ingredient backfill failed; cook-api remains stopped, rerun deployment after recovery"
+    return 1
+  fi
 
   log "build api"
   pnpm build:api

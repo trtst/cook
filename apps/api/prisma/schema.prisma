@@ -574,6 +574,24 @@ model AdminImageGenerationSettings {
   @@map("admin_image_generation_settings")
 }
 
+model HomeFridgeRecommendationCache {
+  userId                    Int      @id @map("user_id")
+  activeIngredientIds       Json     @map("active_ingredient_ids")
+  activeExpiresAt           DateTime @map("active_expires_at") @db.Timestamptz(3)
+  candidatePoolExpiresAt    DateTime @map("candidate_pool_expires_at") @db.Timestamptz(3)
+  candidatePool             Json     @default("[]") @map("candidate_pool")
+  currentCandidates         Json     @default("[]") @map("current_candidates")
+  cursorRecipeVersionId     Int      @default(0) @map("cursor_recipe_version_id")
+  seenRecipeNames           Json     @default("[]") @map("seen_recipe_names")
+  seenIngredientSets        Json     @default("[]") @map("seen_ingredient_sets")
+  hasMore                   Boolean  @default(true) @map("has_more")
+  updatedAt                 DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("home_fridge_recommendation_caches")
+}
+
 model AdminImageGenerationCandidate {
   id               Int                          @id @default(autoincrement())
   assetType        AdminImageGenerationAssetType  @map("asset_type")
@@ -852,6 +870,7 @@ model User {
   fridgeMaintenanceEvents  FridgeMaintenanceEvent[]
   diningGroupActivities     DiningGroupActivity[]      @relation("DiningGroupActivityActor")
   fridgeTraces              FridgeTrace[]
+  homeFridgeRecommendationCache HomeFridgeRecommendationCache?
   shoppingItems             ShoppingItem[]
   ownedShoppingLists        ShoppingList[]          @relation("ShoppingListOwner")
   shoppingListMembers       ShoppingListMember[]    @relation("ShoppingListMemberUser")
@@ -1371,6 +1390,7 @@ model Ingredient {
   targetRecommendations IngredientRecommendation[] @relation("IngredientRecommendationTarget")
   feedbacks             IngredientFeedback[]
   fridgeTraces          FridgeTrace[]
+  recipeVersionLinks    RecipeVersionIngredient[]
   shoppingSourceItems   ShoppingItem[]             @relation("ShoppingItemIngredient")
   nutrientMappings      IngredientNutrientMapping[]
   nutrientConversions   IngredientUnitNutrientConversion[]
@@ -1479,10 +1499,23 @@ model RecipeContentVersion {
   cookAssistantUnlocks    CookAssistantUnlock[]
   nutritionSnapshots      RecipeNutritionSnapshot[]
   completenessSnapshots   RecipeCompletenessSnapshot[]
+  ingredientLinks         RecipeVersionIngredient[]
 
   @@index([name])
   @@index([createdByUserId, createdAt])
   @@map("recipe_content_versions")
+}
+
+model RecipeVersionIngredient {
+  recipeVersionId Int @map("recipe_version_id")
+  ingredientId    Int @map("ingredient_id")
+
+  recipeVersion RecipeContentVersion @relation(fields: [recipeVersionId], references: [id], onDelete: Cascade)
+  ingredient    Ingredient           @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+
+  @@id([recipeVersionId, ingredientId])
+  @@index([ingredientId, recipeVersionId])
+  @@map("recipe_version_ingredients")
 }
 
 model RecipeCookAssistant {
@@ -1833,6 +1866,7 @@ model Recipe {
   @@index([inspirationCategoryId, status, updatedAt, id])
   @@index([ownerId, status, updatedAt])
   @@index([ownerId, originVersionId])
+  @@index([currentVersionId])
   @@map("recipes")
 }
 

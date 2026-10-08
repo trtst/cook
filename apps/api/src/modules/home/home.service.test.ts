@@ -27,133 +27,160 @@ function recipeRow({ id, currentVersionId, isInspiration, inspirationCategoryId 
   };
 }
 
-test("home fridge recipes rank confirmed primary ingredient hit rate before hit count", async () => {
-  const recipeWithFullHitRate = recipeRow({
+test("reading homepage fridge recommendations returns the same cached batch without advancing it", async () => {
+  const now = new Date();
+  const candidate = {
+    recipeId: 101,
+    title: "当前推荐",
+    recipeVersionId: 201,
+    matchedIngredientIds: [501],
+    totalIngredientCount: 2
+  };
+  const recipe = recipeRow({
     id: 101,
     currentVersionId: 201,
     isInspiration: false,
-    title: "全命中菜谱",
-    ingredients: [501, 700, 701].map(ingredientId => ({ ingredientId, ingredientName: "食材", amount: { kind: "FUZZY", text: "适量" } }))
+    title: "当前推荐",
+    ingredients: [{ ingredientId: 501, ingredientName: "鸡腿", amount: { kind: "FUZZY", text: "适量" } }]
   });
-  const recipeWithMoreHits = recipeRow({
-    id: 102,
-    currentVersionId: 202,
-    isInspiration: false,
-    title: "主料命中更多的菜谱",
-    ingredients: [501, 502, 503, 700].map(ingredientId => ({ ingredientId, ingredientName: "食材", amount: { kind: "FUZZY", text: "适量" } }))
-  });
-  const recipeWithStableTieBreak = recipeRow({
-    id: 104,
-    currentVersionId: 204,
-    isInspiration: false,
-    title: "同命中率菜谱",
-    ingredients: [501, 502, 503].map(ingredientId => ({ ingredientId, ingredientName: "食材", amount: { kind: "FUZZY", text: "适量" } }))
-  });
-  const recipeForNextPage = recipeRow({
-    id: 103,
-    currentVersionId: 203,
-    isInspiration: false,
-    title: "下一页菜谱",
-    ingredients: [501, 503, 504].map(ingredientId => ({ ingredientId, ingredientName: "食材", amount: { kind: "FUZZY", text: "适量" } }))
-  });
-  const confirmedTags = [
-    { recipeVersionId: 201, tagValue: "501" },
-    { recipeVersionId: 201, tagValue: "501" },
-    { recipeVersionId: 202, tagValue: "501" },
-    { recipeVersionId: 202, tagValue: "502" },
-    { recipeVersionId: 202, tagValue: "503" },
-    { recipeVersionId: 203, tagValue: "501" },
-    { recipeVersionId: 203, tagValue: "503" },
-    { recipeVersionId: 203, tagValue: "504" },
-    { recipeVersionId: 204, tagValue: "501" },
-    { recipeVersionId: 204, tagValue: "502" },
-    { recipeVersionId: 204, tagValue: "503" }
-  ];
-  const capturedQueries: { fridge?: any; tags: any[]; recipes?: any } = { tags: [] };
-  const prisma = {
-    fridgeTrace: {
-      findMany: async (args: any) => {
-        capturedQueries.fridge = args;
-        return [
-          { ingredientId: 501, kind: "MANUAL_PRESENT", createdAt: new Date(), categoryName: null, categoryCode: null, ingredient: null },
-          { ingredientId: 502, kind: "PURCHASED", createdAt: new Date(), categoryName: null, categoryCode: null, ingredient: null }
-        ];
-      }
-    },
-    recipeVersionTag: {
-      findMany: async (args: any) => {
-        capturedQueries.tags.push(args);
-        return args.where.recipeVersionId
-          ? confirmedTags.filter(tag => args.where.recipeVersionId.in.includes(tag.recipeVersionId))
-          : confirmedTags.filter(tag => ["501", "502"].includes(tag.tagValue));
+  let cache = {
+    userId: 1001,
+    activeIngredientIds: [501],
+    activeExpiresAt: new Date(now.getTime() + 60_000),
+    candidatePoolExpiresAt: new Date(now.getTime() + 60_000),
+    candidatePool: [],
+    currentCandidates: [candidate],
+    cursorRecipeVersionId: 201,
+    seenRecipeNames: ["当前推荐"],
+    seenIngredientSets: [[501]],
+    hasMore: true
+  };
+  let updates = 0;
+  const tx = {
+    $queryRaw: async () => [],
+    homeFridgeRecommendationCache: {
+      upsert: async () => cache,
+      findUniqueOrThrow: async () => cache,
+      update: async ({ data }: { data: Record<string, unknown> }) => {
+        updates += 1;
+        cache = { ...cache, ...data };
+        return cache;
       }
     },
     recipe: {
-      findMany: async (args: any) => {
-        if (args.where.originVersionId) return [];
-        capturedQueries.recipes = args;
-        return [recipeWithFullHitRate, recipeWithMoreHits, recipeWithStableTieBreak, recipeForNextPage];
-      }
+      findMany: async () => [recipe]
     }
   };
+  const prisma = { $transaction: async (run: (client: typeof tx) => unknown) => run(tx) };
   const service = new HomeService(prisma as never, {} as never, {} as never);
 
-  const result = await service.getFridgeRecipes(1001);
+  const first = await service.getFridgeRecipes(1001);
+  const second = await service.getFridgeRecipes(1001);
 
-  assert.deepEqual(result.items.map(item => item.recipeId), [101, 104, 102]);
-  assert.equal(result.items[0]?.matchedIngredientCount, 1);
-  assert.equal(result.items[0]?.totalIngredientCount, 1);
-  assert.equal(result.hasNext, true);
-  assert.ok(capturedQueries.fridge?.where.createdAt.gte instanceof Date);
-  assert.ok(capturedQueries.fridge.where.createdAt.gte.getTime() >= Date.now() - 15 * 24 * 60 * 60 * 1000 - 1000);
-  assert.ok(capturedQueries.tags.every(query => query.where.status === "CONFIRMED"));
-  assert.deepEqual(capturedQueries.recipes?.select.currentVersion.select, { difficulty: true, duration: true });
-
-  const nextPage = await service.getFridgeRecipes(1001, 2);
-  assert.deepEqual(nextPage.items.map(item => item.recipeId), [103]);
-  assert.equal(nextPage.hasNext, false);
+  assert.deepEqual(second, first);
+  assert.deepEqual(first.items.map(item => item.recipeId), [101]);
+  assert.equal(updates, 0);
 });
 
-test("home fridge recipes keep the owned copy instead of its inspiration source", async () => {
-  const inspiration = recipeRow({
+test("retrying the same homepage recommendation advance key does not skip another batch", async () => {
+  const candidate = {
+    recipeId: 101,
+    title: "下一组菜谱",
+    recipeVersionId: 201,
+    matchedIngredientIds: [501],
+    totalIngredientCount: 1
+  };
+  const moreCandidates = [102, 103].map(id => ({ ...candidate, recipeId: id, title: `下一组菜谱${id}`, recipeVersionId: id + 100 }));
+  const recipe = recipeRow({
     id: 101,
     currentVersionId: 201,
-    isInspiration: true,
-    inspirationCategoryId: 301,
-    title: "灵感菜谱",
-    ingredients: [{ ingredientId: 501, ingredientName: "鸡腿", amount: { kind: "FUZZY", text: "适量" } }]
-  });
-  const owned = recipeRow({
-    id: 102,
-    currentVersionId: 202,
     isInspiration: false,
-    title: "我的菜谱",
+    title: "下一组菜谱",
     ingredients: [{ ingredientId: 501, ingredientName: "鸡腿", amount: { kind: "FUZZY", text: "适量" } }]
   });
-  const tags = [
-    { recipeVersionId: 201, tagValue: "501" },
-    { recipeVersionId: 202, tagValue: "501" }
-  ];
-  const prisma = {
-    fridgeTrace: {
-      findMany: async () => [
-        { ingredientId: 501, kind: "MANUAL_PRESENT", createdAt: new Date(), categoryName: null, categoryCode: null, ingredient: null }
-      ]
+  let cache = {
+    userId: 1001,
+    activeIngredientIds: [501],
+    activeExpiresAt: new Date(Date.now() + 60_000),
+    candidatePoolExpiresAt: new Date(Date.now() + 60_000),
+    candidatePool: [candidate, ...moreCandidates],
+    currentCandidates: [],
+    cursorRecipeVersionId: 201,
+    seenRecipeNames: ["下一组菜谱"],
+    seenIngredientSets: [[501]],
+    hasMore: true
+  };
+  const idempotencyRecords = new Map<string, any>();
+  let cacheUpdates = 0;
+  const tx = {
+    $queryRaw: async () => [],
+    idempotencyRecord: {
+      findFirst: async ({ where }: { where: { operationId: string } }) => idempotencyRecords.get(where.operationId) ?? null,
+      create: async ({ data }: { data: any }) => {
+        idempotencyRecords.set(data.operationId, data);
+        return data;
+      },
+      updateMany: async ({ where, data }: { where: { operationId: string }, data: any }) => {
+        idempotencyRecords.set(where.operationId, { ...idempotencyRecords.get(where.operationId), ...data });
+        return { count: 1 };
+      }
     },
-    recipeVersionTag: {
-      findMany: async (args: { where: { recipeVersionId?: { in: number[] } } }) =>
-        args.where.recipeVersionId ? tags.filter(tag => args.where.recipeVersionId?.in.includes(tag.recipeVersionId)) : tags
+    homeFridgeRecommendationCache: {
+      upsert: async () => cache,
+      findUniqueOrThrow: async () => cache,
+      update: async ({ data }: { data: Record<string, unknown> }) => {
+        cacheUpdates += 1;
+        cache = { ...cache, ...data };
+        return cache;
+      }
     },
     recipe: {
-      findMany: async (args: { where: { originVersionId?: { in: number[] } } }) =>
-        args.where.originVersionId ? [{ id: owned.id, originVersionId: inspiration.currentVersionId }] : [inspiration, owned]
+      findMany: async () => [recipe, ...moreCandidates.map(item => recipeRow({
+        id: item.recipeId,
+        currentVersionId: item.recipeVersionId,
+        isInspiration: false,
+        title: item.title,
+        ingredients: [{ ingredientId: 501, ingredientName: "鸡腿", amount: { kind: "FUZZY", text: "适量" } }]
+      }))]
     }
   };
+  const prisma = { $transaction: async (run: (client: typeof tx) => unknown) => run(tx) };
   const service = new HomeService(prisma as never, {} as never, {} as never);
 
-  const result = await service.getFridgeRecipes(1001);
+  const first = await service.nextFridgeRecipes(1001, "1234567890");
+  const retried = await service.nextFridgeRecipes(1001, "1234567890");
 
-  assert.equal(result.items.length, 1);
-  assert.equal(result.items[0]?.kind, "MY");
-  assert.equal(result.items[0]?.recipeId, owned.id);
+  assert.deepEqual(retried, first);
+  assert.deepEqual(first.items.map(item => item.recipeId), [101, 102, 103]);
+  assert.equal(cacheUpdates, 1);
+});
+
+test("fridge matching maps historical merged ingredient links to the active target id", async () => {
+  const recipe = recipeRow({
+    id: 101,
+    currentVersionId: 201,
+    isInspiration: false,
+    title: "归并食材菜谱",
+    ingredients: [501, 900].map(ingredientId => ({
+      ingredientId,
+      ingredientName: "食材",
+      amount: { kind: "FUZZY", text: "适量" }
+    }))
+  });
+  const tx = {
+    $queryRaw: async () => [{ recipeVersionId: 201 }],
+    recipe: { findMany: async () => [recipe] },
+    recipeVersionIngredient: {
+      findMany: async () => [
+        { recipeVersionId: 201, ingredientId: 501 },
+        { recipeVersionId: 201, ingredientId: 900 }
+      ]
+    },
+    ingredient: { findMany: async () => [{ id: 501, mergedToId: 900 }] }
+  };
+  const service = new HomeService({} as never, {} as never, {} as never);
+  const batch = await (service as any).loadFridgeRecipeBatch(tx, 1001, [900], 0, 10);
+
+  assert.deepEqual(batch.items[0]?.matchedIngredientIds, [900]);
+  assert.equal(batch.items[0]?.totalIngredientCount, 1);
 });

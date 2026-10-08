@@ -23,6 +23,7 @@ function createEmptyTraceFixture() {
       findMany: async () => [...traceRows],
       deleteMany: async () => ({ count: 0 })
     },
+    homeFridgeRecommendationCache: { findUnique: async () => null },
     fridgeMaintenanceEvent: {
       create: async ({ data }: { data: Record<string, unknown> }) => {
         maintenanceRows.push(data);
@@ -115,6 +116,7 @@ test("批量确认食材有状态使用单个幂等事务并按食材去重", as
         return { count: matched.length };
       }
     },
+    homeFridgeRecommendationCache: { findUnique: async () => null },
     fridgeMaintenanceEvent: { create: async ({ data }: { data: Record<string, unknown> }) => { maintenanceRows.push(data); return data; } }
   };
   const service = new PantryService({

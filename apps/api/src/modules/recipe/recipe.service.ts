@@ -10,6 +10,7 @@ import { Prisma, RecipeStatus, type UploadAsset } from "@prisma/client";
 import { recipeDifficultyText, recipeDurationText } from "../../common/display-text";
 import { PrismaService } from "../../common/prisma.service";
 import { publicInspirationRecipeWhere } from "./public-content-user-pool";
+import { indexRecipeVersionIngredients } from "./recipe-version-ingredients";
 import { toOwnerNicknameSnapshot } from "./recipe-owner-snapshot";
 import { UserTokenService } from "../../common/security/user-token.service";
 import { completeIdempotentOperation, getIdempotentResult, startIdempotentOperation } from "../../common/idempotency";
@@ -1460,6 +1461,7 @@ export class RecipeService {
         const version = await tx.recipeContentVersion.create({
           data: this.buildVersionCreateInput(userId, recipeContent, versionImages, ingredientAliasMap)
         });
+        await indexRecipeVersionIngredients(tx, version.id, version.ingredientsJson);
         await tx.recipeCookAssistant.create({
           data: {
             recipeVersionId: version.id,
@@ -1495,6 +1497,7 @@ export class RecipeService {
         const version = await tx.recipeContentVersion.create({
           data: this.buildVersionCreateInput(userId, recipeContent, versionImages, ingredientAliasMap)
         });
+        await indexRecipeVersionIngredients(tx, version.id, version.ingredientsJson);
         await tx.recipeCookAssistant.create({
           data: {
             recipeVersionId: version.id,

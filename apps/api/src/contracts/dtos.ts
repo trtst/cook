@@ -684,15 +684,6 @@ export class UpdateHomeEntryImageDto extends OperationDto {
   expectedVersion!: number;
 }
 
-export class HomeFridgeRecipesQueryDto {
-  @ApiPropertyOptional({ default: 1 })
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  page = 1;
-}
-
 export class SetHomeEntryStatusDto extends OperationDto {
   @ApiProperty({ enum: ["LISTED", "UNLISTED"] })
   @IsIn(["LISTED", "UNLISTED"])

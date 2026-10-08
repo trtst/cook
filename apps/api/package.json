@@ -24,6 +24,7 @@
     "backfill:ingredient-tag-facts-reviewed": "tsx scripts/ingredient-tag-facts-review.ts",
     "prepare:admin-recipe-governance-fixture": "tsx scripts/prepare-admin-recipe-governance-fixture.ts",
     "backfill:recipe-search-text": "tsx scripts/backfill-recipe-search-text.ts",
+    "backfill:recipe-version-ingredients": "tsx scripts/backfill-recipe-version-ingredients.ts",
     "backfill:recipe-import-units": "tsx scripts/backfill-recipe-import-units.ts",
     "backfill:import-pending-ingredients": "tsx scripts/backfill-import-pending-ingredients.ts",
     "backfill:legacy-version-units": "tsx scripts/backfill-legacy-version-units.ts",

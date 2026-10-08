@@ -55,6 +55,7 @@ test("new food status keeps only the latest status, purchase, and use trace", as
         return { count: matches.length };
       }
     },
+    homeFridgeRecommendationCache: { findUnique: async () => null },
     fridgeMaintenanceEvent: {
       create: async ({ data }: { data: Record<string, unknown> }) => {
         maintenanceEvents.push(data);

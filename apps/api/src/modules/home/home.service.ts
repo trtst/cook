@@ -1,8 +1,15 @@
-import { createHash } from "node:crypto";
+import { createHash, randomInt } from "node:crypto";
 import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException } from "@nestjs/common";
 import { type HomeEntryStatus, type HomeFeatureBoardCard, type HomeFeatureBoardPlacement, type HomeFeatureBoardTargetType, type MealSlot, Prisma } from "@prisma/client";
 import { recipeDifficultyText, recipeDurationText } from "../../common/display-text";
-import { completeAdminIdempotentOperation, getAdminIdempotentResult, startAdminIdempotentOperation } from "../../common/idempotency";
+import {
+  completeAdminIdempotentOperation,
+  completeIdempotentOperation,
+  getAdminIdempotentResult,
+  getIdempotentResult,
+  startAdminIdempotentOperation,
+  startIdempotentOperation
+} from "../../common/idempotency";
 import { PrismaService } from "../../common/prisma.service";
 import type {
   AdminHomeEntriesResponse,
@@ -30,7 +37,8 @@ import type {
 import { PantryService } from "../pantry/pantry.service";
 import { publicInspirationRecipeWhere } from "../recipe/public-content-user-pool";
 import { HomeImageService } from "./home-image.service";
-import { fridgePresentIngredientIds } from "../pantry/pantry.fridge-trace";
+import { canonicalRecipeIngredientIds } from "./recipe-ingredient-canonical";
+import { fridgePresenceState, fridgeTraceWindowDays } from "../pantry/pantry.fridge-trace";
 
 type BoardDb = Prisma.TransactionClient | PrismaService;
 type HomeCardInput = Pick<HomeFeatureBoardCard, "placement" | "title" | "subtitle" | "targetType" | "targetValue" | "artImageUrl" | "badgeText">;
@@ -62,6 +70,9 @@ const fallbackWindowMs = 36 * 60 * 60 * 1000;
 const pastShareWindowMs = 24 * 60 * 60 * 1000;
 const homeFridgeRecipePageSize = 3;
 const homeWeekDayCount = 7;
+const homeFridgeRecipePoolTarget = 9;
+const homeFridgeRecipePoolCacheMs = 30 * 60 * 1000;
+const homeFridgeActiveIngredientCategories = new Set([5001, 5002, 5003, 5004]);
 const weekDayNames = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
 const arrangementStatusPriority: Record<HomeRecentArrangementStatus, number> = {
   TIME_UP_SHARE: 5,
@@ -87,6 +98,76 @@ const pageTargets: HomeEntryPageTarget[] = [
   { label: "我的菜谱管理", value: "/pages_recipe/list/index" }
 ];
 const pageTargetSet = new Set(pageTargets.map(item => item.value));
+
+type CachedFridgeRecipe = {
+  recipeId: number;
+  title: string;
+  recipeVersionId: number;
+  matchedIngredientIds: number[];
+  totalIngredientCount: number;
+};
+
+function jsonNumberArray(value: Prisma.JsonValue): number[] {
+  if (!Array.isArray(value)) return [];
+  return value.map(Number).filter(item => Number.isInteger(item) && item > 0);
+}
+
+function readCachedFridgeRecipes(value: Prisma.JsonValue): CachedFridgeRecipe[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is Prisma.JsonObject => typeof item === "object" && item !== null && !Array.isArray(item))
+    .flatMap(item => {
+      const recipeVersionId = Number(item.recipeVersionId);
+      const matchedIngredientIds = jsonNumberArray(item.matchedIngredientIds as Prisma.JsonValue);
+      const recipeId = Number(item.recipeId);
+      const totalIngredientCount = Number(item.totalIngredientCount);
+      if (!Number.isInteger(recipeVersionId) || !Number.isInteger(recipeId) || !matchedIngredientIds.length || typeof item.title !== "string") return [];
+      if (!Number.isInteger(totalIngredientCount) || totalIngredientCount < matchedIngredientIds.length) return [];
+      return [{ recipeVersionId, recipeId, title: item.title, matchedIngredientIds, totalIngredientCount }];
+    });
+}
+
+function shuffleItems<T>(items: T[]) {
+  const shuffled = [...items];
+  for (let index = shuffled.length - 1; index > 0; index -= 1) {
+    const other = randomInt(index + 1);
+    [shuffled[index], shuffled[other]] = [shuffled[other]!, shuffled[index]!];
+  }
+  return shuffled;
+}
+
+function normalizeFridgeRecipeName(name: string) {
+  return name.trim().replace(/\s+/g, "").toLocaleLowerCase();
+}
+
+function ingredientSetsOverlapBySubset(left: number[], right: number[]) {
+  const leftSet = new Set(left);
+  const rightSet = new Set(right);
+  const leftIsSubset = left.every(id => rightSet.has(id));
+  const rightIsSubset = right.every(id => leftSet.has(id));
+  return leftIsSubset || rightIsSubset;
+}
+
+function indexIngredientSet(index: Map<number, number[][]>, ingredientIds: number[]) {
+  for (const ingredientId of ingredientIds) {
+    const sets = index.get(ingredientId) ?? [];
+    sets.push(ingredientIds);
+    index.set(ingredientId, sets);
+  }
+}
+
+function hasDuplicateIngredientSet(index: Map<number, number[][]>, ingredientIds: number[]) {
+  const relatedSets = new Set<number[]>();
+  for (const ingredientId of ingredientIds) {
+    for (const existing of index.get(ingredientId) ?? []) relatedSets.add(existing);
+  }
+  return Array.from(relatedSets).some(existing => ingredientSetsOverlapBySubset(existing, ingredientIds));
+}
+
+function fridgeRecipeBatchSize(activeIngredientCount: number) {
+  if (activeIngredientCount < 15) return 1500;
+  if (activeIngredientCount < 35) return 1000;
+  return 500;
+}
 const imagePathPattern = /^(?:https?:\/\/[^/]+)?\/(?:static\/)?uploads\/home-entries\/(QUICK_1|QUICK_2|QUICK_3|QUICK_4)$/i;
 const defaultCards: Record<HomeFeatureBoardPlacement, Omit<HomeCardInput, "placement">> = {
   QUICK_1: {
@@ -539,12 +620,180 @@ export class HomeService {
     };
   }
 
-  async getFridgeRecipes(userId: UUID, page = 1): Promise<HomeFridgeRecipesResponse> {
+  async getFridgeRecipes(userId: UUID): Promise<HomeFridgeRecipesResponse> {
+    return this.loadFridgeRecipes(userId, null);
+  }
+
+  async nextFridgeRecipes(userId: UUID, operationId: OperationId): Promise<HomeFridgeRecipesResponse> {
+    return this.loadFridgeRecipes(userId, operationId);
+  }
+
+  private async loadFridgeRecipes(userId: UUID, operationId: OperationId | null): Promise<HomeFridgeRecipesResponse> {
     const now = new Date();
-    const fridgeTraces = await this.prisma.fridgeTrace.findMany({
+    return this.prisma.$transaction(async tx => {
+      // GET 只读取当前批次，只有带幂等键的 POST 才推进“换一换”游标。
+      const operationType = "home-fridge-recipes:next";
+      const requestHash = "advance-current-recommendations";
+      if (operationId) {
+        const repeated = await getIdempotentResult<HomeFridgeRecipesResponse>(
+          tx,
+          operationId,
+          operationType,
+          userId,
+          null,
+          requestHash
+        );
+        if (repeated) return repeated;
+        await startIdempotentOperation(tx, operationId, operationType, userId, null, requestHash);
+      }
+      await tx.homeFridgeRecommendationCache.upsert({
+        where: { userId },
+        create: {
+          userId,
+          activeIngredientIds: [],
+          activeExpiresAt: now,
+          candidatePoolExpiresAt: now,
+        },
+        update: {}
+      });
+      await tx.$queryRaw`SELECT "user_id" FROM "home_fridge_recommendation_caches" WHERE "user_id" = ${userId} FOR UPDATE`;
+      const cache = await tx.homeFridgeRecommendationCache.findUniqueOrThrow({ where: { userId } });
+      let activeIds = jsonNumberArray(cache.activeIngredientIds);
+      let candidatePool = readCachedFridgeRecipes(cache.candidatePool);
+      let currentCandidates = readCachedFridgeRecipes(cache.currentCandidates);
+      let cursorRecipeVersionId = cache.cursorRecipeVersionId;
+      let hasMore = cache.hasMore;
+      let seenNames = Array.isArray(cache.seenRecipeNames)
+        ? cache.seenRecipeNames.map(String)
+        : [];
+      let seenIngredientSets = Array.isArray(cache.seenIngredientSets)
+        ? cache.seenIngredientSets.flatMap(value => Array.isArray(value) ? [jsonNumberArray(value)] : [])
+        : [];
+      let activeExpiresAt = cache.activeExpiresAt;
+      let candidatePoolExpiresAt = cache.candidatePoolExpiresAt;
+
+      if (activeExpiresAt <= now) {
+        const active = await this.loadActiveFridgeIngredients(tx, userId, now);
+        activeIds = active.ingredientIds;
+        activeExpiresAt = active.expiresAt;
+        candidatePool = [];
+        currentCandidates = [];
+        cursorRecipeVersionId = 0;
+        hasMore = activeIds.length > 0;
+        seenNames = [];
+        seenIngredientSets = [];
+        candidatePoolExpiresAt = new Date(now.getTime() + homeFridgeRecipePoolCacheMs);
+      } else if (candidatePoolExpiresAt <= now) {
+        candidatePool = [];
+        currentCandidates = [];
+        cursorRecipeVersionId = 0;
+        hasMore = activeIds.length > 0;
+        seenNames = [];
+        seenIngredientSets = [];
+        candidatePoolExpiresAt = new Date(now.getTime() + homeFridgeRecipePoolCacheMs);
+      }
+
+      if (!activeIds.length) {
+        const result = { items: [], hasNext: false };
+        await tx.homeFridgeRecommendationCache.update({
+          where: { userId },
+          data: {
+            activeIngredientIds: [],
+            activeExpiresAt,
+            candidatePoolExpiresAt,
+            candidatePool: [],
+            currentCandidates: [],
+            cursorRecipeVersionId: 0,
+            seenRecipeNames: [],
+            seenIngredientSets: [],
+            hasMore: false
+          }
+        });
+        if (operationId) {
+          await completeIdempotentOperation(tx, operationId, operationType, userId, null, requestHash, result);
+        }
+        return result;
+      }
+
+      if (!operationId && currentCandidates.length) {
+        return {
+          items: await this.loadCurrentFridgeRecipeItems(tx, userId, currentCandidates),
+          hasNext: candidatePool.length >= homeFridgeRecipePageSize || hasMore
+        };
+      }
+      if (!operationId && !hasMore) return { items: [], hasNext: false };
+
+      const seenNameSet = new Set(seenNames);
+      const seenIngredientIndex = new Map<number, number[][]>();
+      for (const ingredientIds of seenIngredientSets) indexIngredientSet(seenIngredientIndex, ingredientIds);
+      const items: HomeFridgeRecipeItem[] = [];
+      const displayedCandidates: CachedFridgeRecipe[] = [];
+      while (items.length < homeFridgeRecipePageSize) {
+        while (candidatePool.length < homeFridgeRecipePoolTarget && hasMore) {
+          const batch = await this.loadFridgeRecipeBatch(
+            tx,
+            userId,
+            activeIds,
+            cursorRecipeVersionId,
+            fridgeRecipeBatchSize(activeIds.length)
+          );
+          cursorRecipeVersionId = batch.cursorRecipeVersionId;
+          hasMore = batch.hasMore;
+          for (const candidate of shuffleItems(batch.items)) {
+            const normalizedName = normalizeFridgeRecipeName(candidate.title);
+            if (seenNameSet.has(normalizedName)) continue;
+            if (hasDuplicateIngredientSet(seenIngredientIndex, candidate.matchedIngredientIds)) continue;
+            seenNames.push(normalizedName);
+            seenNameSet.add(normalizedName);
+            seenIngredientSets.push(candidate.matchedIngredientIds);
+            indexIngredientSet(seenIngredientIndex, candidate.matchedIngredientIds);
+            candidatePool.push(candidate);
+          }
+        }
+        if (!candidatePool.length) break;
+        const nextCandidates = candidatePool.splice(0, homeFridgeRecipePageSize - items.length);
+        displayedCandidates.push(...nextCandidates);
+        items.push(...await this.loadCurrentFridgeRecipeItems(tx, userId, nextCandidates));
+      }
+      if (items.length < homeFridgeRecipePageSize && !hasMore) {
+        candidatePool = [];
+        displayedCandidates.length = 0;
+        items.length = 0;
+      }
+      currentCandidates = displayedCandidates;
+      await tx.homeFridgeRecommendationCache.update({
+        where: { userId },
+        data: {
+          activeIngredientIds: activeIds,
+          activeExpiresAt,
+          candidatePoolExpiresAt,
+          candidatePool: candidatePool as unknown as Prisma.InputJsonValue,
+          currentCandidates: currentCandidates as unknown as Prisma.InputJsonValue,
+          cursorRecipeVersionId,
+          seenRecipeNames: seenNames as unknown as Prisma.InputJsonValue,
+          seenIngredientSets: seenIngredientSets as unknown as Prisma.InputJsonValue,
+          hasMore
+        }
+      });
+
+      const result = {
+        items,
+        hasNext: candidatePool.length >= homeFridgeRecipePageSize || hasMore
+      };
+      if (operationId) {
+        await completeIdempotentOperation(tx, operationId, operationType, userId, null, requestHash, result);
+      }
+      return result;
+    });
+  }
+
+  private async loadActiveFridgeIngredients(tx: Prisma.TransactionClient, userId: UUID, now: Date) {
+    // 首页只使用近期仍确认“有”的指定食材，过期时间取最早一项以便及时重建缓存。
+    const traces = await tx.fridgeTrace.findMany({
       where: {
         userId,
-        createdAt: { gte: new Date(now.getTime() - 15 * 24 * 60 * 60 * 1000) }
+        createdAt: { gte: new Date(now.getTime() - 15 * 24 * 60 * 60 * 1000) },
+        ingredient: { is: { categoryId: { in: Array.from(homeFridgeActiveIngredientCategories) } } }
       },
       select: {
         id: true,
@@ -553,65 +802,71 @@ export class HomeService {
         createdAt: true,
         categoryName: true,
         categoryCode: true,
-        ingredient: { select: { category: { select: { name: true, code: true } } } }
+        ingredient: {
+          select: {
+            categoryId: true,
+            category: { select: { name: true, code: true } }
+          }
+        }
       }
     });
-    const fridgeIngredientIds = fridgePresentIngredientIds(fridgeTraces.map(item => ({
-      id: item.id,
-      ingredientId: item.ingredientId,
-      kind: item.kind,
-      createdAt: item.createdAt,
-      categoryName: item.categoryName ?? item.ingredient?.category.name ?? null,
-      categoryCode: item.categoryCode ?? item.ingredient?.category.code ?? null
-    })), now);
-    if (fridgeIngredientIds.size === 0) return { items: [], hasNext: false };
-
-    const primaryIngredientTags = await this.prisma.recipeVersionTag.findMany({
-      where: {
-        tagCode: "PRIMARY_INGREDIENT",
-        status: "CONFIRMED",
-        tagValue: { in: Array.from(fridgeIngredientIds, String) }
-      },
-      select: { recipeVersionId: true, tagValue: true }
-    });
-    const matchedPrimaryIds = new Map<number, Set<number>>();
-    for (const tag of primaryIngredientTags) {
-      const ingredientId = Number(tag.tagValue);
-      if (!Number.isInteger(ingredientId) || ingredientId <= 0) continue;
-      const ids = matchedPrimaryIds.get(tag.recipeVersionId) ?? new Set<number>();
-      ids.add(ingredientId);
-      matchedPrimaryIds.set(tag.recipeVersionId, ids);
-    }
-    const candidateVersionIds = Array.from(matchedPrimaryIds.keys());
-    if (!candidateVersionIds.length) return { items: [], hasNext: false };
-
-    const allPrimaryIngredientTags = await this.prisma.recipeVersionTag.findMany({
-      where: {
-        recipeVersionId: { in: candidateVersionIds },
-        tagCode: "PRIMARY_INGREDIENT",
-        status: "CONFIRMED"
-      },
-      select: { recipeVersionId: true, tagValue: true }
-    });
-    const primaryIngredientCounts = new Map<number, Set<number>>();
-    for (const tag of allPrimaryIngredientTags) {
-      const ingredientId = Number(tag.tagValue);
-      if (!Number.isInteger(ingredientId) || ingredientId <= 0) continue;
-      const ids = primaryIngredientCounts.get(tag.recipeVersionId) ?? new Set<number>();
-      ids.add(ingredientId);
-      primaryIngredientCounts.set(tag.recipeVersionId, ids);
-    }
-    const primaryScores = new Map<number, { matchedCount: number; totalCount: number }>();
-    for (const [recipeVersionId, matchedIds] of matchedPrimaryIds) {
-      primaryScores.set(recipeVersionId, {
-        matchedCount: matchedIds.size,
-        totalCount: primaryIngredientCounts.get(recipeVersionId)?.size ?? matchedIds.size
-      });
+    const grouped = new Map<number, typeof traces>();
+    for (const trace of traces) {
+      if (trace.ingredientId === null) continue;
+      const items = grouped.get(trace.ingredientId) ?? [];
+      items.push(trace);
+      grouped.set(trace.ingredientId, items);
     }
 
-    const recipes = await this.prisma.recipe.findMany({
+    const ingredientIds: number[] = [];
+    let expiresAt = new Date(now.getTime() + 15 * 60 * 1000);
+    for (const [ingredientId, facts] of grouped) {
+      const categoryId = facts[0]?.ingredient?.categoryId;
+      if (!categoryId || !homeFridgeActiveIngredientCategories.has(categoryId)) continue;
+      const state = fridgePresenceState(facts.map(item => ({
+        id: item.id,
+        kind: item.kind,
+        createdAt: item.createdAt,
+        categoryName: item.categoryName ?? item.ingredient?.category.name ?? null,
+        categoryCode: item.categoryCode ?? item.ingredient?.category.code ?? null
+      })), now);
+      if (state?.status !== "PRESENT") continue;
+      const latest = facts.reduce((current, item) => item.createdAt > current.createdAt || (item.createdAt.getTime() === current.createdAt.getTime() && item.id > current.id) ? item : current);
+      const categoryName = latest.categoryName ?? latest.ingredient?.category.name ?? null;
+      const categoryCode = latest.categoryCode ?? latest.ingredient?.category.code ?? null;
+      const ingredientExpiresAt = new Date(latest.createdAt.getTime() + fridgeTraceWindowDays(categoryName, categoryCode) * 24 * 60 * 60 * 1000);
+      ingredientIds.push(ingredientId);
+      if (ingredientExpiresAt < expiresAt || ingredientIds.length === 1) expiresAt = ingredientExpiresAt;
+    }
+    return { ingredientIds: ingredientIds.sort((left, right) => left - right), expiresAt };
+  }
+
+  private async loadFridgeRecipeBatch(
+    tx: Prisma.TransactionClient,
+    userId: UUID,
+    activeIngredientIds: number[],
+    cursorRecipeVersionId: number,
+    batchSize: number
+  ) {
+    const versionRows = await tx.$queryRaw<Array<{ recipeVersionId: number }>>(Prisma.sql`
+      SELECT DISTINCT recipe.current_version_id AS "recipeVersionId"
+      FROM recipe_version_ingredients link
+      JOIN recipes recipe ON recipe.current_version_id = link.recipe_version_id
+      JOIN ingredients ingredient ON ingredient.id = link.ingredient_id
+      WHERE (CASE WHEN ingredient.status = 'MERGED' THEN ingredient.merged_to_id ELSE link.ingredient_id END)
+          IN (${Prisma.join(activeIngredientIds)})
+        AND recipe.current_version_id > ${cursorRecipeVersionId}
+        AND recipe.status = 'ACTIVE'
+        AND (recipe.owner_id = ${userId} OR (recipe.is_inspiration = TRUE AND recipe.inspiration_category_id IS NOT NULL))
+      ORDER BY recipe.current_version_id ASC
+      LIMIT ${batchSize}
+    `);
+    if (!versionRows.length) return { items: [] as CachedFridgeRecipe[], cursorRecipeVersionId, hasMore: false };
+    const versionIds = versionRows.map(item => item.recipeVersionId);
+    const nextCursor = Math.max(...versionIds);
+    const recipes = await tx.recipe.findMany({
       where: {
-        currentVersionId: { in: candidateVersionIds },
+        currentVersionId: { in: versionIds },
         status: "ACTIVE",
         OR: [{ ownerId: userId }, publicInspirationRecipeWhere("ACTIVE")]
       },
@@ -623,45 +878,91 @@ export class HomeService {
         isInspiration: true,
         inspirationCategoryId: true,
         currentVersionId: true,
-        currentVersion: {
-          select: {
-            difficulty: true,
-            duration: true
-          }
-        }
+        currentVersion: { select: { difficulty: true, duration: true } }
       },
-      orderBy: [{ updatedAt: "desc" }, { id: "desc" }]
+      orderBy: [{ currentVersionId: "asc" }, { id: "asc" }]
     });
-    const inspirationVersionIds = recipes
+    const links = await tx.recipeVersionIngredient.findMany({
+      where: { recipeVersionId: { in: versionIds } },
+      select: { recipeVersionId: true, ingredientId: true }
+    });
+    const mergedIngredients = links.length
+      ? await tx.ingredient.findMany({
+        where: { id: { in: Array.from(new Set(links.map(link => link.ingredientId))) }, status: "MERGED", mergedToId: { not: null } },
+        select: { id: true, mergedToId: true }
+      })
+      : [];
+    const mergedTargets = new Map(mergedIngredients.flatMap(item =>
+      item.mergedToId === null ? [] : [[item.id, item.mergedToId] as const]
+    ));
+    const ingredientIdsByVersion = new Map<number, Set<number>>();
+    for (const link of links) {
+      const ids = ingredientIdsByVersion.get(link.recipeVersionId) ?? new Set<number>();
+      ids.add(mergedTargets.get(link.ingredientId) ?? link.ingredientId);
+      ingredientIdsByVersion.set(link.recipeVersionId, ids);
+    }
+    const inspirationVersionIds = recipes.filter(item => item.isInspiration && item.inspirationCategoryId !== null).map(item => item.currentVersionId);
+    const ownedRecipeMap = await this.loadOwnedOriginRecipeMap(userId, inspirationVersionIds);
+    const items = recipes.flatMap(recipe => {
+      // 历史版本可能仍引用已归并食材，查询时统一到目标 ID 后再计算命中和去重。
+      const ingredientIds = canonicalRecipeIngredientIds(
+        ingredientIdsByVersion.get(recipe.currentVersionId) ?? [],
+        mergedTargets
+      );
+      const matchedIngredientIds = ingredientIds.filter(id => activeIngredientIds.includes(id));
+      if (!matchedIngredientIds.length) return [];
+      const item = this.toHomeFridgeRecipe(recipe, { matchedCount: matchedIngredientIds.length, totalCount: ingredientIds.length }, ownedRecipeMap);
+      if (!item || (item.kind === "INSPIRATION" && item.ownedRecipeId !== null)) return [];
+      return [{
+        recipeId: recipe.id,
+        title: recipe.title,
+        recipeVersionId: recipe.currentVersionId,
+        matchedIngredientIds,
+        totalIngredientCount: ingredientIds.length
+      }];
+    });
+    return { items, cursorRecipeVersionId: nextCursor, hasMore: versionRows.length === batchSize };
+  }
+
+  private async loadCurrentFridgeRecipeItems(
+    tx: Prisma.TransactionClient,
+    userId: UUID,
+    candidates: CachedFridgeRecipe[]
+  ) {
+    if (!candidates.length) return [];
+    const candidatesById = new Map(candidates.map(item => [item.recipeId, item]));
+    const currentRecipes = await tx.recipe.findMany({
+      where: {
+        id: { in: Array.from(candidatesById.keys()) },
+        status: "ACTIVE",
+        OR: [{ ownerId: userId }, publicInspirationRecipeWhere("ACTIVE")]
+      },
+      select: {
+        id: true,
+        ownerId: true,
+        title: true,
+        coverImageUrl: true,
+        isInspiration: true,
+        inspirationCategoryId: true,
+        currentVersionId: true,
+        currentVersion: { select: { difficulty: true, duration: true } }
+      }
+    });
+    const inspirationVersionIds = currentRecipes
       .filter(item => item.isInspiration && item.inspirationCategoryId !== null)
       .map(item => item.currentVersionId);
     const ownedRecipeMap = await this.loadOwnedOriginRecipeMap(userId, inspirationVersionIds);
-    const recipeVersionIdByRecipeId = new Map(recipes.map(item => [item.id, item.currentVersionId]));
-    const items = recipes
-      .map(item => this.toHomeFridgeRecipe(item, primaryScores.get(item.currentVersionId) ?? null, ownedRecipeMap))
-      .filter((item): item is HomeFridgeRecipeItem => Boolean(item))
-      .filter(item => item.kind !== "INSPIRATION" || item.ownedRecipeId === null)
-      .sort((left, right) => {
-        const leftVersionId = recipeVersionIdByRecipeId.get(left.recipeId) ?? 0;
-        const rightVersionId = recipeVersionIdByRecipeId.get(right.recipeId) ?? 0;
-        const leftScore = primaryScores.get(leftVersionId);
-        const rightScore = primaryScores.get(rightVersionId);
-        const leftMatched = leftScore?.matchedCount ?? 0;
-        const rightMatched = rightScore?.matchedCount ?? 0;
-        const leftTotal = leftScore?.totalCount ?? 0;
-        const rightTotal = rightScore?.totalCount ?? 0;
-        const rateDiff = rightMatched * leftTotal - leftMatched * rightTotal;
-        if (rateDiff !== 0) return rateDiff;
-        if (leftMatched !== rightMatched) return rightMatched - leftMatched;
-        return right.recipeId - left.recipeId;
-      });
-
-    const startIndex = (page - 1) * homeFridgeRecipePageSize;
-
-    return {
-      items: items.slice(startIndex, startIndex + homeFridgeRecipePageSize),
-      hasNext: startIndex + homeFridgeRecipePageSize < items.length
-    };
+    const recipeById = new Map(currentRecipes.map(item => [item.id, item]));
+    return candidates.flatMap(candidate => {
+      const recipe = recipeById.get(candidate.recipeId);
+      if (!recipe || recipe.currentVersionId !== candidate.recipeVersionId) return [];
+      if (recipe.isInspiration && ownedRecipeMap.has(recipe.currentVersionId)) return [];
+      const item = this.toHomeFridgeRecipe(recipe, {
+        matchedCount: candidate.matchedIngredientIds.length,
+        totalCount: candidate.totalIngredientCount
+      }, ownedRecipeMap);
+      return item ? [item] : [];
+    });
   }
 
   async updateAdminHomeEntries(
