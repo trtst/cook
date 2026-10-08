@@ -209,7 +209,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, ref } from "vue";
-import { onShow } from "@dcloudio/uni-app";
+import { onShareAppMessage, onShow } from "@dcloudio/uni-app";
 import { userApi } from "@/apis/user";
 import Layout from "@/components/Layout/Layout.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
@@ -444,6 +444,11 @@ function formatMembershipValidUntil(validUntil: string | null) {
 function isDisabledEntry(entry: PageEntry) {
 	return Boolean(entry.disabledText && !entry.url && !entry.openType);
 }
+
+onShareAppMessage(() => ({
+  title: APP_NAME,
+  path: "/pages/me/index"
+}));
 
 onShow(() => {
 	void syncPageState();

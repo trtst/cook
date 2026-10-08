@@ -23,7 +23,7 @@
 			</view>
 			<PageLoading :visible="pageLoading" :text="pageLoadingText" />
 			<slot name="global-loading" />
-			<TabBar v-if="showTabbar && currentTab" :current="currentTab" />
+			<TabBar v-if="showTabbar && currentTab" :current="currentTab" :hidden="props.tabbarHidden" />
 			<Toast :top-offset="toastTop" />
 			<Confirm />
 			<LoginModal />
@@ -57,6 +57,7 @@ const props = withDefaults(
 		showNavbar?: boolean;
 		showLeft?: boolean;
 		currentTab?: TabKey;
+		tabbarHidden?: boolean;
 		fullScreen?: boolean;
 		pageLoading?: boolean;
 		pageLoadingText?: string;
@@ -73,6 +74,7 @@ const props = withDefaults(
 		showNavbar: true,
 		showLeft: true,
 		currentTab: undefined,
+		tabbarHidden: false,
 		fullScreen: false,
 		pageLoading: false,
 		pageLoadingText: "页面加载中...",
@@ -88,6 +90,7 @@ const props = withDefaults(
 
 const { themeClasses } = useTheme();
 const { navBarTotalHeight, systemInfo } = useSystemInfo();
+// 页面滚动时可临时隐藏底部导航，返回页面后由父页面恢复显示。
 const showTabbar = computed(() => Boolean(props.currentTab));
 const toastTop = computed(() => (props.showNavbar ? navBarTotalHeight.value : systemInfo.value.statusBarHeight));
 </script>

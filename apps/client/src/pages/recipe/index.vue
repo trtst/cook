@@ -3,6 +3,7 @@
   <Layout
     :class="themeClasses"
     current-tab="recipe"
+    :tabbar-hidden="isRecipeScrolling"
     :show-left="false"
     full-screen
     :navbar-capsule-guard="true"
@@ -186,6 +187,8 @@
 
         <scroll-view
           scroll-y
+          :scroll-top="recipeScrollCommand"
+          scroll-with-animation
           class="recipe-scroll"
           refresher-enabled
           refresher-default-style="none"
@@ -193,6 +196,7 @@
           :refresher-threshold="refresherThreshold"
           :refresher-triggered="refresherTriggered"
           :lower-threshold="120"
+          @scroll="handleRecipeScroll"
           @scrolltolower="loadMoreActiveTab"
           @refresherpulling="onRefresherPulling"
           @refresherrefresh="handleRefresherRefresh"
@@ -271,6 +275,20 @@
         </scroll-view>
       </view>
 
+      <view
+        class="recipe-back-top"
+        :class="{
+          'recipe-back-top--scrolling': canShowBackToTop && isRecipeScrolling,
+          'recipe-back-top--visible': canShowBackToTop && !isRecipeScrolling
+        }"
+        :aria-hidden="!canShowBackToTop"
+        hover-class="recipe-back-top--hover"
+        hover-stay-time="100"
+        @click="scrollRecipeToTop"
+      >
+        <text class="cookfont recipe-back-top__icon">&#xe705;</text>
+      </view>
+
       <SheetShell
         v-if="sheetMode"
         :visible="sheetVisible"
@@ -317,7 +335,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue";
-import { onHide, onShow } from "@dcloudio/uni-app";
+import { onHide, onShareAppMessage, onShow } from "@dcloudio/uni-app";
 import emptyStateIllustration from "@/assets/empty.png";
 import {
 	recipeApi,
@@ -352,6 +370,7 @@ import { useSettingsStore, type ThemeMode, type ThemePalette, type ThemeSkin } f
 import { formatThemeText } from "@/themes";
 import { difficultyOptions, durationOptions } from "@/utils/recipe-meta";
 import { defaultRecipeTab } from "@/utils/recipe-access";
+import { APP_NAME } from "@/config/app";
 
 type RecipeTab = "my" | "inspiration";
 type SheetMode = "" | "my";
@@ -430,6 +449,11 @@ const durationItems = [{ value: "" as const, label: "全部" }, ...durationOptio
 const activeTab = ref<RecipeTab>(defaultRecipeTab(sessionStore.isLoggedIn));
 const keyword = ref("");
 const showFilters = ref(false);
+const recipeScrollTop = ref(0);
+const recipeScrollCommand = ref(0);
+const isRecipeScrolling = ref(false);
+const backToTopThreshold = 320;
+let recipeScrollStopTimer: ReturnType<typeof setTimeout> | undefined;
 const loading = ref(false);
 const loadingMore = ref(false);
 const errorText = ref("");
@@ -548,6 +572,9 @@ const emptyStateDescription = computed(() =>
 );
 const emptyStateArt = computed(() => emptyStateIllustration);
 const currentHasNext = computed(() => tabHasNext.value[activeTab.value]);
+const canShowBackToTop = computed(
+	() => recipeScrollTop.value > backToTopThreshold && !showFilters.value && !sheetVisible.value
+);
 const loadedMoreOnceMap = ref<Record<RecipeTab, boolean>>({
 	my: false,
 	inspiration: false
@@ -560,15 +587,44 @@ const inlineLoadingText = computed(() => {
 	}
 	return loadingTips;
 });
+onShareAppMessage(() => ({
+  title: APP_NAME,
+  path: "/pages/recipe/index"
+}));
+
 onShow(() => {
 	consumeRecipeTabIntent();
 	void loadActiveTab();
 });
 
 onHide(() => {
+	if (recipeScrollStopTimer) {
+		clearTimeout(recipeScrollStopTimer);
+		recipeScrollStopTimer = undefined;
+	}
+	isRecipeScrolling.value = false;
 	showFilters.value = false;
 	closeSheet(true);
 });
+
+function handleRecipeScroll(event: { detail?: { scrollTop?: number } }) {
+	recipeScrollTop.value = Math.max(0, event.detail?.scrollTop ?? 0);
+	isRecipeScrolling.value = true;
+	if (recipeScrollStopTimer) clearTimeout(recipeScrollStopTimer);
+	recipeScrollStopTimer = setTimeout(() => {
+		isRecipeScrolling.value = false;
+		recipeScrollStopTimer = undefined;
+	}, 300);
+}
+
+// 仅在滚动到阈值后显示返回顶部按钮，避免遮挡菜谱首屏内容。
+function scrollRecipeToTop() {
+	isRecipeScrolling.value = true;
+	recipeScrollCommand.value = recipeScrollTop.value;
+	void nextTick(() => {
+		recipeScrollCommand.value = 0;
+	});
+}
 
 watch(
 	() => sessionStore.isLoggedIn,
@@ -1160,6 +1216,48 @@ defineExpose({
   min-height: 0;
   overflow: hidden;
   padding: 0 var(--space-page);
+}
+
+.recipe-back-top {
+  position: absolute;
+  right: 28rpx;
+  bottom: calc(var(--tabbar-shell-height) + env(safe-area-inset-bottom) + 24rpx);
+  z-index: 902;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 88rpx;
+  height: 88rpx;
+  border-radius: 50%;
+  background: var(--button-primary-bg);
+  box-shadow: var(--button-primary-shadow);
+  color: var(--button-primary-text);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(calc(50% + 28rpx));
+  transition:
+    transform 420ms cubic-bezier(0.22, 0.61, 0.36, 1),
+    opacity 360ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.recipe-back-top--visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(0);
+}
+
+.recipe-back-top--scrolling {
+  opacity: 0.35;
+}
+
+.recipe-back-top--hover {
+  opacity: 0.85;
+}
+
+.recipe-back-top__icon {
+  color: inherit;
+  font-size: 50rpx;
+  line-height: 1;
 }
 
 .filter-overlay {

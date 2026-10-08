@@ -1,5 +1,8 @@
 <template>
-  <view class="tabbar-shell" :class="[`tabbar-shell--${effectiveSkin}`, { 'tabbar-shell--embedded': !fixed }]">
+  <view
+    class="tabbar-shell"
+    :class="[`tabbar-shell--${effectiveSkin}`, { 'tabbar-shell--embedded': !fixed, 'tabbar-shell--hidden': hidden }]"
+  >
     <view class="tabbar">
       <view class="tabbar__active-pill" :style="activePillStyle" />
       <view
@@ -53,13 +56,16 @@ const props = withDefaults(
     current: TabKey;
     interactive?: boolean;
     fixed?: boolean;
+    hidden?: boolean;
   }>(),
   {
     interactive: true,
-    fixed: true
+    fixed: true,
+    hidden: false
   }
 );
 
+// hidden 只控制视觉与触摸层，保留组件挂载以避免切页时重置导航状态。
 const { effectiveSkin } = useTheme();
 const sessionStore = useSessionStore();
 const activeIndex = computed(() => Math.max(TAB_ITEMS.findIndex(item => item.key === props.current), 0));
@@ -117,6 +123,21 @@ async function syncBadgeSnapshot() {
   left: 0;
   z-index: 900;
   height: calc(var(--tabbar-shell-height) + env(safe-area-inset-bottom));
+  pointer-events: none;
+  opacity: 1;
+  transform: translateY(0);
+  transition:
+    transform 420ms cubic-bezier(0.22, 0.61, 0.36, 1),
+    opacity 360ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.tabbar-shell--hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(100%);
+}
+
+.tabbar-shell--hidden .tabbar {
   pointer-events: none;
 }
 

@@ -1,5 +1,5 @@
 import { cfg } from "@/config";
-import { get, type IsoDateTime, type UUID } from "./http";
+import { get, post, type IsoDateTime, type OperationId, type UUID } from "./http";
 
 export type HomeEntryPlacement = "QUICK_1" | "QUICK_2" | "QUICK_3" | "QUICK_4";
 export type HomeEntryTargetType = "PAGE" | "WEB_VIEW";
@@ -188,8 +188,11 @@ export const homeApi = {
   getWeekOverview() {
     return get<HomeWeekOverview>(`${cfg.domain}/api/home/week-overview`);
   },
-  getFridgeRecipes(page = 1) {
-    return get<HomeFridgeRecipesResponse>(`${cfg.domain}/api/home/fridge-recipes`, { page });
+  getFridgeRecipes() {
+    return get<HomeFridgeRecipesResponse>(`${cfg.domain}/api/home/fridge-recipes`);
+  },
+  nextFridgeRecipes(operationId: OperationId) {
+    return post<HomeFridgeRecipesResponse>(`${cfg.domain}/api/home/fridge-recipes`, undefined, { idempotencyKey: operationId });
   },
   getCurrentTopic() {
     return get<HomeTopicCurrentResponse>(`${cfg.domain}/api/home-topics/current`);

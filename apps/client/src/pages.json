@@ -8,6 +8,7 @@
       "style": {
         "navigationBarTitleText": "炊火记",
         "navigationStyle": "custom",
+        "enableShareAppMessage": true,
         "backgroundColor": "#f7f4ee"
       }
     },
@@ -16,6 +17,7 @@
       "style": {
         "navigationBarTitleText": "菜谱",
         "navigationStyle": "custom",
+        "enableShareAppMessage": true,
         "backgroundColor": "#f7f4ee"
       }
     },
@@ -24,6 +26,7 @@
       "style": {
         "navigationBarTitleText": "我的",
         "navigationStyle": "custom",
+        "enableShareAppMessage": true,
         "backgroundColor": "#f7f4ee"
       }
     },

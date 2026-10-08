@@ -258,7 +258,7 @@
 </template>
 
 <script setup lang="ts">
-import { onLoad, onShow } from "@dcloudio/uni-app";
+import { onLoad, onShareAppMessage, onShow } from "@dcloudio/uni-app";
 import { computed, ref } from "vue";
 import { isUniRequestBlockedError } from "@/apis/adapters/uni";
 import {
@@ -273,6 +273,7 @@ import {
   type HomeWeekOverviewStatus
 } from "@/apis/home";
 import { fridgeApi } from "@/apis/fridge";
+import { createOperationId } from "@/utils/operation-id";
 import { shoppingApi } from "@/apis/shopping";
 import Empty from "@/components/Empty/Empty.vue";
 import ImageEmpty from "@/components/ImageEmpty.vue";
@@ -288,6 +289,7 @@ import { useAppConfigStore } from "@/stores/app-config";
 import { useLoginModalStore } from "@/stores/login-modal";
 import { useSessionStore } from "@/stores/session";
 import { useSettingsStore } from "@/stores/settings";
+import { APP_NAME } from "@/config/app";
 import { formatThemeText, type ThemeMode, type ThemePalette, type ThemeSkin } from "@/themes";
 import {
   buildRecentArrangementDetailUrl,
@@ -346,8 +348,10 @@ const weekOverview = ref<HomeWeekOverview | null>(null);
 const fridgeRecipesLoading = ref(false);
 const fridgeRecipesLoaded = ref(false);
 const fridgeRecipes = ref<HomeFridgeRecipeItem[]>([]);
-const fridgeRecipePage = ref(1);
 const fridgeRecipesHasNext = ref(false);
+const fridgeRecipesCanRetry = ref(false);
+const fridgeRecipesExhausted = ref(false);
+const pendingFridgeRecipeOperationId = ref<string | null>(null);
 const pantrySummaryLoading = ref(false);
 const pantrySummaryLoaded = ref(false);
 const pantryIngredientCount = ref(0);
@@ -449,14 +453,17 @@ const pantrySummaryHintText = computed(() => {
 const hasFridgeIngredients = computed(() => pantryIngredientCount.value > 0);
 const fridgeRecipesEmptyTitle = computed(() => {
   if (!sessionStore.isLoggedIn) return "登录后看看能做什么";
-  return hasFridgeIngredients.value ? "这次还没找到合适的菜" : "家里还没记下食材";
+  if (fridgeRecipesExhausted.value) return "这一轮能匹配的菜已经看完啦";
+  if (!hasFridgeIngredients.value) return "最近没有可用来匹配的食材";
+  return "暂时没有匹配到菜谱";
 });
 const fridgeRecipesEmptyDescription = computed(() => {
   if (!sessionStore.isLoggedIn) return "记下家里已有的食材后，这里会按食材匹配菜谱。";
-  if (hasFridgeIngredients.value) return "没关系，可以逛逛菜谱，或者试试智能搭配。";
-  return "先记下几样家里已有的食材，我来帮你看看能做什么。";
+  if (fridgeRecipesExhausted.value) return "更新家里的食材后，再来看看还能匹配到哪些菜。";
+  if (!hasFridgeIngredients.value) return "确认一下哪些食材最近还在家里，我们再帮你找能做的菜。";
+  return "更新家里的食材后，再来看看能匹配到哪些菜。";
 });
-const fridgeRecipesEmptyPrimaryActionText = computed(() => (hasFridgeIngredients.value ? "去看食谱" : "去记食材"));
+const fridgeRecipesEmptyPrimaryActionText = computed(() => "去更新食材");
 const homeNextStatus = computed<HomeNextMealStatus>(() => nextMealState.value?.status ?? "NO_ARRANGEMENT");
 const weekOverviewState = computed<HomeWeekOverview | null>(() => weekOverview.value);
 const weekOverviewStatus = computed<HomeWeekOverviewStatus>(() => weekOverviewState.value?.status ?? "NO_ARRANGEMENT");
@@ -498,6 +505,11 @@ const recentArrangementMeta = computed(() => {
 const recentArrangementStatusText = computed(() => (recentArrangement.value ? recentArrangementCopyPicker.statusText(recentArrangement.value) : ""));
 const recentArrangementHintText = computed(() => (recentArrangement.value ? recentArrangementCopyPicker.hintText(recentArrangement.value) : ""));
 
+onShareAppMessage(() => ({
+  title: APP_NAME,
+  path: "/pages/home/index"
+}));
+
 onLoad(query => {
   pendingLoginPrompt.value = parseHomeLoginPrompt(query?.login);
 });
@@ -505,7 +517,7 @@ onLoad(query => {
 onShow(() => {
   openPendingLoginPrompt();
   void useAppConfigStore().refreshForHomeShow();
-  void Promise.all([loadHomeEntries(), loadNextMealState(true), loadWeekOverview(true), loadFridgeRecipes(), loadPantrySummary(true)]);
+  void Promise.all([loadHomeEntries(), loadNextMealState(true), loadWeekOverview(true), loadFridgeRecipes(true), loadPantrySummary(true)]);
 });
 
 function parseHomeLoginPrompt(value: unknown) {
@@ -629,11 +641,12 @@ async function loadWeekOverview(force = false) {
   await weekOverviewLoadPromise;
 }
 
-async function loadFridgeRecipes(force = false, page = fridgeRecipePage.value) {
+async function loadFridgeRecipes(force = false) {
   if (!sessionStore.isLoggedIn) {
     fridgeRecipes.value = [];
-    fridgeRecipePage.value = 1;
     fridgeRecipesHasNext.value = false;
+    fridgeRecipesCanRetry.value = false;
+    fridgeRecipesExhausted.value = false;
     fridgeRecipesLoading.value = false;
     fridgeRecipesLoaded.value = false;
     return;
@@ -648,16 +661,20 @@ async function loadFridgeRecipes(force = false, page = fridgeRecipePage.value) {
 
   fridgeRecipesLoading.value = true;
   fridgeRecipesLoadPromise = homeApi
-    .getFridgeRecipes(page)
+    .getFridgeRecipes()
     .then(result => {
       fridgeRecipes.value = result.items;
-      fridgeRecipePage.value = page;
       fridgeRecipesHasNext.value = result.hasNext;
+      fridgeRecipesCanRetry.value = false;
+      fridgeRecipesExhausted.value = false;
       fridgeRecipesLoaded.value = true;
+      pendingFridgeRecipeOperationId.value = null;
     })
     .catch(() => {
       fridgeRecipes.value = [];
       fridgeRecipesHasNext.value = false;
+      fridgeRecipesCanRetry.value = true;
+      fridgeRecipesExhausted.value = false;
       fridgeRecipesLoaded.value = true;
     })
     .finally(() => {
@@ -869,16 +886,35 @@ async function refreshFridgeRecipeRecommendations() {
   }
 
   if (fridgeRecipesLoadPromise) await fridgeRecipesLoadPromise;
+  if (fridgeRecipesLoading.value) return;
 
-  const nextPage = fridgeRecipesHasNext.value ? fridgeRecipePage.value + 1 : 1;
-  await loadFridgeRecipes(true, nextPage);
+  // 页面刷新只读取当前批次；点击“换一换”用同一个幂等键推进一次。
+  if (!pendingFridgeRecipeOperationId.value) {
+    pendingFridgeRecipeOperationId.value = createOperationId();
+  }
+  fridgeRecipesLoading.value = true;
+  fridgeRecipesLoadPromise = homeApi
+    .nextFridgeRecipes(pendingFridgeRecipeOperationId.value)
+    .then(result => {
+      fridgeRecipes.value = result.items;
+      fridgeRecipesHasNext.value = result.hasNext;
+      fridgeRecipesCanRetry.value = false;
+      fridgeRecipesExhausted.value = result.items.length === 0 && fridgeRecipesLoaded.value;
+      fridgeRecipesLoaded.value = true;
+      pendingFridgeRecipeOperationId.value = null;
+    })
+    .catch(() => {
+      fridgeRecipesCanRetry.value = true;
+      fridgeRecipesExhausted.value = false;
+    })
+    .finally(() => {
+      fridgeRecipesLoading.value = false;
+      fridgeRecipesLoadPromise = null;
+    });
+  await fridgeRecipesLoadPromise;
 }
 
 function openFridgeEmptyPrimaryAction() {
-  if (hasFridgeIngredients.value) {
-    void uniPlatform.navigation.switchTab("/pages/recipe/index");
-    return;
-  }
   navigateTo("/pages_pantry/index/index");
 }
 
