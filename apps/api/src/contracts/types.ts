@@ -927,6 +927,13 @@ export interface AdminSiteContentSummary {
   updatedAt: IsoDateTime;
 }
 
+export type PublicArticleChannelCode = "KITCHEN" | "COOK" | "FOOD";
+
+export interface AdminSiteContentCalendarDay {
+  date: string;
+  channelCodes: PublicArticleChannelCode[];
+}
+
 export interface AdminSitePageSummary extends AdminSiteContentSummary {
   exists: boolean;
   fixedSlug: string;

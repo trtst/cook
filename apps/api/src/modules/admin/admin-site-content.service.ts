@@ -13,6 +13,7 @@ import { PrismaService } from "../../common/prisma.service";
 import { sanitizeContentHtml } from "./content-html";
 import type {
   AdminSiteContentChannelSummary,
+  AdminSiteContentCalendarDay,
   AdminSiteContentDetail,
   AdminSiteContentSummary,
   AdminSitePageSummary,
@@ -246,7 +247,7 @@ export class AdminSiteContentService {
     page: number,
     pageSize: number,
     adminId: UUID,
-    filters: { channelId?: UUID; status?: SiteContentStatus; keyword?: string }
+    filters: { channelId?: UUID; status?: SiteContentStatus; keyword?: string; publishedDate?: string }
   ): Promise<PageResult<AdminSiteContentSummary>> {
     await this.requireSuperAdmin(adminId);
     await this.ensureDefaultChannels();
@@ -254,10 +255,25 @@ export class AdminSiteContentService {
     const normalizedPageSize = Math.min(100, toPositiveInt(pageSize, 20));
     const skip = (normalizedPage - 1) * normalizedPageSize;
     const keyword = filters.keyword?.trim();
+    const [publishYear, publishMonth, publishDay] = filters.publishedDate?.split("-").map(Number) ?? [];
+    // 后台文章日期筛选统一按北京时间计算，避免服务器时区影响日期边界。
+    const chinaOffset = 8 * 60 * 60 * 1000;
+    const publishDateStart = filters.publishedDate
+      ? new Date(Date.UTC(publishYear, publishMonth - 1, publishDay) - chinaOffset)
+      : undefined;
+    const publishDateEnd = filters.publishedDate
+      ? new Date(Date.UTC(publishYear, publishMonth - 1, publishDay + 1) - chinaOffset)
+      : undefined;
     const where: Prisma.SiteContentWhereInput = {
       type: "ARTICLE",
       ...(filters.channelId ? { channelId: filters.channelId } : {}),
       ...(filters.status ? { status: filters.status } : {}),
+      ...(publishDateStart && publishDateEnd
+        ? {
+            publishedAt: { gte: publishDateStart, lt: publishDateEnd },
+            channel: { is: { code: { in: publicArticleChannels.map(channel => channel.code) } } }
+          }
+        : {}),
       ...(keyword
         ? {
             OR: [
@@ -294,6 +310,43 @@ export class AdminSiteContentService {
       total,
       hasNext: skip + items.length < total
     };
+  }
+
+  async listArticleCalendar(month: string, adminId: UUID): Promise<AdminSiteContentCalendarDay[]> {
+    await this.requireSuperAdmin(adminId);
+    await this.ensureDefaultChannels();
+
+    const [year, monthNumber] = month.split("-").map(Number);
+    // 月历按北京时间切分月份，保证后台展示与运营日期一致。
+    const chinaOffset = 8 * 60 * 60 * 1000;
+    const monthStart = new Date(Date.UTC(year, monthNumber - 1, 1) - chinaOffset);
+    const nextMonthStart = new Date(Date.UTC(year, monthNumber, 1) - chinaOffset);
+    const rows = await this.prisma.$queryRaw<Array<{ date: string; channelCode: "KITCHEN" | "COOK" | "FOOD" }>>`
+      SELECT
+        TO_CHAR((content.published_at AT TIME ZONE 'Asia/Shanghai')::date, 'YYYY-MM-DD') AS "date",
+        channel.code AS "channelCode"
+      FROM site_contents AS content
+      INNER JOIN site_content_channels AS channel ON channel.id = content.channel_id
+      WHERE content.type = 'ARTICLE'
+        AND content.published_at >= ${monthStart}
+        AND content.published_at < ${nextMonthStart}
+        AND channel.code IN ('KITCHEN', 'COOK', 'FOOD')
+      GROUP BY 1, 2
+      ORDER BY 1, 2
+    `;
+
+    const channelCodesByDate = new Map<string, Set<"KITCHEN" | "COOK" | "FOOD">>();
+    for (const row of rows) {
+      const channelCodes = channelCodesByDate.get(row.date) ?? new Set();
+      channelCodes.add(row.channelCode);
+      channelCodesByDate.set(row.date, channelCodes);
+    }
+
+    const channelOrder = new Map(publicArticleChannels.map((channel, index) => [channel.code, index]));
+    return [...channelCodesByDate].map(([date, channelCodes]) => ({
+      date,
+      channelCodes: [...channelCodes].sort((left, right) => channelOrder.get(left)! - channelOrder.get(right)!)
+    }));
   }
 
   async getDetail(contentId: UUID, adminId: UUID): Promise<AdminSiteContentDetail> {

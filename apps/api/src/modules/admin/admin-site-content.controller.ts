@@ -11,6 +11,7 @@ import { SuperAdminGuard } from "../../common/super-admin.guard";
 import { UserAuthGuard } from "../../common/user-auth.guard";
 import {
   AdminSiteContentImageUploadDto,
+  AdminSiteContentArticleCalendarQueryDto,
   AdminSiteContentArticleQueryDto,
   AdminSiteContentChannelQueryDto,
   CreateAdminSiteContentChannelDto,
@@ -26,12 +27,14 @@ import {
 } from "../../contracts/dtos";
 import {
   AdminSiteContentChannelModel,
+  AdminSiteContentCalendarDayModel,
   AdminSiteContentDetailModel,
   AdminSiteContentDeleteResultModel,
   AdminSiteContentImageUploadResultModel,
   AdminSiteContentSummaryModel,
   AdminSitePageSummaryModel,
   ApiOkModel,
+  ApiOkArray,
   ApiOkPage,
   SiteContentArticleDetailModel,
   SiteContentArticleListModel,
@@ -108,9 +111,16 @@ export class AdminSiteContentController {
       .listArticles(query.page, query.pageSize, request.admin.adminId, {
         channelId: query.channelId,
         status: query.status,
-        keyword: query.keyword
+        keyword: query.keyword,
+        publishedDate: query.publishedDate
       })
       .then(result => ok(result));
+  }
+
+  @Get("articles/calendar")
+  @ApiOkArray(AdminSiteContentCalendarDayModel, "后台文章月度发布日期和栏目标记")
+  listArticleCalendar(@Req() request: RequestWithAdmin, @Query() query: AdminSiteContentArticleCalendarQueryDto) {
+    return this.adminSiteContentService.listArticleCalendar(query.month, request.admin.adminId).then(result => ok(result));
   }
 
   @Get(":contentId")

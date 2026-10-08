@@ -4372,6 +4372,21 @@ export class AdminSiteContentArticleQueryDto extends PageQueryDto {
   @IsString()
   @MaxLength(80)
   declare keyword?: string;
+
+  @ApiPropertyOptional({ pattern: "^(?:1\\d{3}|[2-9]\\d{3})-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$", example: "2026-10-08" })
+  @IsOptional()
+  @Transform(({ value }) => trimString(value))
+  @IsISO8601({ strict: true })
+  @Matches(/^(?:1\d{3}|[2-9]\d{3})-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/)
+  publishedDate?: string;
+}
+
+export class AdminSiteContentArticleCalendarQueryDto {
+  @ApiProperty({ pattern: "^(?:1\\d{3}|[2-9]\\d{3})-(0[1-9]|1[0-2])$", example: "2026-10" })
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @Matches(/^(?:1\d{3}|[2-9]\d{3})-(0[1-9]|1[0-2])$/)
+  month!: string;
 }
 
 export class CreateAdminSiteContentChannelDto extends OperationDto {

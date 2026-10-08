@@ -672,6 +672,11 @@ export class AdminSiteContentSummaryModel {
   @ApiProperty(dateTime) updatedAt!: string;
 }
 
+export class AdminSiteContentCalendarDayModel {
+  @ApiProperty({ type: String, format: "date", example: "2026-10-08" }) date!: string;
+  @ApiProperty({ type: String, isArray: true, enum: ["KITCHEN", "COOK", "FOOD"] }) channelCodes!: string[];
+}
+
 export class AdminSitePageSummaryModel extends AdminSiteContentSummaryModel {
   @ApiProperty({ type: Boolean }) exists!: boolean;
   @ApiProperty({ type: String }) fixedSlug!: string;
