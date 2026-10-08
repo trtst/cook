@@ -2,6 +2,12 @@ import { requestData, uploadForm, type IsoDateTime, type OperationId, type PageQ
 
 export type SiteContentType = "PAGE" | "ARTICLE";
 export type SiteContentStatus = "DRAFT" | "PUBLISHED" | "UNLISTED";
+export type PublicArticleChannelCode = "KITCHEN" | "COOK" | "FOOD";
+
+export interface AdminSiteContentCalendarDay {
+  date: string;
+  channelCodes: PublicArticleChannelCode[];
+}
 
 export interface AdminSiteContentChannelItem {
   id: UUID;
@@ -57,6 +63,7 @@ export interface AdminSiteContentArticleQuery extends PageQuery {
   channelId?: UUID;
   status?: SiteContentStatus;
   keyword?: string;
+  publishedDate?: string;
 }
 
 export interface AdminSiteContentChannelQuery extends PageQuery {
@@ -150,6 +157,11 @@ export const contentApi = {
   listArticles(query: AdminSiteContentArticleQuery) {
     return requestData<PageResult<AdminSiteContentSummary>>("/admin/content/articles", {
       query: { ...query }
+    });
+  },
+  listArticleCalendar(month: string) {
+    return requestData<AdminSiteContentCalendarDay[]>("/admin/content/articles/calendar", {
+      query: { month }
     });
   },
   getDetail(contentId: UUID) {

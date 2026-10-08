@@ -3,7 +3,15 @@ import { computed, onMounted, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { Edit, Plus, Refresh, Upload } from "@element-plus/icons-vue";
 import { ElMessage, ElMessageBox } from "element-plus";
-import { contentApi, type AdminSiteContentChannelItem, type AdminSiteContentSummary, type AdminSitePageSummary, type SiteContentStatus } from "@/apis/content";
+import {
+  contentApi,
+  type AdminSiteContentCalendarDay,
+  type AdminSiteContentChannelItem,
+  type AdminSiteContentSummary,
+  type AdminSitePageSummary,
+  type PublicArticleChannelCode,
+  type SiteContentStatus
+} from "@/apis/content";
 import { useAdminHeaderRefresh } from "@/composables/useAdminHeader";
 import { sanitizeContentHtml } from "@/utils/content-html";
 import { formatDateTime } from "@/utils/date";
@@ -18,6 +26,7 @@ const router = useRouter();
 const pageLoading = ref(false);
 const pageRows = ref<AdminSitePageSummary[]>([]);
 const articleRows = ref<AdminSiteContentSummary[]>([]);
+const articleCalendarDays = ref<Record<string, PublicArticleChannelCode[]>>({});
 const channelRows = ref<AdminSiteContentChannelItem[]>([]);
 const articleTotal = ref(0);
 const channelOptions = ref<AdminSiteContentChannelItem[]>([]);
@@ -27,9 +36,44 @@ const scheduleDialogOpen = ref(false);
 const scheduleSaving = ref(false);
 const scheduleTime = ref<string | null>(null);
 const scheduleTarget = ref<AdminSiteContentSummary | null>(null);
+const articleCalendarLoading = ref(false);
+const articleCalendarError = ref(false);
+let articleCalendarRequest = 0;
 
 const publicArticleChannelCodes = new Set(["KITCHEN", "COOK", "FOOD"]);
 const publicChannelOptions = computed(() => channelOptions.value.filter(item => publicArticleChannelCodes.has(item.code)));
+const articleChannelColors: Record<PublicArticleChannelCode, string> = {
+  KITCHEN: "#567746",
+  COOK: "#B65E3E",
+  FOOD: "#5B709B"
+};
+const articleCalendarMonth = ref(currentShanghaiMonth());
+const selectedArticleDate = ref<string | null>(null);
+const articleCalendarTitle = computed(() => {
+  const [year, month] = articleCalendarMonth.value.split("-");
+  return `${year}年${Number(month)}月`;
+});
+const articleCalendarCells = computed(() => {
+  const [year, month] = articleCalendarMonth.value.split("-").map(Number);
+  const dayCount = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  const firstWeekday = new Date(Date.UTC(year, month - 1, 1)).getUTCDay();
+  const cells: Array<{ key: string; date: string | null; day: string }> = [];
+  for (let index = 0; index < firstWeekday; index += 1) {
+    cells.push({ key: `empty-start-${index}`, date: null, day: "" });
+  }
+  for (let day = 1; day <= dayCount; day += 1) {
+    cells.push({
+      key: `${articleCalendarMonth.value}-${String(day).padStart(2, "0")}`,
+      date: `${articleCalendarMonth.value}-${String(day).padStart(2, "0")}`,
+      day: String(day)
+    });
+  }
+  const trailingCount = (7 - cells.length % 7) % 7;
+  for (let index = 0; index < trailingCount; index += 1) {
+    cells.push({ key: `empty-end-${index}`, date: null, day: "" });
+  }
+  return cells;
+});
 const channelDialogOpen = ref(false);
 const channelSaving = ref(false);
 const channelForm = reactive({
@@ -71,6 +115,61 @@ const statusOptions: Array<{ label: string; value: SiteContentStatus }> = [
 
 function formatTime(value: string | null) {
   return formatDateTime(value);
+}
+
+function currentShanghaiMonth() {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit"
+  }).formatToParts(new Date());
+  const year = parts.find(part => part.type === "year")?.value;
+  const month = parts.find(part => part.type === "month")?.value;
+  if (!year || !month) return new Date().toISOString().slice(0, 7);
+  return `${year}-${month}`;
+}
+
+function articleChannelColor(code: string | null | undefined) {
+  return code && Object.prototype.hasOwnProperty.call(articleChannelColors, code)
+    ? articleChannelColors[code as PublicArticleChannelCode]
+    : "#78716C";
+}
+
+function moveArticleCalendarMonth(offset: -1 | 1) {
+  const [year, month] = articleCalendarMonth.value.split("-").map(Number);
+  const nextMonth = new Date(Date.UTC(year, month - 1 + offset, 1));
+  articleCalendarMonth.value = `${nextMonth.getUTCFullYear()}-${String(nextMonth.getUTCMonth() + 1).padStart(2, "0")}`;
+  if (selectedArticleDate.value) {
+    selectedArticleDate.value = null;
+    articleQuery.page = 1;
+    void loadArticles();
+  }
+  void loadArticleCalendar();
+}
+
+function toggleArticleCalendarDate(date: string) {
+  selectedArticleDate.value = selectedArticleDate.value === date ? null : date;
+  articleQuery.page = 1;
+  void loadArticles();
+}
+
+async function loadArticleCalendar() {
+  if (pageMode.value !== "articles") return;
+  const requestId = ++articleCalendarRequest;
+  const requestedMonth = articleCalendarMonth.value;
+  articleCalendarLoading.value = true;
+  articleCalendarError.value = false;
+  try {
+    const result: AdminSiteContentCalendarDay[] = await contentApi.listArticleCalendar(requestedMonth);
+    if (requestId !== articleCalendarRequest) return;
+    articleCalendarDays.value = Object.fromEntries(result.map(item => [item.date, item.channelCodes]));
+  } catch {
+    if (requestId !== articleCalendarRequest) return;
+    articleCalendarDays.value = {};
+    articleCalendarError.value = true;
+  } finally {
+    if (requestId === articleCalendarRequest) articleCalendarLoading.value = false;
+  }
 }
 
 function formatScheduleTime(value: string | null) {
@@ -308,6 +407,20 @@ async function loadArticles() {
     articleQuery.channelId = matched?.id;
   }
 
+  if (pageMode.value === "articles" && selectedArticleDate.value) {
+    const result = await contentApi.listArticles({
+      page: articleQuery.page,
+      pageSize: articleQuery.pageSize,
+      channelId: articleQuery.channelId,
+      status: articleQuery.status,
+      keyword: articleQuery.keyword.trim() || undefined,
+      publishedDate: selectedArticleDate.value
+    });
+    articleRows.value = result.items;
+    articleTotal.value = result.total;
+    return;
+  }
+
   if (pageMode.value === "articles") {
     const publicChannelIds = new Set(publicChannelOptions.value.map(item => item.id));
     if (articleQuery.channelId && !publicChannelIds.has(articleQuery.channelId)) {
@@ -418,7 +531,7 @@ async function setContentStatus(row: AdminSiteContentSummary, status: SiteConten
       expectedVersion: row.version,
       status
     });
-    await loadArticles();
+    await Promise.all([loadArticles(), loadArticleCalendar()]);
     ElMessage.success(status === "PUBLISHED" ? "内容已上架" : "内容已下架");
   } catch (error) {
     if (error === "cancel" || error === "close") return;
@@ -437,7 +550,7 @@ async function removeContent(row: AdminSiteContentSummary) {
       operationId: createOperationId(),
       expectedVersion: row.version
     });
-    await loadArticles();
+    await Promise.all([loadArticles(), loadArticleCalendar()]);
     ElMessage.success("内容已删除");
   } catch (error) {
     if (error === "cancel" || error === "close") return;
@@ -464,7 +577,7 @@ async function loadCurrentPage() {
     } else {
       articleQuery.channelId = undefined;
     }
-    await loadArticles();
+    await Promise.all([loadArticles(), loadArticleCalendar()]);
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : "加载内容治理数据失败");
   } finally {
@@ -486,7 +599,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <section class="page-stack content-page" v-loading="pageLoading">
+  <section class="page-stack content-page" :class="{ 'content-page--calendar': pageMode === 'articles' }" v-loading="pageLoading">
     <div class="toolbar-panel page-toolbar">
       <el-button v-if="pageMode === 'articles' || pageMode === 'official-messages'" type="primary" :icon="Plus" @click="openEditor()">
         {{ pageMode === "official-messages" ? "新建官方消息" : "新建文章" }}
@@ -550,28 +663,52 @@ onMounted(() => {
       </div>
 
       <el-table :data="articleRows" row-key="id">
-        <el-table-column prop="title" label="标题" min-width="220" />
-        <el-table-column label="栏目" min-width="140">
+        <el-table-column label="标题" min-width="220">
+          <template #default="{ row }">
+            <span v-if="pageMode === 'articles'" class="article-channel-name" :style="{ color: articleChannelColor(row.channel?.code) }">
+              {{ row.channel?.name ?? "未分类" }}
+            </span>
+            <span v-if="pageMode === 'articles'" class="article-title-separator">|</span>
+            <span>{{ row.title }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column v-if="pageMode !== 'articles'" label="栏目" min-width="140">
           <template #default="{ row }">{{ row.channel?.name ?? "-" }}</template>
         </el-table-column>
-        <el-table-column label="状态" width="110">
+        <el-table-column label="状态" width="80">
           <template #default="{ row }">
             <el-tag :type="row.status === 'PUBLISHED' ? 'success' : row.status === 'UNLISTED' ? 'warning' : 'info'">
               {{ row.status === "PUBLISHED" ? "已发布" : row.status === "UNLISTED" ? "已下架" : "草稿" }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="发布时间" min-width="200">
+        <el-table-column v-if="pageMode === 'articles'" label="时间（发布/更新）" min-width="205">
+          <template #default="{ row }">
+            <div class="article-time-cell">
+              <div class="article-time-cell__row">
+                <span class="article-time-cell__label">发布</span>
+                <span v-if="row.publishedAt">{{ formatTime(row.publishedAt) }}</span>
+                <el-tag v-else-if="row.scheduledPublishAt" type="warning" effect="light">预约 {{ formatScheduleTime(row.scheduledPublishAt) }}</el-tag>
+                <span v-else>-</span>
+              </div>
+              <div class="article-time-cell__row">
+                <span class="article-time-cell__label">更新</span>
+                <span>{{ formatTime(row.updatedAt) }}</span>
+              </div>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column v-else label="发布时间" min-width="200">
           <template #default="{ row }">
             <span v-if="row.publishedAt">{{ formatTime(row.publishedAt) }}</span>
             <el-tag v-else-if="row.scheduledPublishAt" type="warning" effect="light">预约 {{ formatScheduleTime(row.scheduledPublishAt) }}</el-tag>
             <span v-else>-</span>
           </template>
         </el-table-column>
-        <el-table-column label="更新时间" min-width="180">
+        <el-table-column v-if="pageMode !== 'articles'" label="更新时间" min-width="180">
           <template #default="{ row }">{{ formatTime(row.updatedAt) }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="350" fixed="right">
+        <el-table-column label="操作" width="300" fixed="right">
           <template #default="{ row }">
             <el-button size="small" type="primary" @click="openEditor(row.id)">编辑</el-button>
             <template v-if="pageMode === 'articles'">
@@ -640,6 +777,52 @@ onMounted(() => {
       </el-table>
     </div>
 
+    <aside v-if="pageMode === 'articles'" class="article-calendar-panel">
+      <div class="article-calendar__header">
+        <h3>发布日历</h3>
+        <div class="article-calendar__month-control">
+          <button type="button" aria-label="上个月" @click="moveArticleCalendarMonth(-1)">‹</button>
+          <strong>{{ articleCalendarTitle }}</strong>
+          <button type="button" aria-label="下个月" @click="moveArticleCalendarMonth(1)">›</button>
+        </div>
+      </div>
+      <div class="article-calendar__weekdays">
+        <span v-for="weekday in ['日', '一', '二', '三', '四', '五', '六']" :key="weekday">{{ weekday }}</span>
+      </div>
+      <div class="article-calendar__grid" :aria-busy="articleCalendarLoading">
+        <button
+          v-for="cell in articleCalendarCells"
+          :key="cell.key"
+          type="button"
+          class="article-calendar__cell"
+          :class="{ 'article-calendar__cell--selected': cell.date && selectedArticleDate === cell.date }"
+          :disabled="!cell.date"
+          :aria-pressed="cell.date ? selectedArticleDate === cell.date : undefined"
+          @click="cell.date && toggleArticleCalendarDate(cell.date)"
+        >
+          <span v-if="cell.date" class="article-calendar__day">{{ cell.day }}</span>
+          <div v-if="cell.date" class="article-calendar__marks">
+            <span
+              v-for="channelCode in articleCalendarDays[cell.date] ?? []"
+              :key="channelCode"
+              class="article-calendar__dot"
+              :style="{ backgroundColor: articleChannelColor(channelCode) }"
+              :title="publicChannelOptions.find(channel => channel.code === channelCode)?.name ?? channelCode"
+            />
+          </div>
+        </button>
+      </div>
+      <p v-if="articleCalendarLoading" class="article-calendar__message">加载中…</p>
+      <button v-else-if="articleCalendarError" type="button" class="article-calendar__message article-calendar__message--retry" @click="loadArticleCalendar">
+        加载失败，点击重试
+      </button>
+      <div class="article-calendar__legend">
+        <span v-for="channel in publicChannelOptions" :key="channel.code">
+          <i :style="{ backgroundColor: articleChannelColor(channel.code) }" />{{ channel.name }}
+        </span>
+      </div>
+    </aside>
+
     <el-dialog v-model="channelDialogOpen" title="编辑栏目" width="520px">
       <el-form label-position="top">
         <el-form-item label="code">
@@ -668,8 +851,210 @@ onMounted(() => {
   margin-bottom: 16px;
 }
 
+.content-page--calendar {
+  grid-template-columns: minmax(0, 1fr) 400px;
+  align-items: start;
+}
+
+.content-page--calendar > .toolbar-panel:first-child {
+  grid-column: 1 / -1;
+}
+
+.content-page--calendar > .table-panel {
+  grid-column: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+}
+
+.content-page--calendar > .article-calendar-panel {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+.article-channel-name {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.article-title-separator {
+  margin: 0 6px;
+  color: #b8b2a8;
+}
+
+.article-time-cell {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.article-time-cell__row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-height: 18px;
+  white-space: nowrap;
+}
+
+.article-time-cell__label {
+  flex: 0 0 28px;
+  color: #8c857a;
+}
+
+.article-calendar-panel {
+  min-width: 0;
+  padding: 16px;
+  background: #fff;
+  border: 1px solid #ece7df;
+  border-radius: 6px;
+}
+
+.article-calendar__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.article-calendar__header h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.article-calendar__month-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #57534e;
+  font-size: 13px;
+}
+
+.article-calendar__month-control button {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  color: #57534e;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  background: #f6f5f2;
+  border: 0;
+  border-radius: 50%;
+}
+
+.article-calendar__weekdays,
+.article-calendar__grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.article-calendar__weekdays {
+  margin-bottom: 6px;
+  color: #8c857a;
+  font-size: 11px;
+  text-align: center;
+}
+
+.article-calendar__cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 42px;
+  padding: 4px 1px;
+  color: inherit;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+}
+
+.article-calendar__cell:disabled {
+  cursor: default;
+}
+
+.article-calendar__cell--selected {
+  background: #eef3ec;
+}
+
+.article-calendar__day {
+  color: #44403c;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.article-calendar__marks {
+  display: flex;
+  justify-content: center;
+  min-height: 12px;
+  gap: 3px;
+}
+
+.article-calendar__dot,
+.article-calendar__legend i {
+  display: inline-block;
+  border-radius: 50%;
+}
+
+.article-calendar__dot {
+  width: 5px;
+  height: 5px;
+  flex: 0 0 5px;
+}
+
+.article-calendar__message {
+  width: 100%;
+  margin: 8px 0 0;
+  color: #8c857a;
+  font-size: 12px;
+  text-align: center;
+  background: transparent;
+  border: 0;
+}
+
+.article-calendar__message--retry {
+  color: #a98228;
+  cursor: pointer;
+}
+
+.article-calendar__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-top: 14px;
+  padding-top: 12px;
+  color: #625d54;
+  font-size: 11px;
+  border-top: 1px solid #f0ede7;
+}
+
+.article-calendar__legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.article-calendar__legend i {
+  width: 8px;
+  height: 8px;
+  flex-basis: 8px;
+}
+
 .schedule-help {
   margin: 0 0 16px;
   color: #606266;
+}
+
+@media (max-width: 1280px) {
+  .article-calendar-panel {
+    padding: 12px;
+  }
+
+  .article-calendar__dot {
+    width: 9px;
+    height: 9px;
+    flex-basis: 9px;
+  }
 }
 </style>
