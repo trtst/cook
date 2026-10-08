@@ -270,8 +270,15 @@ export class AdminSiteContentService {
       ...(filters.status ? { status: filters.status } : {}),
       ...(publishDateStart && publishDateEnd
         ? {
-            publishedAt: { gte: publishDateStart, lt: publishDateEnd },
-            channel: { is: { code: { in: publicArticleChannels.map(channel => channel.code) } } }
+            AND: [
+              {
+                OR: [
+                  { publishedAt: { gte: publishDateStart, lt: publishDateEnd } },
+                  { status: "DRAFT" as const, scheduledPublishAt: { gte: publishDateStart, lt: publishDateEnd } }
+                ]
+              },
+              { channel: { is: { code: { in: publicArticleChannels.map(channel => channel.code) } } } }
+            ]
           }
         : {}),
       ...(keyword
@@ -321,15 +328,22 @@ export class AdminSiteContentService {
     const chinaOffset = 8 * 60 * 60 * 1000;
     const monthStart = new Date(Date.UTC(year, monthNumber - 1, 1) - chinaOffset);
     const nextMonthStart = new Date(Date.UTC(year, monthNumber, 1) - chinaOffset);
+    // 月历同时展示已发布日期与仍为草稿的预约发布时间。
     const rows = await this.prisma.$queryRaw<Array<{ date: string; channelCode: "KITCHEN" | "COOK" | "FOOD" }>>`
       SELECT
-        TO_CHAR((content.published_at AT TIME ZONE 'Asia/Shanghai')::date, 'YYYY-MM-DD') AS "date",
+        TO_CHAR((article_dates.publish_at AT TIME ZONE 'Asia/Shanghai')::date, 'YYYY-MM-DD') AS "date",
         channel.code AS "channelCode"
       FROM site_contents AS content
       INNER JOIN site_content_channels AS channel ON channel.id = content.channel_id
+      CROSS JOIN LATERAL (
+        SELECT content.published_at AS publish_at
+        UNION ALL
+        SELECT content.scheduled_publish_at AS publish_at
+        WHERE content.status = 'DRAFT'
+      ) AS article_dates
       WHERE content.type = 'ARTICLE'
-        AND content.published_at >= ${monthStart}
-        AND content.published_at < ${nextMonthStart}
+        AND article_dates.publish_at >= ${monthStart}
+        AND article_dates.publish_at < ${nextMonthStart}
         AND channel.code IN ('KITCHEN', 'COOK', 'FOOD')
       GROUP BY 1, 2
       ORDER BY 1, 2
