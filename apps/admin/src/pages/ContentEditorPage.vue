@@ -34,7 +34,7 @@ const updatedAt = ref<string | null>(null);
 const fileInputRef = ref<HTMLInputElement | null>(null);
 const markdownInputRef = ref<HTMLInputElement | null>(null);
 const publicArticleChannelCodes = new Set(["KITCHEN", "COOK", "FOOD"]);
-// 正文图片沿用 4:3；普通文章封面单独裁成 3:4。
+// 文章封面和正文图片均按 4:3 处理。
 const contentImageMaxWidth = 375 * 5;
 const contentImageQuality = 0.8;
 const sourceMode = computed(() => {
@@ -425,7 +425,7 @@ async function uploadImage(file: File, isCover = false) {
       const width = image.naturalWidth || image.width;
       const height = image.naturalHeight || image.height;
       const articleCover = isCover && form.type === "ARTICLE" && !isOfficialMessage.value;
-      const ratio = articleCover ? 3 / 4 : 4 / 3;
+      const ratio = 4 / 3;
       let sourceX = 0;
       let sourceY = 0;
       let sourceWidth = width;
@@ -615,7 +615,7 @@ onMounted(() => {
                   <el-button type="primary" :icon="Upload" :loading="imageUploading" :disabled="formLocked" @click="chooseCoverImage">上传封面</el-button>
                   <el-button :icon="Picture" :disabled="formLocked" @click="form.coverImageUrl = ''">清空</el-button>
                   <el-input v-model="form.coverImageUrl" :disabled="formLocked" placeholder="也可直接粘贴图片 URL" />
-                  <div class="table-hint">普通文章封面会裁剪并保存为 3:4；正文图片沿用 4:3 规则。官方消息封面规则不变。</div>
+                  <div class="table-hint">普通文章封面会裁剪并保存为 4:3；正文图片沿用 4:3 规则。官方消息封面规则不变。</div>
                 </div>
               </div>
             </el-form-item>

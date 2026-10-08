@@ -327,7 +327,17 @@ async function loadArticles() {
       );
       const allItems = results
         .flatMap(result => result.items)
-        .sort((left, right) => left.sortOrder - right.sortOrder || right.updatedAt.localeCompare(left.updatedAt) || right.id - left.id);
+        .sort((left, right) => {
+          if (left.publishedAt && right.publishedAt) {
+            const publishedAtOrder = right.publishedAt.localeCompare(left.publishedAt);
+            if (publishedAtOrder) return publishedAtOrder;
+          } else if (left.publishedAt) {
+            return -1;
+          } else if (right.publishedAt) {
+            return 1;
+          }
+          return right.updatedAt.localeCompare(left.updatedAt) || right.id - left.id;
+        });
       const start = (articleQuery.page - 1) * articleQuery.pageSize;
       articleRows.value = allItems.slice(start, start + articleQuery.pageSize);
       articleTotal.value = allItems.length;
@@ -544,7 +554,6 @@ onMounted(() => {
         <el-table-column label="栏目" min-width="140">
           <template #default="{ row }">{{ row.channel?.name ?? "-" }}</template>
         </el-table-column>
-        <el-table-column prop="slug" label="slug" min-width="160" />
         <el-table-column label="状态" width="110">
           <template #default="{ row }">
             <el-tag :type="row.status === 'PUBLISHED' ? 'success' : row.status === 'UNLISTED' ? 'warning' : 'info'">
