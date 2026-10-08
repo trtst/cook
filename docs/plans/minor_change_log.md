@@ -1,5 +1,7 @@
 # 项目变更记录
 
+| 2026-10-08 | 普通知识文章封面上传和服务端处理统一为 `4:3`；文章列表隐藏 slug 列并按发布时间倒序展示，无发布时间项置后。 | `apps/admin/src/pages/ContentEditorPage.vue`、`apps/admin/src/pages/ContentGovernancePage.vue`、`apps/api/src/modules/admin/admin-site-content.service.ts`、`apps/api/src/modules/admin/site-content-image.service.ts`、`docs/api-contract.md`、`docs/plans/minor_change_log.md` | Admin/API type-check 通过；`git diff --check` 通过；未运行测试或做后台登录态/图片上传手动验收。 |
+
 | 2026-10-06 | 修复后台菜谱新建和编辑页上传步骤图时裁剪状态重置为封面的问题；上传场景和步骤序号贯穿裁剪、上传、回写及成功提示。 | `apps/admin/src/pages/RecipeCreatePage.vue`、`apps/admin/src/pages/RecipeDetailPage.vue`、`docs/plans/minor_change_log.md` | 静态核对上传目标快照流转；`git diff --check` 通过；未运行测试或后台登录态手动验收。 |
 
 | 2026-10-06 | 菜谱、文章、专题和餐桌话题封面上传按 `3:4` 处理，饭局封面上传与饭局回忆分享海报封面区按 `4:3`；存量图片只改页面裁切展示。菜谱列表/详情头图、专题和餐桌话题展示为 `3:4`；最近看过列表、文章列表/详情及饭局列表/详情头图保留 `4:3`。普通步骤图和 Wiki 步骤图默认 `3:4`，支持 `1:1 / 16:9 / 原尺寸`。 | 客户端裁剪页、菜谱/文章/专题/餐桌话题/饭局封面展示与上传页面，`apps/client/src/pages_me/recipe-history/index.vue`、`apps/client/src/pages_me/knowledge-list/index.vue`、`apps/client/src/pages_me/knowledge-detail/index.vue`、`apps/client/src/pages_meal/event/index.vue`、`apps/client/src/pages_meal/detail/index.vue`，API 图片处理与内容图片 DTO，后台文章/菜谱/Wiki 生图页面，`apps/client/src/pages_share/memory/`，`docs/api-contract.md`，`docs/plans/cover-and-step-image-ratios-execution.md`，`docs/plans/minor_change_log.md` | API、Admin、Client type-check 通过；`pnpm --filter @next-meal/api verify:openapi` 通过；本次 `git diff --check` 通过。未运行测试；未做微信开发者工具、真机或后台登录态手动验收；存量图片文件未重写。 |

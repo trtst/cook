@@ -276,7 +276,11 @@ export class AdminSiteContentService {
           channel: true,
           updatedByAdmin: true
         },
-        orderBy: [{ sortOrder: "asc" }, { updatedAt: "desc" }, { id: "desc" }],
+        orderBy: [
+          { publishedAt: { sort: "desc", nulls: "last" } },
+          { updatedAt: "desc" },
+          { id: "desc" }
+        ],
         skip,
         take: normalizedPageSize
       }),

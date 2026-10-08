@@ -85,7 +85,7 @@ export class SiteContentImageService {
         maxInputBytes: maxImageBytes,
         maxOutputBytes: maxImageBytes,
         maxDimension: 1875,
-        cropRatio: 3 / 4,
+        cropRatio: 4 / 3,
         inputSizeMessage: "图片大小不能超过 8 MB",
         outputSizeMessage: "文章封面无法处理，请更换图片"
       });
