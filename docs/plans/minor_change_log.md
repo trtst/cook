@@ -1,5 +1,11 @@
 # 项目变更记录
 
+| 2026-10-08 | 知识文章未读圆点和 `NEW` 字体改用动态主题主色，切换主题时随主题色更新。 | `apps/client/src/pages/me/index.vue`、`apps/client/src/pages_me/knowledge-list/index.vue`、`apps/client/src/pages_me/knowledge-list/style.test.ts`、`apps/client/src/themes/token-usage.test.ts`、`docs/plans/minor_change_log.md` | 静态核对 `--color-primary` 指向 `--theme-primary`；knowledge-list 样式测试和主题 token 审计通过；`git diff --check` 通过；未做微信端视觉验收。 |
+
+| 2026-10-08 | 将 knowledge-list 样式测试同步到手动调整的标题行高 `48rpx`、未读图标字号 `60rpx`/底部对齐，以及标题文本与图标共用一个 `view` 的结构。 | `apps/client/src/pages_me/knowledge-list/style.test.ts`、`docs/plans/minor_change_log.md` | `pnpm --filter @next-meal/client exec tsx src/pages_me/knowledge-list/style.test.ts` 和 `git diff --check` 通过；页面样式未改动。 |
+
+| 2026-10-08 | 知识文章标题文本直接放在同一个 `view` 容器中，未读时追加 `icon-new` 子 `text`；标题不再单独包一层文本节点。 | `apps/client/src/pages_me/knowledge-list/index.vue`、`docs/plans/minor_change_log.md` | Client `build:mp-weixin` 与 `git diff --check` 通过；未做微信开发者工具/真机视觉验收。 |
+
 | 2026-10-08 | 在 `cookfont` 新增专用 `icon-new` 字形 U+E6A6，并让未读文章标题使用该字体图标；同步更新 TTF、WOFF 与 WOFF2 字体资源。 | `apps/client/src/assets/fonts/font.scss`、`apps/client/src/assets/fonts/iconfont.ttf`、`apps/client/src/assets/fonts/iconfont.woff`、`apps/client/src/assets/fonts/iconfont.woff2`、`apps/client/src/pages_me/knowledge-list/index.vue`、`docs/superpowers/plans/2026-10-05-knowledge-article-unread.md`、`docs/plans/minor_change_log.md` | TTF/WOFF/WOFF2 均包含 U+E6A6，原有 105 个字形映射和宽度保留；字体预览可读为 `NEW`；Client `build:mp-weixin` 与 `git diff --check` 通过。 |
 
 | 2026-10-08 | 修复知识文章未读图标使用缺失字体码点 `e6a6` 导致图标不显示的问题，改用 `cookfont` 中实际存在的 `icon-notice` 字形（`e60b`）。 | `apps/client/src/pages_me/knowledge-list/index.vue`、`docs/superpowers/plans/2026-10-05-knowledge-article-unread.md`、`docs/plans/minor_change_log.md` | 检查字体 cmap：`e6a6` 不存在、`e60b` 存在；Client `build:mp-weixin` 通过；`git diff --check` 通过；未做微信开发者工具/真机视觉验收。 |

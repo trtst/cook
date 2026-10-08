@@ -89,9 +89,12 @@
               <ImageEmpty v-else class="knowledge-item__thumb knowledge-item__thumb--empty" copy="封面图" ratio="4-3" />
 
               <view class="knowledge-item__body">
-                <view class="knowledge-item__title-row">
-                  <text class="knowledge-item__title">{{ item.title }}</text>
-                  <text v-if="item.isUnread" class="cookfont icon-new knowledge-item__new" aria-label="NEW" />
+                <view class="knowledge-item__title">
+                  {{ item.title }}<text
+                    v-if="item.isUnread"
+                    class="cookfont icon-new knowledge-item__new"
+                    aria-label="NEW"
+                  />
                 </view>
                 <text v-if="item.summary" class="knowledge-item__summary">{{ item.summary }}</text>
                 <view v-if="splitKeywords(item.keywords).length" class="knowledge-item__keywords">
@@ -360,29 +363,25 @@ function splitKeywords(value: string | null) {
   gap: 16rpx;
 }
 
-.knowledge-item__title-row {
-  display: flex;
-  align-items: center;
-  min-width: 0;
-}
-
-.knowledge-item__new {
-  flex: 0 0 auto;
-  margin-left: 8rpx;
-  color: var(--color-state-danger-base);
-  font-size: 22rpx;
-  line-height: 1;
-}
-
 .knowledge-item__title {
   display: -webkit-box;
   overflow: hidden;
   color: var(--color-text);
   font-size: 32rpx;
   font-weight: var(--font-weight-bold);
-  line-height: 1.45;
+  line-height: 48rpx;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
+}
+
+/* 未读 NEW 标识跟随主题主色，并与标题保持同一行。 */
+.knowledge-item__new {
+  display: inline-block;
+  margin-left: 8rpx;
+  color: var(--color-primary);
+  line-height: 48rpx;
+      font-size: 60rpx;
+    vertical-align: bottom;
 }
 
 .knowledge-item__summary {

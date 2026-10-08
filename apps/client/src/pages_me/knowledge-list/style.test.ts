@@ -37,6 +37,13 @@ assert.ok(titleIndex > bodyIndex, "Expected title below cover");
 assert.ok(summaryIndex > titleIndex, "Expected summary below title");
 assert.ok(keywordsIndex > summaryIndex, "Expected keywords below summary");
 assert.ok(metaIndex > keywordsIndex, "Expected meta row below keywords");
+assert.match(
+  pageSource,
+  /<view class="knowledge-item__title">\s*\{\{ item\.title \}\}<text\s+v-if="item\.isUnread"\s+class="cookfont icon-new knowledge-item__new"/,
+  "Expected title text and unread icon text to share one view"
+);
+expectExcludes('class="knowledge-item__title-row"');
+expectExcludes('<text class="knowledge-item__title">');
 
 expectIncludes('class="knowledge-item__meta-icon cookfont icon-time"');
 expectIncludes('class="knowledge-item__meta-icon cookfont icon-read"');
@@ -65,6 +72,8 @@ expectIncludes("const navbarTitleOpacity = computed(() =>");
 expectIncludes("scrollTop.value / NAVBAR_TITLE_FADE_DISTANCE");
 expectIncludes("scrollTop.value = event.detail?.scrollTop ?? 0;");
 expectSelectorIncludes(".knowledge-item", ["flex-direction: column;"]);
+expectSelectorIncludes(".knowledge-item__title", ["line-height: 48rpx;", "-webkit-line-clamp: 2;"]);
+expectSelectorIncludes(".knowledge-item__new", ["color: var(--color-primary);", "font-size: 60rpx;", "line-height: 48rpx;", "vertical-align: bottom;"]);
 expectExcludes('class="knowledge-hero__eyebrow"');
 expectExcludes(".knowledge-hero__eyebrow");
 expectSelectorIncludes(".knowledge-item:last-child", ["border-bottom: 0;"]);

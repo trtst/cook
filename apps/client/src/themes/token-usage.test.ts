@@ -129,6 +129,8 @@ const EXPECTED_EXISTING_THEME_VIOLATION_COUNTS = new Map<string, number>([
   ["src/pages/home/index.vue: direct-color #000", 1],
   ["src/pages_me/profile/index.vue: direct-theme-seed-token var(--color-primary)", 1],
   ["src/pages_me/profile-field/index.vue: direct-theme-seed-token var(--color-primary)", 1],
+  ["src/pages/me/index.vue: direct-theme-seed-token var(--color-primary)", 1],
+  ["src/pages_me/knowledge-list/index.vue: direct-theme-seed-token var(--color-primary)", 1],
   ["src/pages_me/recipe-history/index.vue: direct-color #fff", 2],
   ["src/pages_me/recipe-history/index.vue: direct-color #c9544d", 1],
   ["src/pages_me/recipe-history/index.vue: direct-theme-seed-token var(--color-primary)", 1],

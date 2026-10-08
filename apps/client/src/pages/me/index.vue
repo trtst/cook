@@ -1264,7 +1264,7 @@ function showComingSoon(name: string) {
 	height: 14rpx;
 	margin-left: 8rpx;
 	border-radius: 50%;
-	background: var(--color-state-danger-base);
+	background: var(--color-primary);
 }
 
 .option-chip--active .option-chip__text {
