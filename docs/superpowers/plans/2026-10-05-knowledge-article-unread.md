@@ -64,7 +64,7 @@
 - [x] Add the client summary type and `knowledgeUnreadApi.getSummary()` through the existing request layer. Use the authenticated `get` helper; do not add raw platform requests or local storage.
 - [x] Add the three-channel `hasUnread` state to `pages/me/index.vue`. On `onShow`, refresh it for logged-in users after the existing session restoration; clear it for guests and on account change/logout.
 - [x] Derive each `knowledgeEntries` row's `showBadgeDot` from its matching channel summary and render a small red dot beside that row's title. Keep the current entry title, icon, and route unchanged.
-- [x] Render the `NEW` glyph using the existing `cookfont` font and code point `e6a6` only when `item.isUnread` is true; do not add the label to article detail or other lists.
+- [x] Render the existing `icon-notice` cookfont glyph only when `item.isUnread` is true; the bundled font does not contain the previously assumed `e6a6` glyph. Do not add the marker to article detail or other lists.
 - [x] Reload the current knowledge list when returning from detail so the newly recorded read state removes `NEW`. Guard the initial `onLoad`/`onShow` pair so it does not issue duplicate list requests.
 - [x] Run `pnpm --filter @next-meal/client type-check` and `pnpm --filter @next-meal/client build:mp-weixin`.
 

@@ -91,7 +91,7 @@
               <view class="knowledge-item__body">
                 <view class="knowledge-item__title-row">
                   <text class="knowledge-item__title">{{ item.title }}</text>
-                  <text v-if="item.isUnread" class="cookfont knowledge-item__new" aria-label="NEW" />
+                  <text v-if="item.isUnread" class="cookfont icon-notice knowledge-item__new" aria-label="NEW" />
                 </view>
                 <text v-if="item.summary" class="knowledge-item__summary">{{ item.summary }}</text>
                 <view v-if="splitKeywords(item.keywords).length" class="knowledge-item__keywords">
@@ -372,10 +372,6 @@ function splitKeywords(value: string | null) {
   color: var(--color-state-danger-base);
   font-size: 22rpx;
   line-height: 1;
-}
-
-.knowledge-item__new::before {
-  content: "\e6a6";
 }
 
 .knowledge-item__title {
