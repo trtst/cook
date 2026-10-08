@@ -620,6 +620,7 @@ function closePlanSheet() {
 
 .recipe-card {
   width: calc(100% - 36rpx);
+  margin: 0 auto;
   padding-bottom: 40rpx;
   transition: transform 0.18s ease;
 }
