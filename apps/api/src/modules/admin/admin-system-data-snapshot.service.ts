@@ -186,7 +186,7 @@ function storageKeyFromRef(reference: string) {
   }
 }
 
-function isLocalAssetReference(reference: string, request?: { protocol?: string; get?: (name: string) => string | undefined }) {
+export function isLocalAssetReference(reference: string, request?: { protocol?: string; get?: (name: string) => string | undefined }) {
   if (reference.startsWith("/uploads/") || reference.startsWith("/static/uploads/")) return true;
   try {
     const candidate = new URL(reference);
@@ -194,7 +194,11 @@ function isLocalAssetReference(reference: string, request?: { protocol?: string;
     const requestOrigin = host ? `${request?.protocol || "http"}://${host}` : "";
     if (requestOrigin && candidate.origin === new URL(requestOrigin).origin) return true;
     const publicBase = process.env.ASSET_PUBLIC_BASE_URL?.trim();
-    return Boolean(publicBase && candidate.origin === new URL(publicBase).origin && candidate.pathname.includes("/uploads/"));
+    if (!publicBase) return false;
+    const base = new URL(publicBase);
+    const basePath = base.pathname.replace(/\/+$/u, "");
+    const uploadsPrefix = `${basePath}/uploads/`;
+    return candidate.origin === base.origin && candidate.pathname.startsWith(uploadsPrefix);
   } catch {
     return false;
   }
@@ -332,7 +336,7 @@ export class AdminSystemDataSnapshotService {
       if (!sourceKey) continue;
       if (!assets.some(asset => asset.sourceKey === sourceKey)) {
         const content = await this.assetStorage.readBuffer(sourceKey).catch(() => null);
-        if (!content) throw new ConflictException(`快照引用的图片无法读取：${reference}`);
+        if (!content) continue;
         if (content.length > 100 * 1024 * 1024) throw new ConflictException(`快照图片超过 100 MB：${reference}`);
         const sha256 = snapshotDigest(content);
         const path = `assets/${sha256}`;

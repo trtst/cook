@@ -115,6 +115,7 @@ import type {
   PublishRecipeImportItemRequest
 } from "../../contracts/types";
 import { PrismaService } from "../../common/prisma.service";
+import { invalidateMergedIngredientRecommendationCaches } from "./ingredient-merge-cache";
 import {
   completeAdminIdempotentOperation,
   getAdminIdempotentResult,
@@ -142,6 +143,7 @@ import { buildNutritionFoodWhere, buildNutritionSnapshotDeleteWhere, normalizeNu
 import { buildRecipeWikiQualityCards } from "../recipe/recipe-wiki";
 import { createImportedRecipeVersionTags, replaceAutoRecipeVersionTags } from "../recipe/recipe-version-tags";
 import { pickPublicContentOwner } from "../recipe/public-content-user-pool";
+import { indexRecipeVersionIngredients } from "../recipe/recipe-version-ingredients";
 import { toOwnerNicknameSnapshot } from "../recipe/recipe-owner-snapshot";
 import { MedalService } from "../user/medal.service";
 import { AdminRecipeImageService } from "./admin-recipe-image.service";
@@ -2626,6 +2628,7 @@ export class AdminService {
         throw new ConflictException("食材已被更新，请刷新后重试");
       }
 
+      await invalidateMergedIngredientRecommendationCaches(tx, sourceIds);
       const [fridgeResult, shoppingResult] = await Promise.all([
         tx.fridgeTrace.updateMany({
           where: { ingredientId: { in: sourceIds } },
@@ -4195,6 +4198,7 @@ export class AdminService {
         const nextVersion = await tx.recipeContentVersion.create({
           data: this.buildAdminRecipeVersionCreateInput(sourceContent, recommendation.recipe.coverImageUrl)
         });
+        await indexRecipeVersionIngredients(tx, nextVersion.id, nextVersion.ingredientsJson);
         await replaceAutoRecipeVersionTags(tx, nextVersion.id, sourceContent);
         await this.syncRecipeAssistant(tx, nextVersion.id, sourceContent);
 
@@ -4930,6 +4934,7 @@ export class AdminService {
         const nextVersion = await tx.recipeContentVersion.create({
           data: this.buildAdminRecipeVersionCreateInput(content, stagedImages.coverImageUrl)
         });
+        await indexRecipeVersionIngredients(tx, nextVersion.id, nextVersion.ingredientsJson);
         await loadRecipeNutritionSummary(tx, nextVersion.id, content);
         await createImportedRecipeVersionTags(tx, nextVersion.id, recipeBody.tags ?? []);
         await replaceAutoRecipeVersionTags(tx, nextVersion.id, content);
@@ -5304,6 +5309,7 @@ export class AdminService {
           const nextVersion = await tx.recipeContentVersion.create({
             data: this.buildAdminRecipeVersionCreateInput(content, recipe.coverImageUrl)
           });
+          await indexRecipeVersionIngredients(tx, nextVersion.id, nextVersion.ingredientsJson);
           await loadRecipeNutritionSummary(tx, nextVersion.id, content);
           if (recipe.currentVersion.versionTags.length) {
             await tx.recipeVersionTag.createMany({
@@ -5780,6 +5786,7 @@ export class AdminService {
             const nextVersion = await tx.recipeContentVersion.create({
               data: this.buildAdminRecipeVersionCreateInput(updatedContent, coverImageUrl)
             });
+            await indexRecipeVersionIngredients(tx, nextVersion.id, nextVersion.ingredientsJson);
             nextContentVersionId = nextVersion.id;
             if (current.currentVersion.versionTags.length) {
               await tx.recipeVersionTag.createMany({
@@ -6419,6 +6426,7 @@ export class AdminService {
         const nextVersion = await tx.recipeContentVersion.create({
           data: this.buildAdminRecipeVersionCreateInput(content, imageState.coverImageUrl)
         });
+        await indexRecipeVersionIngredients(tx, nextVersion.id, nextVersion.ingredientsJson);
         await replaceAutoRecipeVersionTags(tx, nextVersion.id, content);
         await this.syncRecipeAssistant(tx, nextVersion.id, content);
 
@@ -6926,6 +6934,7 @@ export class AdminService {
         const nextVersion = await tx.recipeContentVersion.create({
           data: this.buildAdminRecipeVersionCreateInput(content, imageState.coverImageUrl)
         });
+        await indexRecipeVersionIngredients(tx, nextVersion.id, nextVersion.ingredientsJson);
         await replaceAutoRecipeVersionTags(tx, nextVersion.id, content);
         await this.syncRecipeAssistant(tx, nextVersion.id, content);
 

@@ -491,6 +491,7 @@ test("merges a system ingredient and repoints mutable references in one transact
       }
     },
     fridgeTrace: {
+      findMany: async () => [],
       updateMany: async (args: { where: unknown; data: unknown }) => {
         fridgeUpdates.push(args);
         return { count: 2 };
@@ -830,7 +831,7 @@ test("allows a disabled system ingredient to become a merged lookup item", async
         return { count: 1 };
       }
     },
-    fridgeTrace: { updateMany: async () => ({ count: 0 }) },
+    fridgeTrace: { findMany: async () => [], updateMany: async () => ({ count: 0 }) },
     shoppingItem: { updateMany: async () => ({ count: 0 }) },
     recipeImportItem: { findMany: async () => [] },
     auditEvent: { create: async () => undefined }
