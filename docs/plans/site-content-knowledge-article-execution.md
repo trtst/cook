@@ -111,3 +111,11 @@
 - 风险：后台现有文章需要运营归到 `KITCHEN / COOK / FOOD` 三个栏目下，前台列表才会有内容；导入脚本可以先写入无栏目草稿，但必须重新编辑选择栏目后才能发布。
 - 遗留：阅读数当前只累计总数，不保留阅读明细。
 - 发布前必须处理：部署 migration，并确认内容栏目与已发布文章数据准备完成。
+
+## 厨房知识文章未读标识（2026-10-05）
+
+- 已确认口径：按服务端当前请求时刻向前滚动 7×24 小时，只对窗口内发布的文章判断当前用户是否已读；窗口外文章不查询个人已读关系、默认视为已读并自动退出提示，无定时任务或清理 Worker。
+- 页面行为：未读文章标题后显示 `NEW` 字体图标；“我的”页对应栏目至少有一篇窗口内未读文章时显示圆点。详情阅读成功后与阅读数在同一事务中写入已读关系，返回列表和“我的”页时刷新状态。匿名列表的 `isUnread` 固定为 `false`。
+- 接口与数据：文章列表增加 `isUnread`；新增需登录的 `GET /site-contents/articles/unread-summary`，固定返回 `KITCHEN / COOK / FOOD` 三栏 `hasUnread`；新增 `site_content_article_reads` 用户/文章唯一关系表。文章阅读统计与窗口内已读写入同事务完成。
+- 机器验证：Prisma Client 生成成功；API 与 Client type-check 通过；`prisma validate` 通过；OpenAPI 验证通过（347 operations / 308 response schemas）；Client `build:mp-weixin` 生产构建通过；`git diff --check` 通过。
+- 尚未验收：migration 仅生成，未应用到数据库。只读执行 `prisma migrate status` 发现本地 `next_meal` 有 6 条待应用迁移（5 条先前迁移和本功能迁移）；未应用，避免连带执行无关迁移。未在微信开发者工具或真机验收圆点、`NEW` 及返回刷新。

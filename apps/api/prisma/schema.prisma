@@ -671,10 +671,12 @@ model SiteContent {
 
   channel        SiteContentChannel? @relation(fields: [channelId], references: [id], onDelete: SetNull)
   likes          SiteContentLike[]
+  reads          SiteContentArticleRead[]
   updatedByAdmin AdminAccount?       @relation(fields: [updatedByAdminId], references: [id], onDelete: SetNull)
 
   @@index([type, status, sortOrder, id])
   @@index([channelId, type, status, sortOrder, id])
+  @@index([channelId, type, status, publishedAt])
   @@index([publishedAt, id])
   @@index([type, status, scheduledPublishAt])
   @@map("site_contents")
@@ -693,6 +695,20 @@ model SiteContentLike {
   @@index([userId, createdAt])
   @@index([contentId, createdAt])
   @@map("site_content_likes")
+}
+
+model SiteContentArticleRead {
+  id        Int      @id @default(autoincrement())
+  contentId Int      @map("content_id")
+  userId    Int      @map("user_id")
+  readAt    DateTime @default(now()) @map("read_at") @db.Timestamptz(3)
+
+  content SiteContent @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  user    User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, contentId])
+  @@index([contentId])
+  @@map("site_content_article_reads")
 }
 
 model HomeTopic {
@@ -849,6 +865,7 @@ model User {
   storageLedger             StorageLedger[]
   tableTopicParticipants    TableTopicParticipant[]
   siteContentLikes          SiteContentLike[]
+  siteContentArticleReads   SiteContentArticleRead[]
   uploadAssets              UploadAsset[]
   userMedals                UserMedal[]
   notificationSettings      UserNotificationSettings?

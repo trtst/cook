@@ -163,7 +163,10 @@
 									<view class="knowledge-entry__icon-wrap">
 										<text class="knowledge-entry__icon-font cookfont" :class="item.iconClass" aria-hidden="true" />
 									</view>
-									<text class="knowledge-entry__title">{{ item.title }}</text>
+									<view class="knowledge-entry__title-row">
+										<text class="knowledge-entry__title">{{ item.title }}</text>
+										<text v-if="item.showBadgeDot" class="knowledge-entry__badge-dot" aria-hidden="true" />
+									</view>
 								</view>
 						</view>
 					</view>
@@ -230,6 +233,7 @@ import {
 import { useSessionStore } from "@/stores/session";
 import { useSettingsStore, type ThemeMode, type ThemePalette, type ThemeSkin } from "@/stores/settings";
 import { useUserStore } from "@/stores/user";
+import { knowledgeUnreadApi } from "@/apis/knowledge-unread";
 import { formatThemeText } from "@/themes";
 import { restoreAppSession } from "@/utils/session";
 
@@ -361,6 +365,8 @@ type KnowledgeEntryMeta = {
 };
 
 const knowledgeChannelCodes: KnowledgeChannelCode[] = ["KITCHEN", "COOK", "FOOD"];
+const knowledgeUnread = ref<Record<KnowledgeChannelCode, boolean>>({ KITCHEN: false, COOK: false, FOOD: false });
+let knowledgeUnreadOwnerUid: number | null = null;
 const knowledgeChannelMeta: Record<KnowledgeChannelCode, KnowledgeEntryMeta> = {
 	KITCHEN: KNOWLEDGE_CHANNELS.KITCHEN,
 	COOK: KNOWLEDGE_CHANNELS.COOK,
@@ -372,7 +378,8 @@ const knowledgeEntries = computed<PageEntry[]>(() => knowledgeChannelCodes.map(c
 		title: channel.title,
 		iconClass: knowledgeEntryIcons[code],
 		description: channel.description,
-		url: buildKnowledgeListPath(code)
+		url: buildKnowledgeListPath(code),
+		showBadgeDot: knowledgeUnread.value[code]
 	};
 }));
 
@@ -449,18 +456,49 @@ async function syncPageState() {
 
 		if (sessionStore.isLoggedIn && userStore.profile) {
 			profileLoading.value = false;
+			await syncKnowledgeUnread();
 			return;
 		}
 	}
 
 	if (sessionStore.isLoggedIn) {
-		await Promise.allSettled([loadMe(), syncNotificationBadge()]);
+		await Promise.allSettled([loadMe(), syncNotificationBadge(), syncKnowledgeUnread()]);
 		return;
 	}
 
 	profileLoading.value = false;
 	clearNotificationBadgeSnapshot();
 	notificationBadge.value = EMPTY_BADGE_SNAPSHOT;
+	await syncKnowledgeUnread();
+}
+
+async function syncKnowledgeUnread() {
+	const requestUid = sessionStore.isLoggedIn ? sessionStore.uid : null;
+	if (requestUid === null || requestUid === 0) {
+		knowledgeUnreadOwnerUid = null;
+		knowledgeUnread.value = { KITCHEN: false, COOK: false, FOOD: false };
+		return;
+	}
+
+	if (knowledgeUnreadOwnerUid !== requestUid) {
+		knowledgeUnread.value = { KITCHEN: false, COOK: false, FOOD: false };
+		knowledgeUnreadOwnerUid = requestUid;
+	}
+
+	try {
+		const result = await knowledgeUnreadApi.getSummary();
+		if (!sessionStore.isLoggedIn || sessionStore.uid !== requestUid) return;
+
+		const nextState = {} as Record<KnowledgeChannelCode, boolean>;
+		for (const code of knowledgeChannelCodes) {
+			const channel = result.channels.find(item => item.channelCode === code);
+			if (!channel) throw new Error("知识文章未读摘要缺少栏目");
+			nextState[code] = channel.hasUnread;
+		}
+		knowledgeUnread.value = nextState;
+	} catch {
+		// 保留当前账号上次成功的栏目状态；首次加载失败时保持无圆点。
+	}
 }
 
 async function syncNotificationBadge() {
@@ -1202,15 +1240,31 @@ function showComingSoon(name: string) {
 	line-height: 1;
 }
 
+.knowledge-entry__title-row {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	max-width: 100%;
+	margin-top: 14rpx;
+}
+
 .knowledge-entry__title {
 	overflow: hidden;
 	max-width: 100%;
-	margin-top: 14rpx;
 	color: var(--color-text);
 	font-size: var(--font-size-md);
 	font-weight: var(--font-weight-medium);
 	text-overflow: ellipsis;
 	white-space: nowrap;
+}
+
+.knowledge-entry__badge-dot {
+	flex: 0 0 auto;
+	width: 14rpx;
+	height: 14rpx;
+	margin-left: 8rpx;
+	border-radius: 50%;
+	background: var(--color-state-danger-base);
 }
 
 .option-chip--active .option-chip__text {

@@ -38,6 +38,7 @@ import {
   ApiOkPage,
   SiteContentArticleDetailModel,
   SiteContentArticleListModel,
+  SiteContentArticleUnreadSummaryModel,
   SiteContentArticleLikeResultModel,
   SiteContentArticleViewResultModel,
   SiteContentDetailModel,
@@ -226,6 +227,14 @@ export class SiteContentArticleController {
     return this.adminSiteContentService
       .listPublicArticles(request.user?.userId ?? null, query.page, query.pageSize, query.channelCode)
       .then(result => ok(result));
+  }
+
+  @Get("unread-summary")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiOkModel(SiteContentArticleUnreadSummaryModel, "读取知识文章未读栏目摘要")
+  getUnreadSummary(@Req() request: RequestWithUser) {
+    return this.adminSiteContentService.getPublicArticleUnreadSummary(request.user.userId).then(result => ok(result));
   }
 
   @Get(":articleId")

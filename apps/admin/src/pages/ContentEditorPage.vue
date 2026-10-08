@@ -735,7 +735,7 @@ onMounted(() => {
 }
 
 .cover-editor__preview--article {
-  aspect-ratio: 3 / 4;
+  aspect-ratio: 4 / 3;
 }
 
 .cover-editor__preview--article .cover-editor__image,

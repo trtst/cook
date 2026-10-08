@@ -19,13 +19,17 @@ export interface KnowledgeArticleSummary {
   likeCount: number;
 }
 
+export interface KnowledgeArticleListItem extends KnowledgeArticleSummary {
+  isUnread: boolean;
+}
+
 export interface KnowledgeArticleChannel {
   code: KnowledgeChannelCode;
   name: string;
   description: string;
 }
 
-export interface KnowledgeArticleList extends PageResult<KnowledgeArticleSummary> {
+export interface KnowledgeArticleList extends PageResult<KnowledgeArticleListItem> {
   channel: KnowledgeArticleChannel;
 }
 
@@ -70,7 +74,7 @@ function normalizeBodyHtml(value: string) {
   });
 }
 
-function normalizeSummary(item: KnowledgeArticleSummary): KnowledgeArticleSummary {
+function normalizeSummary(item: KnowledgeArticleListItem): KnowledgeArticleListItem {
   return {
     ...item,
     coverImageUrl: toAssetUrl(item.coverImageUrl)

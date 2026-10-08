@@ -24,6 +24,7 @@ import type {
   SiteContentArticleList,
   SiteContentArticleLikeResult,
   SiteContentArticleSummary,
+  SiteContentArticleUnreadSummary,
   SiteContentArticleViewResult,
   SiteContentDetail,
   UUID,
@@ -72,6 +73,7 @@ const publicArticleChannels = [
 
 type PublicArticleChannelCode = (typeof publicArticleChannels)[number]["code"];
 const officialMessageChannelCode = "OFFICIAL_NOTICE" as const;
+const articleUnreadWindowMs = 7 * 24 * 60 * 60 * 1000;
 const fixedPageSeeds: FixedPageSeed[] = [
   { slug: "about", path: "/about", title: "关于我们", label: "关于", channelCode: "ABOUT", sortOrder: 0 },
   { slug: "privacy", path: "/privacy", title: "隐私政策", label: "法务", channelCode: "LEGAL", sortOrder: 1 },
@@ -682,6 +684,8 @@ export class AdminSiteContentService {
     const normalizedPage = toPositiveInt(page, 1);
     const normalizedPageSize = Math.min(50, toPositiveInt(pageSize, 20));
     const skip = (normalizedPage - 1) * normalizedPageSize;
+    const requestNow = new Date();
+    const unreadSince = new Date(requestNow.getTime() - articleUnreadWindowMs);
     const where: Prisma.SiteContentWhereInput = {
       type: "ARTICLE",
       status: "PUBLISHED",
@@ -698,8 +702,29 @@ export class AdminSiteContentService {
       this.prisma.siteContent.count({ where })
     ]);
 
+    const recentArticleIds = items
+      .filter(item => item.publishedAt !== null && item.publishedAt >= unreadSince && item.publishedAt <= requestNow)
+      .map(item => item.id);
+    const readRows = userId === null || recentArticleIds.length === 0
+      ? []
+      : await this.prisma.siteContentArticleRead.findMany({
+        where: {
+          userId,
+          contentId: { in: recentArticleIds }
+        },
+        select: { contentId: true }
+      });
+    const readIds = new Set(readRows.map(read => read.contentId));
+
     return {
-      items: items.map(item => this.toPublicArticleSummary(item)),
+      items: items.map(item => ({
+        ...this.toPublicArticleSummary(item),
+        isUnread: userId !== null
+          && item.publishedAt !== null
+          && item.publishedAt >= unreadSince
+          && item.publishedAt <= requestNow
+          && !readIds.has(item.id)
+      })),
       page: normalizedPage,
       pageSize: normalizedPageSize,
       total,
@@ -710,6 +735,40 @@ export class AdminSiteContentService {
         description: channel.description ?? ""
       }
     };
+  }
+
+  async getPublicArticleUnreadSummary(userId: number): Promise<SiteContentArticleUnreadSummary> {
+    await this.requireUser(userId);
+    await this.ensureDefaultChannels();
+
+    const requestNow = new Date();
+    const unreadSince = new Date(requestNow.getTime() - articleUnreadWindowMs);
+    const channels = await this.prisma.siteContentChannel.findMany({
+      where: { code: { in: publicArticleChannels.map(channel => channel.code) } },
+      select: { id: true, code: true }
+    });
+    const channelIds = new Map(channels.map(channel => [channel.code, channel.id]));
+
+    const states = await Promise.all(publicArticleChannels.map(async channel => {
+      const channelId = channelIds.get(channel.code);
+      if (channelId === undefined) {
+        return { channelCode: channel.code, hasUnread: false };
+      }
+
+      const unreadArticle = await this.prisma.siteContent.findFirst({
+        where: {
+          channelId,
+          type: "ARTICLE",
+          status: "PUBLISHED",
+          publishedAt: { gte: unreadSince, lte: requestNow },
+          reads: { none: { userId } }
+        },
+        select: { id: true }
+      });
+      return { channelCode: channel.code, hasUnread: unreadArticle !== null };
+    }));
+
+    return { channels: states };
   }
 
   async getPublicArticleDetail(userId: number | null, articleId: number): Promise<SiteContentArticleDetail> {
@@ -782,13 +841,15 @@ export class AdminSiteContentService {
   async recordPublicArticleView(userId: number, articleId: number, operationId: string): Promise<SiteContentArticleViewResult> {
     await this.requireUser(userId);
     const requestHash = toRequestHash({ articleId });
+    const requestNow = new Date();
+    const unreadSince = new Date(requestNow.getTime() - articleUnreadWindowMs);
 
     return this.prisma.$transaction(async tx => {
       const repeated = await getIdempotentResult<SiteContentArticleViewResult>(tx, operationId, "site-content-article:view", userId, null, requestHash);
       if (repeated) return repeated;
       await startIdempotentOperation(tx, operationId, "site-content-article:view", userId, null, requestHash);
 
-      await this.requirePublicArticleForWrite(tx, articleId);
+      const article = await this.requirePublicArticleForWrite(tx, articleId);
       const updated = await tx.siteContent.update({
         where: { id: articleId },
         data: {
@@ -799,6 +860,12 @@ export class AdminSiteContentService {
           viewCount: true
         }
       });
+      if (article.publishedAt !== null && article.publishedAt >= unreadSince && article.publishedAt <= requestNow) {
+        await tx.siteContentArticleRead.createMany({
+          data: [{ contentId: article.id, userId }],
+          skipDuplicates: true
+        });
+      }
       const result: SiteContentArticleViewResult = {
         articleId: updated.id,
         viewCount: updated.viewCount
@@ -1199,12 +1266,13 @@ export class AdminSiteContentService {
           }
         }
       },
-      select: { id: true }
+      select: { id: true, publishedAt: true }
     });
 
     if (!row) {
       throw new NotFoundException("文章不存在");
     }
+    return row;
   }
 
   private async requireUser(userId: number) {

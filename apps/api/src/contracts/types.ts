@@ -1054,13 +1054,24 @@ export interface SiteContentArticleSummary {
   likeCount: number;
 }
 
+export interface SiteContentArticleListItem extends SiteContentArticleSummary {
+  isUnread: boolean;
+}
+
 export interface SiteContentArticleChannel {
   code: "KITCHEN" | "COOK" | "FOOD";
   name: string;
   description: string;
 }
 
-export interface SiteContentArticleList extends PageResult<SiteContentArticleSummary> {
+export interface SiteContentArticleUnreadSummary {
+  channels: Array<{
+    channelCode: "KITCHEN" | "COOK" | "FOOD";
+    hasUnread: boolean;
+  }>;
+}
+
+export interface SiteContentArticleList extends PageResult<SiteContentArticleListItem> {
   channel: SiteContentArticleChannel;
 }
 

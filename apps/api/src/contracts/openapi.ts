@@ -749,6 +749,10 @@ export class SiteContentArticleSummaryModel {
   @ApiProperty({ type: Number, minimum: 0 }) likeCount!: number;
 }
 
+export class SiteContentArticleListItemModel extends SiteContentArticleSummaryModel {
+  @ApiProperty({ type: Boolean }) isUnread!: boolean;
+}
+
 export class SiteContentArticleChannelModel {
   @ApiProperty({ type: String, enum: ["KITCHEN", "COOK", "FOOD"] }) code!: string;
   @ApiProperty({ type: String }) name!: string;
@@ -756,12 +760,22 @@ export class SiteContentArticleChannelModel {
 }
 
 export class SiteContentArticleListModel {
-  @ApiProperty({ type: [SiteContentArticleSummaryModel] }) items!: SiteContentArticleSummaryModel[];
+  @ApiProperty({ type: [SiteContentArticleListItemModel] }) items!: SiteContentArticleListItemModel[];
   @ApiProperty({ type: Number, minimum: 1 }) page!: number;
   @ApiProperty({ type: Number, minimum: 1, maximum: 50 }) pageSize!: number;
   @ApiProperty({ type: Number, minimum: 0 }) total!: number;
   @ApiProperty({ type: Boolean }) hasNext!: boolean;
   @ApiProperty({ type: SiteContentArticleChannelModel }) channel!: SiteContentArticleChannelModel;
+}
+
+export class SiteContentArticleUnreadChannelModel {
+  @ApiProperty({ type: String, enum: ["KITCHEN", "COOK", "FOOD"] }) channelCode!: string;
+  @ApiProperty({ type: Boolean }) hasUnread!: boolean;
+}
+
+export class SiteContentArticleUnreadSummaryModel {
+  @ApiProperty({ type: [SiteContentArticleUnreadChannelModel] })
+  channels!: SiteContentArticleUnreadChannelModel[];
 }
 
 export class SiteContentArticleDetailModel extends SiteContentArticleSummaryModel {

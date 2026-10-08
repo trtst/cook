@@ -1,6 +1,6 @@
 # 厨房知识文章未读标识 Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** 登录用户在文章发布后的 7×24 小时内看到个人未读提示，读过或窗口过期后隐藏提示。
 
@@ -35,18 +35,18 @@
 - Modify: `docs/api-contract.md`
 
 **Interfaces:**
-- `SiteContentArticleSummary.isUnread: boolean`; anonymous summaries always return `false`.
+- `SiteContentArticleListItem` extends `SiteContentArticleSummary` with `isUnread: boolean`; anonymous summaries always return `false`.
 - `GET /site-contents/articles/unread-summary` requires `UserBearerAuth` and returns `channels: Array<{ channelCode: "KITCHEN" | "COOK" | "FOOD"; hasUnread: boolean }>`.
 - `recordPublicArticleView(userId, articleId, operationId)` retains the current response and idempotency key while recording a unique user/article read fact when `publishedAt >= requestNow - 7 days`.
 
-- [ ] Add `SiteContentArticleRead` with `id`, `userId`, `contentId`, and `readAt`; add a unique constraint on `(userId, contentId)` and cascading user/content foreign keys. Add relation arrays to `User` and `SiteContent`.
-- [ ] Create the forward SQL migration for the read table and its unique index. Do not apply it to a shared or production database.
-- [ ] Extend the existing public list mapping: collect IDs only for the current page's articles in the 7-day window; fetch the current user's matching read rows once; set `isUnread` per item. For anonymous callers and out-of-window items, set `false` without querying read rows.
-- [ ] Add the authenticated summary method. Resolve the three existing channel IDs, use one `requestNow` value, and run one `findFirst` existence query per channel filtered to published articles inside the window with no read relation for the current user. Return all three channel codes, including `hasUnread: false` entries.
-- [ ] Register `GET unread-summary` before `GET :articleId` in `SiteContentArticleController` and document its response model in OpenAPI.
-- [ ] In `recordPublicArticleView`, retain the existing `Idempotency-Key` behavior and transaction. Select the published article's `publishedAt`, increment `viewCount`, and `createMany(..., skipDuplicates: true)` the read fact only when it is inside the window.
-- [ ] Update `docs/api-contract.md` with the list-only `isUnread`, the authenticated summary endpoint, and the view endpoint's read-state side effect.
-- [ ] Generate Prisma Client, then run `pnpm --filter @next-meal/api type-check`, `pnpm --filter @next-meal/api verify:openapi`, and `pnpm --filter @next-meal/api exec prisma validate`.
+- [x] Add `SiteContentArticleRead` with `id`, `userId`, `contentId`, and `readAt`; add a unique constraint on `(userId, contentId)` and cascading user/content foreign keys. Add relation arrays to `User` and `SiteContent`.
+- [x] Create the forward SQL migration for the read table and its unique index. Do not apply it to a shared or production database.
+- [x] Extend the existing public list mapping: collect IDs only for the current page's articles in the 7-day window; fetch the current user's matching read rows once; set `isUnread` per item. For anonymous callers and out-of-window items, set `false` without querying read rows.
+- [x] Add the authenticated summary method. Resolve the three existing channel IDs, use one `requestNow` value, and run one `findFirst` existence query per channel filtered to published articles inside the window with no read relation for the current user. Return all three channel codes, including `hasUnread: false` entries.
+- [x] Register `GET unread-summary` before `GET :articleId` in `SiteContentArticleController` and document its response model in OpenAPI.
+- [x] In `recordPublicArticleView`, retain the existing `Idempotency-Key` behavior and transaction. Select the published article's `publishedAt`, increment `viewCount`, and `createMany(..., skipDuplicates: true)` the read fact only when it is inside the window.
+- [x] Update `docs/api-contract.md` with the list-only `isUnread`, the authenticated summary endpoint, and the view endpoint's read-state side effect.
+- [x] Generate Prisma Client, run API/Client type-checks, OpenAPI verification, Prisma validation, and the WeChat production build.
 
 ### Task 2: Render and refresh article unread indicators in the client
 
@@ -54,18 +54,19 @@
 - Modify: `apps/client/src/pages_me/apis/knowledge.ts`
 - Modify: `apps/client/src/pages_me/knowledge-list/index.vue`
 - Modify: `apps/client/src/pages/me/index.vue`
+- Create: `apps/client/src/apis/knowledge-unread.ts`
 
 **Interfaces:**
-- Client `KnowledgeArticleSummary.isUnread: boolean` mirrors the API list summary.
-- `knowledgeApi.getUnreadSummary()` returns one boolean state for each of `KITCHEN`, `COOK`, and `FOOD`.
+- Client `KnowledgeArticleListItem.isUnread: boolean` mirrors the API list summary.
+- `knowledgeUnreadApi.getSummary()` returns one boolean state for each of `KITCHEN`, `COOK`, and `FOOD`.
 - `PageEntry.showBadgeDot` drives the existing “我的” service-entry dot and the knowledge-entry dot without introducing cross-page store state.
 
-- [ ] Add the client summary type and `knowledgeApi.getUnreadSummary()` through the existing request layer. Use the authenticated `get` helper; do not add raw platform requests or local storage.
-- [ ] Add the three-channel `hasUnread` state to `pages/me/index.vue`. On `onShow`, refresh it for logged-in users after the existing session restoration; clear it for guests and on account change/logout.
-- [ ] Derive each `knowledgeEntries` row's `showBadgeDot` from its matching channel summary and render a small red dot beside that row's title. Keep the current entry title, icon, and route unchanged.
-- [ ] Render the `NEW` glyph using the existing `cookfont` font and code point `e6a6` only when `item.isUnread` is true; do not add the label to article detail or other lists.
-- [ ] Reload the current knowledge list when returning from detail so the newly recorded read state removes `NEW`. Guard the initial `onLoad`/`onShow` pair so it does not issue duplicate list requests.
-- [ ] Run `pnpm --filter @next-meal/client type-check` and `pnpm --filter @next-meal/client build:mp-weixin`.
+- [x] Add the client summary type and `knowledgeUnreadApi.getSummary()` through the existing request layer. Use the authenticated `get` helper; do not add raw platform requests or local storage.
+- [x] Add the three-channel `hasUnread` state to `pages/me/index.vue`. On `onShow`, refresh it for logged-in users after the existing session restoration; clear it for guests and on account change/logout.
+- [x] Derive each `knowledgeEntries` row's `showBadgeDot` from its matching channel summary and render a small red dot beside that row's title. Keep the current entry title, icon, and route unchanged.
+- [x] Render the `NEW` glyph using the existing `cookfont` font and code point `e6a6` only when `item.isUnread` is true; do not add the label to article detail or other lists.
+- [x] Reload the current knowledge list when returning from detail so the newly recorded read state removes `NEW`. Guard the initial `onLoad`/`onShow` pair so it does not issue duplicate list requests.
+- [x] Run `pnpm --filter @next-meal/client type-check` and `pnpm --filter @next-meal/client build:mp-weixin`.
 
 ### Task 3: Record the implementation and audit the delivery scope
 
@@ -73,10 +74,10 @@
 - Modify: `docs/plans/site-content-knowledge-article-execution.md`
 - Modify: `docs/plans/minor_change_log.md`
 
-- [ ] Update the existing feature execution sheet with the confirmed 7-day unread rules, API additions, verification evidence, and remaining live-database / WeChat acceptance gates.
-- [ ] Append one dated entry to `minor_change_log.md` listing only files actually changed, successful validations, migration application status, and unverified WeChat behavior. Preserve unrelated pre-existing edits in that file.
-- [ ] Run `git diff --check` on the feature files and inspect the final staged and unstaged diffs. Do not include the pre-existing `apps/admin/src/main.ts` change or unrelated log edits in the feature commit.
-- [ ] Report that the migration was generated and validated but not applied; report that real WeChat UI acceptance was not performed.
+- [x] Update the existing feature execution sheet with the confirmed 7-day unread rules, API additions, verification evidence, and remaining live-database / WeChat acceptance gates.
+- [x] Append one dated entry to `minor_change_log.md` listing only files actually changed, successful validations, migration application status, and unverified WeChat behavior. Preserve unrelated pre-existing edits in that file.
+- [x] Run `git diff --check` on the feature files and inspect the final staged and unstaged diffs. Do not include the pre-existing `apps/admin/src/main.ts` change or unrelated log edits in the feature commit.
+- [x] Report that the migration was generated and validated but not applied; report that real WeChat UI acceptance was not performed.
 
 ## Completion Review
 

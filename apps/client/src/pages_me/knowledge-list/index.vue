@@ -89,7 +89,10 @@
               <ImageEmpty v-else class="knowledge-item__thumb knowledge-item__thumb--empty" copy="封面图" ratio="4-3" />
 
               <view class="knowledge-item__body">
-                <text class="knowledge-item__title">{{ item.title }}</text>
+                <view class="knowledge-item__title-row">
+                  <text class="knowledge-item__title">{{ item.title }}</text>
+                  <text v-if="item.isUnread" class="cookfont knowledge-item__new" aria-label="NEW" />
+                </view>
                 <text v-if="item.summary" class="knowledge-item__summary">{{ item.summary }}</text>
                 <view v-if="splitKeywords(item.keywords).length" class="knowledge-item__keywords">
                   <text v-for="keyword in splitKeywords(item.keywords)" :key="keyword" class="knowledge-item__keyword">
@@ -123,7 +126,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from "vue";
-import { onLoad } from "@dcloudio/uni-app";
+import { onLoad, onShow } from "@dcloudio/uni-app";
 import emptyStateArt from "@/assets/empty.png";
 import Empty from "@/components/Empty/Empty.vue";
 import ImageEmpty from "@/components/ImageEmpty.vue";
@@ -140,7 +143,7 @@ import {
   type KnowledgeChannelCode
 } from "@/config/knowledge-articles";
 import { uniPlatform } from "@/platform/uni";
-import { knowledgeApi, type KnowledgeArticleSummary } from "../apis/knowledge";
+import { knowledgeApi, type KnowledgeArticleListItem } from "../apis/knowledge";
 
 const pageStyle = usePageScrollStyle();
 const { themeVars, themeClasses } = useTheme();
@@ -166,11 +169,12 @@ const {
 
 const channelCode = ref<KnowledgeChannelCode | null>(null);
 const serverChannel = ref<{ code: KnowledgeChannelCode; title: string; description: string } | null>(null);
-const articles = ref<KnowledgeArticleSummary[]>([]);
+const articles = ref<KnowledgeArticleListItem[]>([]);
 const loading = ref(true);
 const loaded = ref(false);
 const errorText = ref("");
 const scrollTop = ref(0);
+let hasShownOnce = false;
 
 const staticChannelMeta = computed(() => getKnowledgeChannel(channelCode.value));
 const channelMeta = computed(() => serverChannel.value ?? staticChannelMeta.value);
@@ -178,6 +182,14 @@ const showSkeleton = computed(() => loading.value && !loaded.value);
 const NAVBAR_TITLE_FADE_DISTANCE = 96;
 const navbarTitleOpacity = computed(() => {
   return Math.min(1, Math.max(0, scrollTop.value / NAVBAR_TITLE_FADE_DISTANCE));
+});
+
+onShow(() => {
+  if (!hasShownOnce) {
+    hasShownOnce = true;
+    return;
+  }
+  if (channelCode.value) void loadArticles();
 });
 
 onLoad((query) => {
@@ -346,6 +358,24 @@ function splitKeywords(value: string | null) {
 
 .knowledge-item__body--skeleton {
   gap: 16rpx;
+}
+
+.knowledge-item__title-row {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.knowledge-item__new {
+  flex: 0 0 auto;
+  margin-left: 8rpx;
+  color: var(--color-state-danger-base);
+  font-size: 22rpx;
+  line-height: 1;
+}
+
+.knowledge-item__new::before {
+  content: "\e6a6";
 }
 
 .knowledge-item__title {
