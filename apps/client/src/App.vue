@@ -31,56 +31,33 @@ onShow(() => {
 @use "@/assets/fonts/font.scss";
 @use "@/themes/skins.scss";
 
-
-
-/* Black / Heavy / 900 */
-@font-face {
-	font-family: 'SC-Black';
-	font-display: block;
-	src: url("https://static.yueniuzq.com/static/font/NotoSerifSCBlack.ttf") format("truetype");
-	font-weight: 900;
-	font-style: normal;
-	font-display: swap;
-}
-
-/* Bold / 700 */
-@font-face {
-	font-family: 'SC-Bold';
-	font-display: block;
-	src: url("https://static.yueniuzq.com/static/font/NotoSerifSCBold.ttf") format("truetype");
-	font-weight: 700;
-	font-style: normal;
-	font-display: swap;
-}
-
-/* Medium / 500 */
 @font-face {
 	font-family: 'SC-Medium';
 	font-display: block;
-	src: url("https://static.yueniuzq.com/static/font/NotoSerifSCMedium.ttf") format("truetype");
+	src: url("https://static.trtst.com/O/fonts/chuihuoji_Medium.ttf") format("truetype");
 	font-weight: 500;
 	font-style: normal;
 	font-display: swap;
 }
 
-.font-black {
-	font-family: 'SC-Black';
-}
-
-.font-bold {
-	font-family: 'SC-Bold';
+@font-face {
+	font-family: 'CHJ-Kai';
+	font-display: block;
+	src: url("https://static.trtst.com/O/fonts/chuihuoji_han.ttf") format("truetype");
+	font-weight: 500;
+	font-style: normal;
+	font-display: swap;
 }
 
 .font-medium {
-	font-family: 'SC-Medium';
+	font-family: 'CHJ-Kai';
 }
-
 
 page {
 	height: 100vh;
 	overflow: hidden;
 	color: var(--color-text);
-	font-family: var(--font-family-base);
+	font-family: 'SC-Medium', var(--font-family-base);
 }
 
 ::-webkit-scrollbar {

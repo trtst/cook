@@ -49,7 +49,7 @@ expectIncludes(recipePageSource, 'v-for="keyword in item.keywords.slice(0, 3)"')
 expectIncludes(recipePageSource, 'class="recipe-card__meta-tag"');
 expectIncludes(recipePageSource, 'v-if="item.caloriesText" class="recipe-card__calories"');
 expectIncludes(recipePageSource, "{{ item.caloriesText }}");
-expectExcludes(recipePageSource, 'class="recipe-card__cover-text font-black">封面图');
+expectExcludes(recipePageSource, 'class="recipe-card__cover-text font-medium">封面图');
 expectExcludes(recipePageSource, "item.durationText");
 expectExcludes(recipePageSource, "item.coverTag");
 expectExcludes(recipePageSource, "coverTag:");
@@ -59,7 +59,7 @@ expectIncludes(recipeManageListSource, 'import RecipeListRow from "@/components/
 expectIncludes(recipeManageListSource, '<RecipeListRow');
 expectIncludes(recipeManageListSource, 'class="card__delete"');
 expectExcludes(recipeManageListSource, 'import ImageEmpty from "@/components/ImageEmpty.vue";');
-expectExcludes(recipeManageListSource, 'class="card__cover-text font-black">封面');
+expectExcludes(recipeManageListSource, 'class="card__cover-text font-medium">封面');
 expectExcludes(recipeManageListSource, 'mode !== "drafts"');
 
 expectExcludes(recipeListRowSource, "recipe-list-row--small");

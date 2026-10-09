@@ -23,6 +23,7 @@ assert.match(useThemeSource, /const themePageColors: Record<ThemeSkin, ThemePage
 assert.match(useThemeSource, /default: "#fff",\s*warm: "#f9eee0",\s*glacier: "#e7f8f9"/);
 assert.match(colorsSource, /@mixin theme-derived-colors\(\s*\$bg,\s*\$surface,\s*\$text,\s*\$primary,\s*\$secondary,/);
 assert.match(colorsSource, /--color-primary:\s*var\(--theme-primary\);/);
+assert.match(colorsSource, /--font-family-base:\s*PingFang SC NEW,system-ui,-apple-system,BlinkMacSystemFont,Helvetica Neue,Hiragino Sans GB,Microsoft YaHei UI,Microsoft YaHei,Arial,sans-serif;/);
 assert.match(colorsSource, /@include theme-derived-colors\(#ffffff, #ffffff, #17231d, #216e4e, #216e4e, #ffffff, #17231d\);/);
 assert.doesNotMatch(colorsSource, /@include theme-derived-colors;/);
 

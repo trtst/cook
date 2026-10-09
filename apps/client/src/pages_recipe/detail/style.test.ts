@@ -4,6 +4,16 @@ import { resolve } from "node:path";
 
 const source = readFileSync(resolve(__dirname, "index.vue"), "utf8");
 const recipeApiSource = readFileSync(resolve(__dirname, "../../apis/recipe.ts"), "utf8");
+const appSource = readFileSync(resolve(__dirname, "../../App.vue"), "utf8");
+
+assert.ok(appSource.includes("font-family: 'SC-Medium';") && appSource.includes("src: url(\"https://static.trtst.com/O/fonts/chuihuoji_Medium.ttf\") format(\"truetype\");"), "Expected the app to load its global SC-Medium font asset.");
+assert.ok(appSource.includes("font-family: 'CHJ-Kai';") && appSource.includes("src: url(\"https://static.trtst.com/O/fonts/chuihuoji_han.ttf\") format(\"truetype\");"), "Expected the shared medium class to use the CHJ-Kai font asset.");
+assert.ok(appSource.includes(".font-medium {\n\tfont-family: 'CHJ-Kai';"), "Expected the app to keep the shared medium font class.");
+assert.ok(appSource.includes("font-family: 'SC-Medium', var(--font-family-base);"), "Expected the page base font to prefer SC-Medium with the platform stack as fallback.");
+assert.ok(!appSource.includes("font-family: 'SC-Black'"), "Expected the app not to keep the removed black font face.");
+assert.ok(!appSource.includes("font-family: 'SC-Bold'"), "Expected the app not to keep the removed bold font face.");
+assert.ok(!appSource.includes(".font-black {"), "Expected the app not to keep the removed black font class.");
+assert.ok(!appSource.includes(".font-bold {"), "Expected the app not to keep the removed bold font class.");
 
 assert.ok(!source.includes("<template #navbar-left>"), "Expected recipe detail navbar to use the default left button.");
 assert.ok(!source.includes(':show-left="false"'), "Expected recipe detail navbar not to disable the default left button.");
@@ -20,6 +30,7 @@ assert.ok(!source.includes('navbar-layout="custom-left"'), "Expected recipe deta
 assert.ok(!source.includes('class="detail-nav"'), "Expected recipe detail navbar not to wrap back and anchors in the left slot.");
 assert.ok(recipeApiSource.includes("keywords: string[];"), "Expected the public recipe content contract to include body keywords.");
 assert.ok(source.includes('v-if="detailContent.keywords.length"'), "Expected the recipe detail to show keywords only when present.");
+assert.ok(source.includes('<text class="step-card__index-current font-medium">'), "Expected the current recipe step index to use the shared medium font.");
 assert.ok(source.includes('v-for="item in detailContent.keywords"'), "Expected the recipe detail to render each body keyword.");
 assert.ok(!source.includes(".wiki"), "Expected the recipe detail not to consume Wiki data.");
 assert.ok(source.includes('import ImageLoader from "@/components/ImageLoader.vue";'), "Expected recipe detail to use the shared image loader.");

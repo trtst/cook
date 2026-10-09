@@ -20,6 +20,7 @@ assert.ok(!source.includes(":left-content="), "Expected Layout not to pass left 
 assert.ok(!source.includes(":right-content="), "Expected Layout not to pass right slot state into NavBar.");
 assert.ok(!source.includes("navbar-left"), "Expected Layout not to expose a custom left navbar slot.");
 assert.ok(!source.includes(":layout=\"navbarLayout\""), "Expected Layout not to pass an unused navbar layout prop.");
+assert.ok(!source.includes("font-family: var(--font-family-base);"), "Expected Layout to inherit the global page font instead of overriding it.");
 assert.ok(!source.includes(":side-guard=\"navbarSideGuard\""), "Expected Layout not to pass a separate navbar side guard prop.");
 assert.ok(
   source.includes('v-if="showNavbar && navbarCenterVisible && $slots[\'navbar-center\']"'),

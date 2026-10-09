@@ -215,7 +215,7 @@
                 <view v-if="detailSteps.length" class="step-list">
                   <view v-for="(item, index) in detailSteps" :key="index" class="step-card">
                     <text class="step-card__index font-medium">
-                      <text class="step-card__index-current font-black">{{ index + 1 }} </text>
+                      <text class="step-card__index-current font-medium">{{ index + 1 }} </text>
                       <text class="step-card__index-total">{{ `/ ${detailSteps.length}` }}</text>
                     </text>
                     <image v-if="item.imageUrl" class="step-card__cover-image" :src="item.imageUrl" mode="widthFix" />

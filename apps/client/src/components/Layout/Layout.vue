@@ -101,7 +101,6 @@ const toastTop = computed(() => (props.showNavbar ? navBarTotalHeight.value : sy
 		height: 100vh;
 	overflow: hidden;
 	color: var(--color-text);
-	font-family: var(--font-family-base);
 }
 
 .layout__theme {
