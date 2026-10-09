@@ -71,14 +71,7 @@
               <ArticleBody :html="detail.bodyHtml" />
             </view>
 
-            <view class="detail-share-actions">
-              <SharePillButton label="分享文章" />
-              <view class="detail-share-actions__copy" hover-class="detail-share-actions__copy--hover" @click="copyArticleLink">
-                复制链接
-              </view>
-            </view>
-
-            <view class="detail-bottom-like">
+            <view class="detail-actions">
               <view
                 class="detail-bottom-like__button"
                 :class="{
@@ -94,6 +87,9 @@
                 <text class="cookfont icon-like detail-bottom-like__icon" />
                 <text class="detail-bottom-like__label">喜欢</text>
               </view>
+              <button class="detail-actions__share" open-type="share" hover-class="detail-actions__share--hover">
+                <text class="cookfont icon-share detail-actions__share-icon" />
+              </button>
             </view>
           </view>
         </template>
@@ -107,7 +103,6 @@ import { computed, ref } from "vue";
 import { onLoad, onShareAppMessage } from "@dcloudio/uni-app";
 import Layout from "@/components/Layout/Layout.vue";
 import ImageEmpty from "@/components/ImageEmpty.vue";
-import SharePillButton from "@/components/Share/SharePillButton.vue";
 import Skeleton from "@/components/Skeleton/Skeleton.vue";
 import ArticleBody from "../components/ArticleBody.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
@@ -239,16 +234,6 @@ async function toggleLike() {
     }).catch(() => undefined);
   } finally {
     likeSubmitting.value = false;
-  }
-}
-
-async function copyArticleLink() {
-  if (!articleId.value) return;
-  try {
-    await uniPlatform.clipboard.set(buildKnowledgeDetailPath(articleId.value));
-    await uniPlatform.feedback.toast({ title: "链接已复制", icon: "none" });
-  } catch (error) {
-    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "复制失败", icon: "none" }).catch(() => undefined);
   }
 }
 
@@ -476,36 +461,41 @@ defineExpose({
   padding-top: 12rpx;
 }
 
-.detail-share-actions {
+.detail-actions {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 16rpx;
-  padding-top: 28rpx;
+  gap: 32rpx;
+  padding-top: 30rpx;
+  padding-bottom: 12rpx;
 }
 
-.detail-share-actions__copy {
-  display: inline-flex;
+.detail-actions__share {
+  display: flex;
   align-items: center;
   justify-content: center;
-  height: 52rpx;
-  padding: 0 18rpx;
-  border-radius: var(--radius-xs);
+  width: 100rpx;
+  height: 100rpx;
+  padding: 0;
+  border: 1rpx solid var(--color-border);
+  border-radius: var(--radius-pill);
+  color: var(--color-text-tertiary);
   background: var(--color-surface-soft-panel);
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-xs);
   line-height: 1;
 }
 
-.detail-share-actions__copy--hover {
+.detail-actions__share::after {
+  border: 0;
+}
+
+.detail-actions__share--hover {
   opacity: 0.72;
 }
 
-.detail-bottom-like {
-  display: flex;
-  justify-content: center;
-  padding-top: 30rpx;
-  padding-bottom: 12rpx;
+.detail-actions__share-icon {
+  color: inherit;
+  font-size: 50rpx;
+  line-height: 1;
 }
 
 .detail-bottom-like__button {
@@ -543,7 +533,7 @@ defineExpose({
   position: relative;
   z-index: 2;
   color: inherit;
-  font-size: 38rpx;
+  font-size: 50rpx;
   line-height: 1;
   transition: color 200ms ease;
 }

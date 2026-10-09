@@ -48,14 +48,13 @@ expectIncludes(fontSource, '.icon-like::before {\n    content: "\\e6f9";\n}');
 expectIncludes(pageSource, 'class="detail-meta__icon cookfont icon-time"');
 expectIncludes(pageSource, 'class="detail-meta__icon cookfont icon-read"');
 expectIncludes(pageSource, 'class="detail-meta__icon cookfont icon-like"');
-expectIncludes(pageSource, 'class="detail-bottom-like"');
+expectIncludes(pageSource, 'class="detail-actions"');
 expectIncludes(pageSource, 'class="detail-bottom-like__button"');
-expectIncludes(pageSource, 'class="detail-share-actions"');
-expectIncludes(pageSource, '<SharePillButton label="分享文章" />');
-expectIncludes(pageSource, '@click="copyArticleLink"');
+expectIncludes(pageSource, 'class="detail-actions__share" open-type="share"');
+expectExcludes(pageSource, 'class="detail-share-actions"');
+expectExcludes(pageSource, '复制链接');
 expectIncludes(pageSource, "onShareAppMessage(() => ({");
 expectIncludes(pageSource, "imageUrl: detail.value?.coverImageUrl || undefined");
-expectIncludes(pageSource, "await uniPlatform.clipboard.set(buildKnowledgeDetailPath(articleId.value))");
 expectIncludes(pageSource, "import ArticleBody from");
 expectIncludes(pageSource, "<ArticleBody :html=\"detail.bodyHtml\" />");
 expectIncludes(pageSource, "if (!detail.value || viewRecorded.value || !sessionStore.isLoggedIn) return;");
@@ -74,7 +73,7 @@ const metaIndex = pageSource.indexOf('class="detail-meta"');
 const summaryIndex = pageSource.indexOf('class="detail-summary"');
 const keywordsIndex = pageSource.indexOf('class="detail-keywords"');
 const articleIndex = pageSource.indexOf('class="detail-article"');
-const bottomLikeIndex = pageSource.indexOf('class="detail-bottom-like"');
+const bottomLikeIndex = pageSource.indexOf('class="detail-actions"');
 
 assert.ok(coverIndex >= 0, "Expected cover section");
 assert.ok(titleIndex > coverIndex, "Expected title after cover");
@@ -82,7 +81,7 @@ assert.ok(metaIndex > titleIndex, "Expected time/read/like meta after title");
 assert.ok(summaryIndex > metaIndex, "Expected summary after meta");
 assert.ok(keywordsIndex > summaryIndex, "Expected keywords after summary");
 assert.ok(articleIndex > keywordsIndex, "Expected article body after keywords");
-assert.ok(bottomLikeIndex > articleIndex, "Expected centered bottom like after article body");
+assert.ok(bottomLikeIndex > articleIndex, "Expected centered like and share actions after article body");
 
 expectSelectorIncludes(sheetSource, ".sheet-shell__close", ["padding: 20rpx;", "margin: -20rpx;"]);
 expectIncludes(sheetSource, "padding-bottom: calc(20rpx + env(safe-area-inset-bottom));");
@@ -113,9 +112,10 @@ expectSelectorIncludes(articleBodySource, ".article-body", [
   "display: block;",
   "color: var(--color-text);"
 ]);
-expectSelectorIncludes(pageSource, ".detail-bottom-like", [
+expectSelectorIncludes(pageSource, ".detail-actions", [
   "display: flex;",
-  "justify-content: center;"
+  "justify-content: center;",
+  "gap: 32rpx;"
 ]);
 expectSelectorIncludes(pageSource, ".detail-bottom-like__button", [
   "border: 1rpx solid var(--color-border);",
@@ -127,6 +127,11 @@ expectSelectorIncludes(pageSource, ".detail-bottom-like__button--active", [
 ]);
 expectSelectorIncludes(pageSource, ".detail-bottom-like__label", [
   "top: -24rpx;"
+]);
+expectSelectorIncludes(pageSource, ".detail-actions__share", [
+  "width: 100rpx;",
+  "height: 100rpx;",
+  "border-radius: var(--radius-pill);"
 ]);
 expectSelectorIncludes(pageSource, ".detail-navbar__title", [
   "display: block;",
