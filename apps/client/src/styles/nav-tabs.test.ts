@@ -39,4 +39,10 @@ for (const source of pageSources) {
   assert.ok(!source.includes("@keyframes nav-tab-active-expand"), "Expected the shared animation keyframes to live in one global file");
 }
 
+for (const source of pageSources.slice(0, 4)) {
+  const tabStyle = source.match(/\.nav-tabs__item\s*\{([^}]*)\}/)?.[1] ?? "";
+  assert.ok(tabStyle.includes("font-size: 46rpx;"), "Expected recipe, ingredient, event, and pantry tabs to use the updated 46rpx size");
+}
+assert.ok(pageSources[1].includes('class="nav-tabs__item font-medium"'), "Expected pantry status tabs to use the shared medium font class");
+
 console.log("shared Navbar tab indicator tests passed");

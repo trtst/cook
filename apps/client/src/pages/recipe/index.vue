@@ -1170,7 +1170,7 @@ defineExpose({
   flex: 0 0 auto;
   padding: 8rpx 0 12rpx;
   color: var(--color-text-secondary);
-  font-size: 40rpx;
+  font-size: 46rpx;
   font-weight: var(--font-weight-bold);
   line-height: 1;
   white-space: nowrap;
