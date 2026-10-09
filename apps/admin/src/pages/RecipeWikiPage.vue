@@ -102,8 +102,16 @@ async function readRevisionPool(adminId: number): Promise<StoredRevisionPool | n
 async function writeRevisionPool(pool: StoredRevisionPool) {
   const database = await openRevisionPoolDatabase();
   return new Promise<void>((resolve, reject) => {
-    const transaction = database.transaction(revisionPoolStore, "readwrite");
-    transaction.objectStore(revisionPoolStore).put(pool);
+    let transaction: IDBTransaction;
+    try {
+      const clone = JSON.parse(JSON.stringify(pool)) as StoredRevisionPool;
+      transaction = database.transaction(revisionPoolStore, "readwrite");
+      transaction.objectStore(revisionPoolStore).put(clone);
+    } catch (error) {
+      database.close();
+      reject(error instanceof Error ? error : new Error("保存本地导入池失败"));
+      return;
+    }
     transaction.oncomplete = () => {
       database.close();
       resolve();
@@ -319,6 +327,7 @@ async function replaceRevisionItems(items: RevisionEntry[]) {
   saving.value = true;
   const resultItems: Array<{ recipeId: number; status: "REPLACED" | "REJECTED"; message: string | null }> = [];
   let replacedCount = 0;
+  let poolSaveFailed = false;
   try {
     const batches = [items.filter(item => item.recipe), items.filter(item => !item.recipe)].filter(batch => batch.length > 0);
     for (const batch of batches) {
@@ -327,7 +336,12 @@ async function replaceRevisionItems(items: RevisionEntry[]) {
       replacedCount += result.replacedCount;
       const succeededIds = new Set(result.items.filter(item => item.status === "REPLACED").map(item => item.recipeId));
       const nextItems = revisionItems.value.filter(item => !succeededIds.has(item.recipeId));
-      await saveRevisionPool(nextItems, selectedFields.value);
+      try {
+        await saveRevisionPool(nextItems, selectedFields.value);
+      } catch (error) {
+        poolSaveFailed = true;
+        throw error;
+      }
       revisionItems.value = nextItems;
       selectedRevisionItems.value = selectedRevisionItems.value.filter(item => !succeededIds.has(item.recipeId));
     }
@@ -346,7 +360,11 @@ async function replaceRevisionItems(items: RevisionEntry[]) {
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : "替换菜谱内容失败";
-    ElMessage.error(replacedCount ? `部分条目已替换；后续批次失败：${message}` : message);
+    if (poolSaveFailed && replacedCount) {
+      ElMessage.error(`服务端已替换 ${replacedCount} 条，但本地导入池保存失败：${message}。成功项仍留在池中，请修复后重新替换或删除`);
+    } else {
+      ElMessage.error(replacedCount ? `部分条目已替换；后续批次失败：${message}` : message);
+    }
   } finally {
     revisionTable.value?.clearSelection();
     selectedRevisionItems.value = [];
