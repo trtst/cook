@@ -20,11 +20,11 @@
             <text class="cookfont hero-card__laurel hero-card__laurel--left hero-card__tone icon-medal-left" />
 
             <view class="hero-card__content">
-              <text class="hero-card__title hero-card__tone">我的勋章</text>
-              <text class="hero-card__slogan hero-card__tone">认真做饭，也值得被记录</text>
+              <text class="hero-card__title hero-card__tone font-medium">我的勋章</text>
+              <text class="hero-card__slogan hero-card__tone font-medium">--- 认真做饭，也值得被记录 ---</text>
             </view>
 
-            <view class="hero-card__count-block">
+            <view class="hero-card__count-block font-medium">
               <text class="hero-card__count hero-card__tone">{{ wall?.earnedCount ?? "--" }}</text>
             </view>
 
@@ -316,7 +316,8 @@ defineExpose({
   justify-content: center;
   gap: 20rpx;
   min-height: 208rpx;
-  margin: 20rpx var(--space-page) 0;
+  margin: 20rpx 0 0;
+  padding: 0;
   overflow: hidden;
 }
 
@@ -350,9 +351,9 @@ defineExpose({
 }
 
 .hero-card__title {
-  font-size: 60rpx;
+  font-size: 80rpx;
   font-weight: var(--font-weight-heavy);
-  line-height: 1.05;
+  line-height: 1;
 }
 
 .hero-card__slogan {
@@ -364,6 +365,7 @@ defineExpose({
   flex: 0 0 auto;
   flex-direction: column;
   justify-content: center;
+  margin-right: -10rpx;
 }
 
 .hero-card__count {

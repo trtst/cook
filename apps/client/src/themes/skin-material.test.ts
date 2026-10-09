@@ -1281,6 +1281,11 @@ expectSelectorExcludes(medalPageSource, ".category-chip--active", ["border-color
 expectSelectorIncludes(medalPageSource, ".category-chip--active .category-chip__name,\n.category-chip--active .category-chip__meta", [
   "color: var(--color-tag-primary-text);"
 ]);
+expectIncludes(medalPageSource, 'class="hero-card__title hero-card__tone font-medium"');
+expectSelectorIncludes(medalPageSource, ".hero-card__title", [
+  "font-size: 80rpx;",
+  "line-height: 1;"
+]);
 expectSelectorExcludes(ingredientUnitsPageSource, ".unit-guide", ["border: 1rpx solid var(--color-border);"]);
 expectSelectorIncludes(membershipCodePageSource, ".redeem-input", [
   "border: 1rpx solid var(--material-input-border);",
