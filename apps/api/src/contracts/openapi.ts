@@ -1583,12 +1583,12 @@ export class AdminRecipeWikiSummaryModel {
 
 export class AdminRecipeWikiImportItemResultModel {
   @ApiProperty(uuid) recipeId!: string;
-  @ApiProperty({ type: String, enum: ["READY", "REJECTED"] }) status!: string;
+  @ApiProperty({ type: String, enum: ["REPLACED", "REJECTED"] }) status!: string;
   @ApiProperty(nullableString) message!: string | null;
 }
 
 export class AdminRecipeWikiImportResultModel {
-  @ApiProperty({ type: Number, minimum: 0 }) importedCount!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) replacedCount!: number;
   @ApiProperty({ type: Number, minimum: 0 }) rejectedCount!: number;
   @ApiProperty({ type: [AdminRecipeWikiImportItemResultModel] }) items!: AdminRecipeWikiImportItemResultModel[];
 }
@@ -1637,12 +1637,73 @@ export class AdminRecipeWikiBatchExportDocumentModel {
   @ApiProperty({ type: [AdminRecipeWikiBatchExportItemModel] }) recipes!: AdminRecipeWikiBatchExportItemModel[];
 }
 
+export class AdminRecipeWikiRevisionIngredientModel {
+  @ApiProperty({ type: String }) name!: string;
+  @ApiProperty({ type: String, nullable: true }) quantity!: string | null;
+  @ApiProperty({ type: String, nullable: true }) unit!: string | null;
+  @ApiProperty({ type: String, nullable: true, enum: ["适量"] }) fuzzyText!: "适量" | null;
+  @ApiProperty({ type: String, nullable: true }) categoryCode!: string | null;
+}
+
+export class AdminRecipeWikiRevisionToolModel {
+  @ApiProperty({ type: String }) name!: string;
+}
+
+export class AdminRecipeWikiRevisionRecipeStepModel {
+  @ApiProperty({ type: String }) text!: string;
+  @ApiProperty({ type: String, nullable: true }) imageUrl!: string | null;
+  @ApiProperty({ type: String, nullable: true }) imagePrompt!: string | null;
+}
+
+export class AdminRecipeWikiRevisionContentModel {
+  @ApiProperty({ type: String }) name!: string;
+  @ApiProperty({ type: String }) story!: string;
+  @ApiProperty({ type: Number }) baseServings!: number;
+  @ApiProperty({ type: String }) difficulty!: string;
+  @ApiProperty({ type: String }) duration!: string;
+  @ApiProperty({ type: String }) tips!: string;
+  @ApiProperty({ type: [String] }) keywords!: string[];
+  @ApiProperty({ type: [AdminRecipeWikiRevisionIngredientModel] }) ingredients!: AdminRecipeWikiRevisionIngredientModel[];
+  @ApiProperty({ type: [AdminRecipeWikiRevisionToolModel] }) tools!: AdminRecipeWikiRevisionToolModel[];
+  @ApiProperty({ type: [AdminRecipeWikiRevisionRecipeStepModel] }) steps!: AdminRecipeWikiRevisionRecipeStepModel[];
+}
+
+export class AdminRecipeWikiRevisionRecipeModel {
+  @ApiProperty({ type: Number }) recipeId!: number;
+  @ApiProperty({ type: Number }) contentVersionId!: number;
+  @ApiProperty({ type: Number }) inspirationCategoryId!: number;
+  @ApiProperty({ type: String, nullable: true }) coverImageUrl!: string | null;
+  @ApiProperty({ type: AdminRecipeWikiRevisionContentModel }) content!: AdminRecipeWikiRevisionContentModel;
+}
+
+export class AdminRecipeWikiRevisionItemModel {
+  @ApiProperty({ type: AdminRecipeWikiRevisionRecipeModel }) recipe!: AdminRecipeWikiRevisionRecipeModel;
+  @ApiProperty({ type: AdminRecipeWikiExportWikiModel }) wiki!: AdminRecipeWikiExportWikiModel;
+}
+
+export class AdminRecipeWikiRevisionExportDocumentModel {
+  @ApiProperty({ type: String, enum: ["recipe.import.batch.v1"] }) schemaVersion!: string;
+  @ApiProperty({ type: [AdminRecipeWikiRevisionItemModel] }) recipes!: AdminRecipeWikiRevisionItemModel[];
+}
+
 export class AdminRecipeWikiRejectResultModel {
   @ApiProperty(uuid) recipeId!: string;
   @ApiProperty(uuid) contentVersionId!: string;
   @ApiProperty({ type: String, enum: ["REJECTED"] }) status!: string;
   @ApiProperty({ type: Number, minimum: 0 }) rejectedRequestCount!: number;
   @ApiProperty({ type: String }) rejectionReason!: string;
+}
+
+export class AdminRecipeWikiDismissResultModel {
+  @ApiProperty(uuid) recipeId!: string;
+  @ApiProperty(uuid) contentVersionId!: string;
+  @ApiProperty({ type: String, enum: ["DISMISSED"] }) status!: string;
+  @ApiProperty({ type: Number, minimum: 0 }) dismissedRequestCount!: number;
+}
+
+export class AdminRecipeWikiDismissBatchResultModel {
+  @ApiProperty({ type: Number, minimum: 0 }) dismissedCount!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) dismissedRequestCount!: number;
 }
 
 export class AdminRecipeContentInputModel {

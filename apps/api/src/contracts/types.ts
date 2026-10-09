@@ -1934,11 +1934,11 @@ export interface AdminRecipeWikiImportItem {
 }
 
 export interface AdminRecipeWikiImportResult {
-  importedCount: number;
+  replacedCount: number;
   rejectedCount: number;
   items: Array<{
     recipeId: UUID;
-    status: "READY" | "REJECTED";
+    status: "REPLACED" | "REJECTED";
     message: string | null;
   }>;
 }
@@ -1956,6 +1956,40 @@ export interface AdminRecipeWikiExportDocument {
 export interface AdminRecipeWikiBatchExportDocument {
   schemaVersion: "recipe.wiki.batch.v1";
   recipes: Array<Omit<AdminRecipeWikiExportDocument, "schemaVersion">>;
+}
+
+export interface AdminRecipeWikiRevisionExportDocument {
+  schemaVersion: "recipe.import.batch.v1";
+  recipes: Array<{
+    recipe: {
+      recipeId: UUID;
+      contentVersionId: UUID;
+      inspirationCategoryId: UUID;
+      coverImageUrl: string | null;
+      content: {
+        name: string;
+        story: string;
+        baseServings: number;
+        difficulty: string;
+        duration: string;
+        tips: string;
+        keywords: string[];
+        ingredients: Array<{
+          name: string;
+          quantity: string | null;
+          unit: string | null;
+          fuzzyText: "适量" | null;
+          categoryCode: string | null;
+        }>;
+        tools: Array<{ name: string }>;
+        steps: Array<{ text: string; imageUrl: string | null; imagePrompt: string | null }>;
+      };
+    };
+    wiki: {
+      tags: RecipeImportTagDraft[];
+      assistant: { steps: RecipeImportAssistantStepDraft[] };
+    };
+  }>;
 }
 
 export interface AdminRecipeImageExportItem {
@@ -1994,6 +2028,18 @@ export interface AdminRecipeWikiRejectResult {
   status: "REJECTED";
   rejectedRequestCount: number;
   rejectionReason: string;
+}
+
+export interface AdminRecipeWikiDismissResult {
+  recipeId: UUID;
+  contentVersionId: UUID;
+  status: "DISMISSED";
+  dismissedRequestCount: number;
+}
+
+export interface AdminRecipeWikiDismissBatchResult {
+  dismissedCount: number;
+  dismissedRequestCount: number;
 }
 
 export interface AdminDeleteRecipeResult {

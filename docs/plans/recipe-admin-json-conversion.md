@@ -2,6 +2,8 @@
 
 单菜使用 `recipe.import.v1`；批量使用 `recipe.import.batch.v1`，每个 `recipes[]` 元素都是完整的 `{ recipe, wiki }`。
 
+Wiki 修订文件由菜谱管理页生成，并额外在 `recipe` 中包含数值型 `recipeId` 和 `contentVersionId`。通过 Wiki 导入入口回导时，服务端只读取这两个 ID 和 `wiki`，忽略菜谱正文；不得把带 ID 的修订文件提交到菜谱新建导入入口。
+
 ## 1. 固定 JSON
 
 除可省略的 `recipe.coverImageUrl` 外，字段都必须出现；无依据不猜测。

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { parseRecipeWikiDocument } from "./recipe-wiki-json";
-import { safeRecipeWikiImportErrorMessage } from "./admin.service";
+import { isValidWikiRecipeQuantity, safeRecipeWikiImportErrorMessage } from "./admin.service";
 
 const step = {
   order: 1,
@@ -31,14 +31,39 @@ test("parses a single Wiki export with recipe and content version IDs", () => {
       recipeId: 100,
       contentVersionId: 200,
       tags: [{ tagCode: "DISH_STYLE", tagValue: "STIR_FRY" }],
-      assistantSteps: [step]
+      assistantSteps: [step],
+      recipeContent: null
     }],
+    invalidItems: [],
     issues: []
   });
 });
 
+test("keeps a malformed batch item separate from valid items", () => {
+  const result = parseRecipeWikiDocument({
+    schemaVersion: "recipe.wiki.batch.v1",
+    recipes: [
+      { recipeId: 100, contentVersionId: 200, wiki: { tags: [], assistant: { steps: [step] } } },
+      { recipeId: 101, contentVersionId: 201, wiki: { tags: [{ tagCode: "DISH_STYLE", tagValue: "" }], assistant: { steps: [step] } } }
+    ]
+  });
+
+  assert.deepEqual(result.items.map(item => item.recipeId), [100]);
+  assert.deepEqual(result.invalidItems.map(item => item.recipeId), [101]);
+  assert.match(result.invalidItems[0]?.issues.map(item => item.message).join(" ") ?? "", /不能为空/);
+  assert.deepEqual(result.issues, []);
+});
+
 test("does not expose internal errors in the Wiki import result", () => {
   assert.equal(safeRecipeWikiImportErrorMessage(new Error("Prisma connection details")), "Wiki 导入失败");
+});
+
+test("rejects non-finite or non-decimal exact ingredient quantities", () => {
+  assert.equal(isValidWikiRecipeQuantity("0.5"), true);
+  assert.equal(isValidWikiRecipeQuantity("Infinity"), false);
+  assert.equal(isValidWikiRecipeQuantity("1e999"), false);
+  assert.equal(isValidWikiRecipeQuantity("0x10"), false);
+  assert.equal(isValidWikiRecipeQuantity(" 2 "), true);
 });
 
 test("expands a batch Wiki export and rejects unknown non-Wiki fields", () => {

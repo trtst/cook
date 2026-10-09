@@ -12,10 +12,25 @@ export interface RecipeWikiImportItem {
   contentVersionId: UUID;
   tags: RecipeImportTagDraft[];
   assistantSteps: RecipeImportAssistantStepDraft[];
+  recipeContent: Record<string, unknown> | null;
 }
+
+export type RecipeWikiReplaceField =
+  | "name"
+  | "story"
+  | "difficulty"
+  | "duration"
+  | "tips"
+  | "keywords"
+  | "ingredients"
+  | "tools"
+  | "steps"
+  | "tags"
+  | "assistant.steps";
 
 export interface RecipeWikiDocumentResult {
   items: RecipeWikiImportItem[];
+  invalidItems: Array<{ recipeId: UUID; issues: RecipeImportIssue[] }>;
   issues: RecipeImportIssue[];
 }
 
@@ -76,12 +91,17 @@ function assertKnownKeys(value: Record<string, unknown>, allowed: Set<string>, p
   }
 }
 
-function parseItem(value: unknown, path: string, issues: RecipeImportIssue[]): RecipeWikiImportItem | null {
+function parseItem(
+  value: unknown,
+  path: string,
+  issues: RecipeImportIssue[],
+  selectedFields: ReadonlySet<RecipeWikiReplaceField>
+): RecipeWikiImportItem | null {
   if (!isRecord(value)) {
     issue(issues, path, "菜谱 Wiki 条目必须是对象");
     return null;
   }
-  assertKnownKeys(value, new Set(["recipeId", "contentVersionId", "wiki"]), path, issues);
+  assertKnownKeys(value, new Set(["recipeId", "contentVersionId", "wiki", "recipeContent"]), path, issues);
   const recipeId = value.recipeId;
   const contentVersionId = value.contentVersionId;
   if (!Number.isInteger(recipeId) || Number(recipeId) < 1) issue(issues, `${path}.recipeId`, "recipeId 必须填写有效菜谱 ID");
@@ -89,16 +109,18 @@ function parseItem(value: unknown, path: string, issues: RecipeImportIssue[]): R
     issue(issues, `${path}.contentVersionId`, "contentVersionId 必须填写有效正文版本 ID");
   }
   const wiki = isRecord(value.wiki) ? value.wiki : null;
-  if (!wiki) {
+  const needsTags = selectedFields.has("tags");
+  const needsAssistant = selectedFields.has("assistant.steps");
+  if ((needsTags || needsAssistant) && !wiki) {
     issue(issues, `${path}.wiki`, "必须填写 wiki 对象");
     return null;
   }
-  assertKnownKeys(wiki, new Set(["tags", "assistant"]), `${path}.wiki`, issues);
+  if (wiki) assertKnownKeys(wiki, new Set(["tags", "assistant"]), `${path}.wiki`, issues);
 
   const tags: RecipeImportTagDraft[] = [];
-  if (!Array.isArray(wiki.tags)) {
+  if (needsTags && !Array.isArray(wiki?.tags)) {
     issue(issues, `${path}.wiki.tags`, "tags 必须是数组");
-  } else {
+  } else if (needsTags && Array.isArray(wiki?.tags)) {
     const seenTags = new Set<string>();
     for (const [index, rawTag] of wiki.tags.entries()) {
       const tagPath = `${path}.wiki.tags.${index}`;
@@ -123,12 +145,12 @@ function parseItem(value: unknown, path: string, issues: RecipeImportIssue[]): R
     }
   }
 
-  const assistant = isRecord(wiki.assistant) ? wiki.assistant : null;
-  if (!assistant) {
+  const assistant = isRecord(wiki?.assistant) ? wiki.assistant : null;
+  if (needsAssistant && !assistant) {
     issue(issues, `${path}.wiki.assistant`, "必须填写 assistant 对象");
   }
   const assistantSteps: RecipeImportAssistantStepDraft[] = [];
-  if (assistant) {
+  if (needsAssistant && assistant) {
     assertKnownKeys(assistant, new Set(["steps"]), `${path}.wiki.assistant`, issues);
     if (!Array.isArray(assistant.steps) || assistant.steps.length === 0) {
       issue(issues, `${path}.wiki.assistant.steps`, "至少需要一条助理步骤");
@@ -174,40 +196,103 @@ function parseItem(value: unknown, path: string, issues: RecipeImportIssue[]): R
     }
   }
 
+  const recipeContent = isRecord(value.recipeContent) ? value.recipeContent : null;
+  for (const field of selectedFields) {
+    if (field === "tags" || field === "assistant.steps") continue;
+    if (!recipeContent || !Object.prototype.hasOwnProperty.call(recipeContent, field)) {
+      issue(issues, `${path}.recipe.content.${field}`, "所选字段在文件中缺失");
+    }
+  }
+
   if (!Number.isInteger(recipeId) || Number(recipeId) < 1 || !Number.isInteger(contentVersionId) || Number(contentVersionId) < 1) return null;
   return {
     recipeId: Number(recipeId),
     contentVersionId: Number(contentVersionId),
     tags,
-    assistantSteps
+    assistantSteps,
+    recipeContent
   };
 }
 
-export function parseRecipeWikiDocument(document: unknown): RecipeWikiDocumentResult {
+export function parseRecipeWikiDocument(
+  document: unknown,
+  selectedFields: ReadonlySet<RecipeWikiReplaceField> = new Set(["tags", "assistant.steps"])
+): RecipeWikiDocumentResult {
   const issues: RecipeImportIssue[] = [];
   if (!isRecord(document)) {
     issue(issues, null, "Wiki JSON 根必须是对象");
-    return { items: [], issues };
+    return { items: [], invalidItems: [], issues };
   }
   const schemaVersion = document.schemaVersion;
+  if (schemaVersion === "recipe.import.v1") {
+    const recipe = isRecord(document.recipe) ? document.recipe : null;
+    if (!recipe) {
+      issue(issues, "recipe", "必须填写 recipe 对象");
+      return { items: [], invalidItems: [], issues };
+    }
+    const item = parseItem({
+      recipeId: recipe.recipeId,
+      contentVersionId: recipe.contentVersionId,
+      wiki: document.wiki,
+      recipeContent: recipe.content
+    }, "recipe", issues, selectedFields);
+    return { items: item ? [item] : [], invalidItems: [], issues };
+  }
+  if (schemaVersion === "recipe.import.batch.v1") {
+    if (!Array.isArray(document.recipes) || document.recipes.length === 0) {
+      issue(issues, "recipes", "批量导入文件至少需要一条菜谱");
+      return { items: [], invalidItems: [], issues };
+    }
+    const items: RecipeWikiImportItem[] = [];
+    const invalidItems: RecipeWikiDocumentResult["invalidItems"] = [];
+    document.recipes.forEach((rawItem, index) => {
+      const path = `recipes.${index}`;
+      if (!isRecord(rawItem)) {
+        issue(issues, path, "菜谱条目必须是对象");
+        return;
+      }
+      const recipe = isRecord(rawItem.recipe) ? rawItem.recipe : null;
+      if (!recipe) {
+        issue(issues, `${path}.recipe`, "必须填写 recipe 对象");
+        return;
+      }
+      const itemIssues: RecipeImportIssue[] = [];
+      const parsed = parseItem({
+        recipeId: recipe.recipeId,
+        contentVersionId: recipe.contentVersionId,
+        wiki: rawItem.wiki,
+        recipeContent: recipe.content
+      }, path, itemIssues, selectedFields);
+      const recipeId = Number.isInteger(recipe.recipeId) && Number(recipe.recipeId) > 0 ? Number(recipe.recipeId) : null;
+      if (itemIssues.length && recipeId !== null) invalidItems.push({ recipeId, issues: itemIssues });
+      else if (parsed) items.push(parsed);
+      else issues.push(...itemIssues);
+    });
+    return { items, invalidItems, issues };
+  }
   if (schemaVersion === "recipe.wiki.v1") {
     assertKnownKeys(document, new Set(["schemaVersion", "recipeId", "contentVersionId", "wiki"]), "", issues);
-    const item = parseItem({ recipeId: document.recipeId, contentVersionId: document.contentVersionId, wiki: document.wiki }, "recipe", issues);
-    return { items: item ? [item] : [], issues };
+    const item = parseItem({ recipeId: document.recipeId, contentVersionId: document.contentVersionId, wiki: document.wiki }, "recipe", issues, selectedFields);
+    return { items: item ? [item] : [], invalidItems: [], issues };
   }
   if (schemaVersion === "recipe.wiki.batch.v1") {
     assertKnownKeys(document, new Set(["schemaVersion", "recipes"]), "", issues);
     if (!Array.isArray(document.recipes) || document.recipes.length === 0) {
       issue(issues, "recipes", "批量 Wiki JSON 至少需要一条菜谱");
-      return { items: [], issues };
+      return { items: [], invalidItems: [], issues };
     }
     const items: RecipeWikiImportItem[] = [];
+    const invalidItems: RecipeWikiDocumentResult["invalidItems"] = [];
     document.recipes.forEach((item, index) => {
-      const parsed = parseItem(item, `recipes.${index}`, issues);
-      if (parsed) items.push(parsed);
+      const itemIssues: RecipeImportIssue[] = [];
+      const parsed = parseItem(item, `recipes.${index}`, itemIssues, selectedFields);
+      const recipeId = isRecord(item) && Number.isInteger(item.recipeId) && Number(item.recipeId) > 0 ? Number(item.recipeId) : null;
+      if (itemIssues.length && recipeId !== null) invalidItems.push({ recipeId, issues: itemIssues });
+      else if (parsed) items.push(parsed);
+      else issues.push(...itemIssues);
     });
-    return { items, issues };
+    return { items, invalidItems, issues };
   }
-  issue(issues, "schemaVersion", "必须使用 recipe.wiki.v1 或 recipe.wiki.batch.v1");
-  return { items: [], issues };
+  issue(issues, "schemaVersion", "必须使用 recipe.import.v1、recipe.import.batch.v1、recipe.wiki.v1 或 recipe.wiki.batch.v1");
+  return { items: [], invalidItems: [], issues };
 }

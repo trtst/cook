@@ -24,6 +24,8 @@ type WikiRequestRow = {
   rejectionReason: string | null;
 };
 
+type RecipeCookAssistantRow = { recipeVersionId: number; isQueueDismissed: boolean };
+
 type IdempotencyRow = {
   operationId: string;
   operationType: string;
@@ -39,6 +41,7 @@ type IdempotencyRow = {
 class FakePrisma {
   unlockRows: UnlockRow[] = [];
   wikiRequestRows: WikiRequestRow[] = [];
+  recipeCookAssistantRows: RecipeCookAssistantRow[] = [];
   idempotencyRows: IdempotencyRow[] = [];
   lockKeys: string[] = [];
   private nextUnlockId = 1;
@@ -119,6 +122,21 @@ class FakePrisma {
         if (where.recipeVersionId !== undefined && row.recipeVersionId !== where.recipeVersionId) continue;
         if (where.userId !== undefined && row.userId !== where.userId) continue;
         if (where.status !== undefined && row.status !== where.status) continue;
+        Object.assign(row, data);
+        count += 1;
+      }
+      return { count };
+    }
+  };
+
+  recipeCookAssistant = {
+    findUnique: async ({ where }: { where: { recipeVersionId: number } }) =>
+      this.recipeCookAssistantRows.find(row => row.recipeVersionId === where.recipeVersionId) ?? null,
+    updateMany: async ({ where, data }: { where: { recipeVersionId: number; isQueueDismissed?: boolean }; data: Partial<RecipeCookAssistantRow> }) => {
+      let count = 0;
+      for (const row of this.recipeCookAssistantRows) {
+        if (row.recipeVersionId !== where.recipeVersionId) continue;
+        if (where.isQueueDismissed !== undefined && row.isQueueDismissed !== where.isQueueDismissed) continue;
         Object.assign(row, data);
         count += 1;
       }
@@ -272,6 +290,51 @@ test("reserves one count for a recipe Wiki request and only refreshes its latest
   assert.equal(prisma.unlockRows.length, 1);
   assert.equal(prisma.wikiRequestRows.length, 1);
   assert.equal(prisma.wikiRequestRows[0]?.requestedAt.toISOString(), "2026-09-13T15:40:00.000Z");
+});
+
+test("allows a dismissed requester to request the same recipe version again", async () => {
+  const prisma = new FakePrisma();
+  prisma.wikiRequestRows.push({
+    id: 1,
+    userId: 7,
+    recipeVersionId: 100,
+    status: "REJECTED",
+    requestedAt: new Date("2026-09-13T10:00:00.000Z"),
+    resolvedAt: now,
+    rejectionReason: "后台已从待补充列表移除该 Wiki"
+  });
+  prisma.recipeCookAssistantRows.push({ recipeVersionId: 100, isQueueDismissed: true });
+  const service = new CookAssistantAccessService(prisma as never);
+
+  const result = await service.requestRecipeWiki(7, 100, "2003", now);
+
+  assert.equal(result.status, "PENDING");
+  assert.equal(result.newlyRequested, true);
+  assert.equal(result.usage.usedCount, 1);
+  assert.equal(prisma.unlockRows.length, 1);
+  assert.equal(prisma.wikiRequestRows.length, 1);
+  assert.equal(prisma.recipeCookAssistantRows[0]?.isQueueDismissed, false);
+});
+
+test("keeps an ordinary rejected Wiki request closed", async () => {
+  const prisma = new FakePrisma();
+  prisma.wikiRequestRows.push({
+    id: 1,
+    userId: 7,
+    recipeVersionId: 100,
+    status: "REJECTED",
+    requestedAt: new Date("2026-09-13T10:00:00.000Z"),
+    resolvedAt: now,
+    rejectionReason: "菜谱内容不够完整"
+  });
+  prisma.recipeCookAssistantRows.push({ recipeVersionId: 100, isQueueDismissed: false });
+  const service = new CookAssistantAccessService(prisma as never);
+
+  const result = await service.requestRecipeWiki(7, 100, "2004", now);
+
+  assert.equal(result.status, "REJECTED");
+  assert.equal(result.newlyRequested, false);
+  assert.equal(prisma.unlockRows.length, 0);
 });
 
 test("settling a Wiki request consumes or releases only the requesting user's reservation", async () => {

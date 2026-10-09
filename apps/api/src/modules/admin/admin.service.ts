@@ -67,7 +67,10 @@ import type {
   AdminRecipeWikiSummary,
   AdminRecipeWikiExportDocument,
   AdminRecipeWikiBatchExportDocument,
+  AdminRecipeWikiRevisionExportDocument,
   AdminRecipeWikiImportResult,
+  AdminRecipeWikiDismissResult,
+  AdminRecipeWikiDismissBatchResult,
   AdminRecipeWikiRejectResult,
   AdminUserRecipeDomainOverview,
   CollectionListResponse,
@@ -94,6 +97,7 @@ import type {
   RecipeImportParsedBody,
   RecipeImportRawBody,
   RecipeImportRecipeBody,
+  RecipeImportTagDraft,
   RecipeIngredientInput,
   RecipeSceneSummary,
   RecipeReportSummary,
@@ -163,7 +167,7 @@ import {
   rebuildJsonItemState,
   type RecipeImportJsonSource
 } from "./recipe-import-json";
-import { parseRecipeWikiDocument, type RecipeWikiImportItem } from "./recipe-wiki-json";
+import { parseRecipeWikiDocument, type RecipeWikiImportItem, type RecipeWikiReplaceField } from "./recipe-wiki-json";
 
 function toIsoDate(value: Date) {
   return value.toISOString();
@@ -181,6 +185,30 @@ const recipeWikiTagCodes = [
   "FLAVOR_PROFILE",
   "SPICE_LEVEL"
 ] as const;
+const recipeWikiReplaceFields: RecipeWikiReplaceField[] = [
+  "name", "story", "difficulty", "duration", "tips", "keywords", "ingredients", "tools", "steps", "tags", "assistant.steps"
+];
+
+function parseRecipeWikiReplaceFields(value?: string): Set<RecipeWikiReplaceField> {
+  if (value === undefined) return new Set(["tags", "assistant.steps"]);
+  let fields: unknown;
+  try {
+    fields = JSON.parse(value) as unknown;
+  } catch {
+    throw new BadRequestException("替换字段格式不正确");
+  }
+  if (!Array.isArray(fields) || fields.length === 0 || fields.some(field => !recipeWikiReplaceFields.includes(field as RecipeWikiReplaceField))) {
+    throw new BadRequestException("请选择至少一个有效替换字段");
+  }
+  const unique = new Set(fields as RecipeWikiReplaceField[]);
+  if (unique.size !== fields.length) throw new BadRequestException("替换字段不能重复");
+  return unique;
+}
+
+export function isValidWikiRecipeQuantity(value: string) {
+  const quantity = value.trim();
+  return /^\d+(?:\.\d+)?$/.test(quantity) && Number.isFinite(Number(quantity)) && Number(quantity) > 0;
+}
 
 function recipeImportTempKeys(body: RecipeImportRecipeBody) {
   return new Set(
@@ -5649,6 +5677,129 @@ export class AdminService {
     };
   }
 
+  async exportRecipeWikiRevision(
+    input: { recipeIds?: UUID[]; categoryId?: UUID; keyword?: string },
+    adminId: UUID
+  ): Promise<AdminRecipeWikiRevisionExportDocument> {
+    await this.requireSuperAdmin(adminId);
+    if (input.recipeIds && (input.categoryId || input.keyword?.trim())) {
+      throw new BadRequestException("勾选菜谱导出不能同时使用分类或关键词筛选");
+    }
+    const recipeIds = input.recipeIds ? Array.from(new Set(input.recipeIds)) : undefined;
+    if (recipeIds && (!recipeIds.length || recipeIds.length > 100 || recipeIds.length !== input.recipeIds?.length)) {
+      throw new BadRequestException("一次最多导出 100 道不重复的菜谱");
+    }
+    const where: Prisma.RecipeWhereInput = {
+      isInspiration: true,
+      status: "ACTIVE",
+      inspirationCategoryId: input.categoryId ? { equals: input.categoryId } : { not: null },
+      ...(recipeIds ? { id: { in: recipeIds } } : {}),
+      ...(input.keyword?.trim() ? { searchText: { contains: buildSearchKey(input.keyword) } } : {}),
+      currentVersion: { is: { cookAssistant: { is: { status: "READY" } } } }
+    };
+    const recipes = await this.prisma.recipe.findMany({
+      where,
+      select: {
+        id: true,
+        currentVersionId: true,
+        inspirationCategoryId: true,
+        coverImageUrl: true,
+        currentVersion: {
+          select: {
+            name: true,
+            story: true,
+            baseServings: true,
+            difficulty: true,
+            duration: true,
+            tips: true,
+            keywordsJson: true,
+            toolsJson: true,
+            ingredientsJson: true,
+            stepsJson: true,
+            versionTags: {
+              where: { tagCode: { in: [...recipeWikiTagCodes] } },
+              orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
+              select: { tagCode: true, tagValue: true }
+            },
+            cookAssistant: { select: { status: true, generatedAt: true, snapshotJson: true } }
+          }
+        }
+      },
+      orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+      take: recipeIds ? 100 : 101
+    });
+    if (recipeIds && recipes.length !== recipeIds.length) {
+      throw new BadRequestException("勾选项中包含非 ACTIVE 菜谱或当前版本 Wiki 未 READY 的菜谱");
+    }
+    if (!recipeIds && recipes.length > 100) {
+      throw new BadRequestException("当前筛选超过 100 道菜谱，请缩小分类或关键词范围后再导出");
+    }
+
+    const contents = recipes.map(recipe => versionToContent(recipe.currentVersion));
+    const categoryIds = Array.from(new Set(contents.flatMap(content => content.ingredients.map(item => item.categoryId))));
+    const ingredientCategories = categoryIds.length
+      ? await this.prisma.ingredientCategory.findMany({ where: { id: { in: categoryIds } }, select: { id: true, code: true } })
+      : [];
+    const categoryCodeById = new Map(ingredientCategories.map(item => [item.id, item.code]));
+
+    const document: AdminRecipeWikiRevisionExportDocument = {
+      schemaVersion: "recipe.import.batch.v1",
+      recipes: recipes.map((recipe, index) => {
+        const content = contents[index];
+        const assistant = versionAssistantToSnapshot(recipe.currentVersion.cookAssistant);
+        return {
+          recipe: {
+            recipeId: recipe.id,
+            contentVersionId: recipe.currentVersionId,
+            inspirationCategoryId: recipe.inspirationCategoryId!,
+            coverImageUrl: recipe.coverImageUrl,
+            content: {
+              name: content.name,
+              story: content.story ?? "",
+              baseServings: content.baseServings,
+              difficulty: content.difficulty ?? "",
+              duration: content.duration ?? "",
+              tips: content.tips ?? "",
+              keywords: content.keywords,
+              ingredients: content.ingredients.map(item => ({
+                name: item.ingredientName,
+                quantity: item.amount.kind === "EXACT" ? item.amount.quantity : null,
+                unit: item.amount.kind === "EXACT" ? item.amount.unitName : null,
+                fuzzyText: item.amount.kind === "FUZZY" ? "适量" : null,
+                categoryCode: categoryCodeById.get(item.categoryId) ?? null
+              })),
+              tools: (content.tools ?? []).map(item => ({ name: item.name })),
+              steps: content.steps.map(item => ({ text: item.text, imageUrl: item.imageUrl, imagePrompt: item.imagePrompt ?? null }))
+            }
+          },
+          wiki: {
+            tags: recipe.currentVersion.versionTags.map(tag => ({
+              tagCode: tag.tagCode as RecipeImportTagDraft["tagCode"],
+              tagValue: tag.tagValue
+            })),
+            assistant: {
+              steps: (assistant?.steps ?? []).map(step => ({
+                order: step.order,
+                phase: step.phase,
+                action: step.action ?? "OTHER",
+                title: step.title,
+                detail: step.detail,
+                imageUrl: step.imageUrl,
+                imagePrompt: step.imagePrompt ?? null,
+                durationMinutes: step.durationMinutes,
+                durationText: step.durationText
+              }))
+            }
+          }
+        };
+      })
+    };
+    if (Buffer.byteLength(JSON.stringify(document), "utf8") > 10 * 1024 * 1024) {
+      throw new BadRequestException("修订文件超过 10MB，请缩小分类或关键词范围后再导出");
+    }
+    return document;
+  }
+
   async backfillRecipeImages(
     request: { protocol?: string; get?: (name: string) => string | undefined },
     recipeId: UUID,
@@ -5948,7 +6099,7 @@ export class AdminService {
         is: {
           OR: [
             { cookAssistant: { is: null } },
-            { cookAssistant: { isNot: { status: "READY" } } }
+            { cookAssistant: { is: { status: { not: "READY" }, isQueueDismissed: false } } }
           ]
         }
       }
@@ -6063,6 +6214,7 @@ export class AdminService {
       const item: RecipeWikiImportItem = {
         recipeId,
         contentVersionId: expectedContentVersionId,
+        recipeContent: null,
         tags: recipeBody.tags ?? [],
         assistantSteps: (recipeBody.assistantSteps ?? []).map(step => ({
           order: step.order,
@@ -6125,34 +6277,42 @@ export class AdminService {
     };
   }
 
-  async importRecipeWiki(buffer: Buffer, operationId: OperationId, adminId: UUID): Promise<AdminRecipeWikiImportResult> {
+  async importRecipeWiki(buffer: Buffer, operationId: OperationId, adminId: UUID, fields?: string): Promise<AdminRecipeWikiImportResult> {
     await this.requireSuperAdmin(adminId);
     if (buffer.byteLength > 10 * 1024 * 1024) throw new BadRequestException("Wiki JSON 文件不能超过 10MB");
+    const selectedFields = parseRecipeWikiReplaceFields(fields);
     let document: unknown;
     try {
       document = JSON.parse(buffer.toString("utf8")) as unknown;
     } catch {
       throw new BadRequestException("Wiki JSON 格式不正确");
     }
-    const parsed = parseRecipeWikiDocument(document);
+    const parsed = parseRecipeWikiDocument(document, selectedFields);
     if (parsed.issues.length) {
       throw new BadRequestException(parsed.issues.slice(0, 10).map(item => `${item.field ?? "根"}：${item.message}`).join("；"));
     }
-    if (!parsed.items.length || parsed.items.length > 100) throw new BadRequestException("一次最多导入 100 条 Wiki");
+    const itemCount = parsed.items.length + parsed.invalidItems.length;
+    if (!itemCount || itemCount > 100) throw new BadRequestException("一次最多导入 100 条 Wiki");
+    const recipeIds = [...parsed.items.map(item => item.recipeId), ...parsed.invalidItems.map(item => item.recipeId)];
+    if (new Set(recipeIds).size !== recipeIds.length) throw new BadRequestException("文件中 recipeId 不能重复");
 
-    const requestHash = createHash("sha256").update(buffer).digest("hex");
+    const requestHash = createHash("sha256").update(buffer).update(JSON.stringify([...selectedFields].sort())).digest("hex");
     return this.prisma.$transaction(async tx => {
       const repeated = await getAdminIdempotentResult<AdminRecipeWikiImportResult>(tx, operationId, "admin-recipe-wiki:import", adminId, requestHash);
       if (repeated) return repeated;
       await startAdminIdempotentOperation(tx, operationId, "admin-recipe-wiki:import", adminId, requestHash);
 
-      const items: AdminRecipeWikiImportResult["items"] = [];
-      for (const item of parsed.items) {
+      const items: AdminRecipeWikiImportResult["items"] = parsed.invalidItems.map(item => ({
+        recipeId: item.recipeId,
+        status: "REJECTED",
+        message: item.issues.slice(0, 5).map(issue => `${issue.field ?? "字段"}：${issue.message}`).join("；").slice(0, 500)
+      }));
+      for (const item of [...parsed.items].sort((left, right) => left.recipeId - right.recipeId)) {
         await tx.$executeRawUnsafe("SAVEPOINT admin_recipe_wiki_item");
         try {
-          await this.importRecipeWikiItem(tx, item, adminId);
+          await this.importRecipeWikiItem(tx, item, adminId, { selectedFields });
           await tx.$executeRawUnsafe("RELEASE SAVEPOINT admin_recipe_wiki_item");
-          items.push({ recipeId: item.recipeId, status: "READY", message: null });
+          items.push({ recipeId: item.recipeId, status: "REPLACED", message: null });
         } catch (error) {
           await tx.$executeRawUnsafe("ROLLBACK TO SAVEPOINT admin_recipe_wiki_item");
           await tx.$executeRawUnsafe("RELEASE SAVEPOINT admin_recipe_wiki_item");
@@ -6164,7 +6324,7 @@ export class AdminService {
         }
       }
       const result = {
-        importedCount: items.filter(item => item.status === "READY").length,
+        replacedCount: items.filter(item => item.status === "REPLACED").length,
         rejectedCount: items.filter(item => item.status === "REJECTED").length,
         items
       } satisfies AdminRecipeWikiImportResult;
@@ -6232,6 +6392,101 @@ export class AdminService {
     });
   }
 
+  async dismissRecipeWiki(
+    recipeId: UUID,
+    expectedContentVersionId: UUID,
+    operationId: OperationId,
+    adminId: UUID
+  ): Promise<AdminRecipeWikiDismissResult> {
+    await this.requireSuperAdmin(adminId);
+    const requestHash = `${recipeId}:${expectedContentVersionId}`;
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getAdminIdempotentResult<AdminRecipeWikiDismissResult>(
+        tx, operationId, "admin-recipe-wiki:dismiss", adminId, requestHash
+      );
+      if (repeated) return repeated;
+      await startAdminIdempotentOperation(tx, operationId, "admin-recipe-wiki:dismiss", adminId, requestHash);
+      const result = await this.dismissRecipeWikiEntry(tx, recipeId, expectedContentVersionId, adminId);
+      await completeAdminIdempotentOperation(tx, operationId, "admin-recipe-wiki:dismiss", adminId, requestHash, result);
+      return result;
+    });
+  }
+
+  async dismissRecipeWikiBatch(
+    items: Array<{ recipeId: UUID; expectedContentVersionId: UUID }>,
+    operationId: OperationId,
+    adminId: UUID
+  ): Promise<AdminRecipeWikiDismissBatchResult> {
+    await this.requireSuperAdmin(adminId);
+    if (!items.length || items.length > 100 || new Set(items.map(item => item.recipeId)).size !== items.length) {
+      throw new BadRequestException("批量删除需要选择 1 至 100 个不重复的 Wiki 补充项");
+    }
+    const orderedItems = [...items].sort((left, right) => left.recipeId - right.recipeId);
+    const requestHash = JSON.stringify(orderedItems);
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getAdminIdempotentResult<AdminRecipeWikiDismissBatchResult>(
+        tx, operationId, "admin-recipe-wiki:dismiss-batch", adminId, requestHash
+      );
+      if (repeated) return repeated;
+      await startAdminIdempotentOperation(tx, operationId, "admin-recipe-wiki:dismiss-batch", adminId, requestHash);
+      let dismissedRequestCount = 0;
+      for (const item of orderedItems) {
+        const result = await this.dismissRecipeWikiEntry(tx, item.recipeId, item.expectedContentVersionId, adminId);
+        dismissedRequestCount += result.dismissedRequestCount;
+      }
+      const result = { dismissedCount: orderedItems.length, dismissedRequestCount } satisfies AdminRecipeWikiDismissBatchResult;
+      await completeAdminIdempotentOperation(tx, operationId, "admin-recipe-wiki:dismiss-batch", adminId, requestHash, result);
+      return result;
+    });
+  }
+
+  private async dismissRecipeWikiEntry(
+    tx: Prisma.TransactionClient,
+    recipeId: UUID,
+    expectedContentVersionId: UUID,
+    adminId: UUID
+  ): Promise<AdminRecipeWikiDismissResult> {
+    await tx.$queryRaw`SELECT "id" FROM "recipes" WHERE "id" = ${recipeId} FOR UPDATE`;
+    const recipe = await tx.recipe.findUnique({
+      where: { id: recipeId },
+      include: { currentVersion: { include: { cookAssistant: true } } }
+    });
+    if (!recipe || recipe.status !== "ACTIVE") throw new NotFoundException("正常菜谱不存在");
+    if (recipe.currentVersionId !== expectedContentVersionId) throw new ConflictException("菜谱正文版本已变化，请刷新后重试");
+    if (recipe.currentVersion.cookAssistant?.status === "READY") throw new ConflictException("当前 Wiki 已完成，不能从待补充列表删除");
+
+    const now = new Date();
+    const dismissedRequestCount = (await this.settleRecipeWikiRequests(
+      tx, recipe.currentVersionId, "REJECTED", now, "后台已从待补充列表移除该 Wiki"
+    )).length;
+    await tx.recipeCookAssistant.upsert({
+      where: { recipeVersionId: recipe.currentVersionId },
+      update: { isQueueDismissed: true, updatedByAdminId: adminId },
+      create: {
+        recipeVersionId: recipe.currentVersionId,
+        status: "PENDING",
+        isQueueDismissed: true,
+        lastAttemptAt: now,
+        attemptCount: 1,
+        candidateJson: Prisma.DbNull,
+        snapshotJson: Prisma.DbNull,
+        generatedAt: null,
+        updatedByAdminId: adminId
+      }
+    });
+    await tx.auditEvent.create({
+      data: {
+        actorType: "ADMIN",
+        actorAdminId: adminId,
+        action: "RECIPE_WIKI_QUEUE_DISMISSED",
+        objectType: "RECIPE",
+        objectId: recipeId,
+        payload: { contentVersionId: recipe.currentVersionId, dismissedRequestCount }
+      }
+    });
+    return { recipeId, contentVersionId: recipe.currentVersionId, status: "DISMISSED", dismissedRequestCount };
+  }
+
   private buildRecipeWikiExportDocument(recipe: {
     id: UUID;
     currentVersionId: UUID;
@@ -6266,28 +6521,185 @@ export class AdminService {
     };
   }
 
+  private async replaceRecipeContentFields(
+    tx: Prisma.TransactionClient,
+    recipe: Prisma.RecipeGetPayload<{ include: { currentVersion: true } }>,
+    item: RecipeWikiImportItem,
+    selectedFields: ReadonlySet<RecipeWikiReplaceField>
+  ) {
+    const fields = [...selectedFields].filter((field): field is Exclude<RecipeWikiReplaceField, "tags" | "assistant.steps"> => field !== "tags" && field !== "assistant.steps");
+    if (!fields.length) return null;
+    const raw = item.recipeContent;
+    if (!raw) throw new BadRequestException("菜谱正文内容缺失");
+    const content = versionToContent(recipe.currentVersion);
+    const next: RecipeContentSnapshot = { ...content, tools: [...(content.tools ?? [])], ingredients: [...content.ingredients], steps: [...content.steps] };
+
+    if (selectedFields.has("name")) {
+      if (typeof raw.name !== "string" || !raw.name.trim() || raw.name.trim().length > 120) throw new BadRequestException("菜谱名称必须为 1 到 120 个字符");
+      next.name = raw.name.trim();
+    }
+    if (selectedFields.has("story")) {
+      if (raw.story !== null && typeof raw.story !== "string") throw new BadRequestException("菜谱故事格式不正确");
+      if (typeof raw.story === "string" && raw.story.length > 2000) throw new BadRequestException("菜谱故事不能超过 2000 个字符");
+      next.story = typeof raw.story === "string" ? raw.story.trim() || null : null;
+    }
+    if (selectedFields.has("difficulty")) {
+      const values = ["BEGINNER", "EASY", "SKILLED", "CHALLENGING", null];
+      const difficulty = raw.difficulty === "" ? null : raw.difficulty;
+      if (!values.includes(difficulty as never)) throw new BadRequestException("菜谱难度不支持");
+      next.difficulty = difficulty as RecipeContentSnapshot["difficulty"];
+    }
+    if (selectedFields.has("duration")) {
+      const values = ["WITHIN_15", "BETWEEN_15_30", "BETWEEN_30_60", "OVER_60", null];
+      const duration = raw.duration === "" ? null : raw.duration;
+      if (!values.includes(duration as never)) throw new BadRequestException("菜谱时长不支持");
+      next.duration = duration as RecipeContentSnapshot["duration"];
+    }
+    if (selectedFields.has("tips")) {
+      if (raw.tips !== null && typeof raw.tips !== "string") throw new BadRequestException("小贴士格式不正确");
+      if (typeof raw.tips === "string" && raw.tips.length > 1000) throw new BadRequestException("小贴士不能超过 1000 个字符");
+      next.tips = typeof raw.tips === "string" ? raw.tips.trim() || null : null;
+    }
+    if (selectedFields.has("keywords")) {
+      if (!Array.isArray(raw.keywords) || raw.keywords.length > 20 || raw.keywords.some(value => typeof value !== "string" || value.length > 64)) throw new BadRequestException("关键词必须是最多 20 项、每项不超过 64 个字符的字符串数组");
+      next.keywords = Array.from(new Set((raw.keywords as string[]).map(value => value.trim()).filter(Boolean)));
+    }
+    if (selectedFields.has("tools")) {
+      if (!Array.isArray(raw.tools) || raw.tools.length > 40 || raw.tools.some(value => !value || typeof value !== "object" || typeof (value as { name?: unknown }).name !== "string" || (value as { name: string }).name.length > 64)) {
+        throw new BadRequestException("工具必须是名称对象数组");
+      }
+      next.tools = (raw.tools as Array<{ name: string }>).map(value => ({ name: value.name.trim() })).filter(value => value.name);
+    }
+    if (selectedFields.has("ingredients")) {
+      if (!Array.isArray(raw.ingredients) || raw.ingredients.length === 0) throw new BadRequestException("至少需要一个食材");
+      const rows = raw.ingredients as Array<Record<string, unknown>>;
+      if (rows.length > 100 || rows.some(value => !value || typeof value !== "object" || Array.isArray(value))) throw new BadRequestException("食材条目格式不正确");
+      const names = rows.map(value => value.name);
+      if (names.some(value => typeof value !== "string" || !value.trim())) throw new BadRequestException("食材名称不能为空");
+      const ingredientRows = await tx.ingredient.findMany({
+        where: { ownerId: null, status: { in: ["ACTIVE", "MERGED"] }, searchKey: { in: (names as string[]).map(buildSearchKey) } },
+        include: { category: true, mergedTo: { include: { category: true } } }
+      });
+      const activeByKey = new Map<string, Map<UUID, { id: UUID; name: string; categoryId: UUID; category: { code: string } }>>();
+      for (const row of ingredientRows) {
+        const target = row.status === "MERGED" ? row.mergedTo : row;
+        if (target?.ownerId === null && target.status === "ACTIVE") {
+          const key = buildSearchKey(row.name);
+          const matches = activeByKey.get(key) ?? new Map<UUID, typeof target>();
+          matches.set(target.id, target);
+          activeByKey.set(key, matches);
+        }
+      }
+      const unitNames = rows.flatMap(value => typeof value.unit === "string" ? [value.unit] : []);
+      const units = unitNames.length
+        ? await tx.unit.findMany({ where: { ownerId: null, searchKey: { in: unitNames.map(buildSearchKey) } } })
+        : [];
+      next.ingredients = rows.map((value, index) => {
+        const name = (value.name as string).trim();
+        const ingredientMatches = [...(activeByKey.get(buildSearchKey(name))?.values() ?? [])];
+        if (!ingredientMatches.length) throw new NotFoundException(`第 ${index + 1} 个食材“${name}”未匹配到启用中的系统食材`);
+        if (ingredientMatches.length !== 1) throw new ConflictException(`第 ${index + 1} 个食材“${name}”匹配到多个系统食材`);
+        const ingredient = ingredientMatches[0]!;
+        if (typeof value.categoryCode === "string" && value.categoryCode !== ingredient.category.code) {
+          throw new BadRequestException(`第 ${index + 1} 个食材分类与系统数据不一致`);
+        }
+        if (value.fuzzyText === "适量") {
+          return { ingredientId: ingredient.id, ingredientName: ingredient.name, source: "SYSTEM", categoryId: ingredient.categoryId, categoryCode: ingredient.category.code, amount: { kind: "FUZZY", text: "适量" } };
+        }
+        if (typeof value.quantity !== "string" || value.quantity.length > 64 || !isValidWikiRecipeQuantity(value.quantity) || typeof value.unit !== "string" || !value.unit.trim()) {
+          throw new BadRequestException(`第 ${index + 1} 个食材的用量或单位不完整`);
+        }
+        const unitMatches = units.filter(unit => unit.searchKey === buildSearchKey(value.unit as string));
+        if (unitMatches.length !== 1) throw new NotFoundException(`第 ${index + 1} 个食材的单位“${value.unit}”未唯一匹配到系统单位`);
+        const unit = unitMatches[0];
+        return {
+          ingredientId: ingredient.id,
+          ingredientName: ingredient.name,
+          source: "SYSTEM",
+          categoryId: ingredient.categoryId,
+          categoryCode: ingredient.category.code,
+          amount: { kind: "EXACT", quantity: value.quantity.trim(), unitId: unit.id, unitName: unit.name, unitType: unit.type }
+        };
+      });
+    }
+    if (selectedFields.has("steps")) {
+      if (!Array.isArray(raw.steps) || raw.steps.length === 0 || raw.steps.length > 40) throw new BadRequestException("制作步骤必须为 1 到 40 步");
+      next.steps = (raw.steps as Array<Record<string, unknown>>).map((step, index) => {
+        if (!step || typeof step !== "object" || Array.isArray(step)) throw new BadRequestException(`第 ${index + 1} 个步骤格式不正确`);
+        if (!step || typeof step.text !== "string" || !step.text.trim() || step.text.length > 2000) throw new BadRequestException(`第 ${index + 1} 个步骤内容无效`);
+        if (step.imageUrl !== null && step.imageUrl !== undefined && typeof step.imageUrl !== "string") throw new BadRequestException(`第 ${index + 1} 个步骤图片地址无效`);
+        if (typeof step.imageUrl === "string") {
+          if (step.imageUrl.length > 512) throw new BadRequestException(`第 ${index + 1} 个步骤图片地址过长`);
+          try {
+            const imageUrl = new URL(step.imageUrl);
+            if (imageUrl.protocol !== "https:" && imageUrl.protocol !== "http:") throw new Error("protocol");
+          } catch {
+            throw new BadRequestException(`第 ${index + 1} 个步骤图片地址无效`);
+          }
+        }
+        if (step.imagePrompt !== null && step.imagePrompt !== undefined && typeof step.imagePrompt !== "string") throw new BadRequestException(`第 ${index + 1} 个步骤图片提示词无效`);
+        if (typeof step.imagePrompt === "string" && step.imagePrompt.length > 1000) throw new BadRequestException(`第 ${index + 1} 个步骤图片提示词过长`);
+        return { text: step.text.trim(), imageUrl: typeof step.imageUrl === "string" ? step.imageUrl : null, imagePrompt: typeof step.imagePrompt === "string" ? step.imagePrompt.trim() || null : null };
+      });
+    }
+
+    const data: Prisma.RecipeContentVersionUpdateInput = {
+      ...(selectedFields.has("name") ? { name: next.name } : {}),
+      ...(selectedFields.has("story") ? { story: next.story } : {}),
+      ...(selectedFields.has("difficulty") ? { difficulty: next.difficulty } : {}),
+      ...(selectedFields.has("duration") ? { duration: next.duration } : {}),
+      ...(selectedFields.has("tips") ? { tips: next.tips } : {}),
+      ...(selectedFields.has("keywords") ? { keywordsJson: toJson(next.keywords) } : {}),
+      ...(selectedFields.has("tools") ? { toolsJson: toJson(next.tools ?? []) } : {}),
+      ...(selectedFields.has("ingredients") ? { ingredientsJson: toJson(next.ingredients) } : {}),
+      ...(selectedFields.has("steps") ? { stepsJson: toJson(next.steps), imagesJson: toJson({ coverImageUrl: recipe.coverImageUrl, stepImages: next.steps.map((step, index) => ({ index, imageUrl: step.imageUrl })).filter(step => step.imageUrl) }) } : {}),
+      searchText: buildRecipeSearchText(next),
+      contentSizeBytes: contentSizeBytes(next)
+    };
+    await tx.recipeContentVersion.update({ where: { id: item.contentVersionId }, data });
+    const recipeData: Prisma.RecipeUpdateInput = {
+      ...(selectedFields.has("name") ? { title: next.name } : {}),
+      searchText: buildRecipeSearchText(next),
+      version: { increment: 1 }
+    };
+    await tx.recipe.update({ where: { id: recipe.id }, data: recipeData });
+    if (selectedFields.has("ingredients")) {
+      await tx.recipeVersionIngredient.deleteMany({ where: { recipeVersionId: item.contentVersionId } });
+      await indexRecipeVersionIngredients(tx, item.contentVersionId, toJson(next.ingredients) as unknown as Prisma.JsonValue);
+      await tx.recipeNutritionSnapshot.deleteMany({ where: { recipeVersionId: item.contentVersionId } });
+      await loadRecipeNutritionSummary(tx, item.contentVersionId, next);
+    }
+    if (["name", "story", "ingredients", "steps"].some(field => selectedFields.has(field as RecipeWikiReplaceField))) {
+      await replaceAutoRecipeVersionTags(tx, item.contentVersionId, next);
+    }
+    return next;
+  }
+
   private async importRecipeWikiItem(
     tx: Prisma.TransactionClient,
     item: RecipeWikiImportItem,
     adminId: UUID,
-    options: { preserveExistingTags?: boolean } = {}
+    options: { preserveExistingTags?: boolean; selectedFields?: ReadonlySet<RecipeWikiReplaceField> } = {}
   ) {
+    await tx.$queryRaw`SELECT "id" FROM "recipes" WHERE "id" = ${item.recipeId} FOR UPDATE`;
     const recipe = await tx.recipe.findUnique({
       where: { id: item.recipeId },
       include: { currentVersion: { include: { cookAssistant: true } } }
     });
     if (!recipe || recipe.status !== "ACTIVE") throw new NotFoundException("菜谱不存在或不是正常状态");
     if (recipe.currentVersionId !== item.contentVersionId) throw new ConflictException("菜谱正文版本已变化，请重新导出");
-    const candidate = buildImportedRecipeAssistantSnapshot(item.assistantSteps);
-    if (!this.isRecipeAssistantCandidateReady(candidate)) throw new BadRequestException("Wiki 助理步骤不完整，不能保存为 READY");
+    const selectedFields = options.selectedFields ?? new Set<RecipeWikiReplaceField>(["tags", "assistant.steps"]);
+    const updatedContent = await this.replaceRecipeContentFields(tx, recipe, item, selectedFields);
+    const candidate = selectedFields.has("assistant.steps") ? buildImportedRecipeAssistantSnapshot(item.assistantSteps) : null;
+    if (candidate && !this.isRecipeAssistantCandidateReady(candidate)) throw new BadRequestException("Wiki 助理步骤不完整，不能保存为 READY");
     const now = new Date();
 
-    await tx.recipeVersionTag.deleteMany({
+    if (selectedFields.has("tags")) await tx.recipeVersionTag.deleteMany({
       where: options.preserveExistingTags
         ? { recipeVersionId: item.contentVersionId, source: "OPS", status: "CANDIDATE", tagCode: { in: [...recipeWikiTagCodes] } }
         : { recipeVersionId: item.contentVersionId, tagCode: { in: [...recipeWikiTagCodes] } }
     });
-    const existingTags = options.preserveExistingTags
+    const existingTags = selectedFields.has("tags") && options.preserveExistingTags
       ? await tx.recipeVersionTag.findMany({
           where: { recipeVersionId: item.contentVersionId, tagCode: { in: [...recipeWikiTagCodes] } },
           select: { tagCode: true, tagValue: true, source: true }
@@ -6295,7 +6707,7 @@ export class AdminService {
       : [];
     const existingTagCodes = new Set(existingTags.map(tag => tag.tagCode));
     const existingTagKeys = new Set(existingTags.map(tag => `${tag.tagCode}:${tag.tagValue}`));
-    const importedTags = options.preserveExistingTags
+    const importedTags = !selectedFields.has("tags") ? [] : options.preserveExistingTags
       ? item.tags.filter(tag => tag.tagCode === "MEAL_TYPE"
           ? !existingTagKeys.has(`${tag.tagCode}:${tag.tagValue}`)
           : !existingTagCodes.has(tag.tagCode))
@@ -6314,7 +6726,7 @@ export class AdminService {
         }))
       });
     }
-    await tx.recipeCookAssistant.upsert({
+    if (candidate) await tx.recipeCookAssistant.upsert({
       where: { recipeVersionId: item.contentVersionId },
       update: {
         status: "READY",
@@ -6340,15 +6752,15 @@ export class AdminService {
         updatedByAdminId: adminId
       }
     });
-    const userIds = await this.settleRecipeWikiRequests(tx, item.contentVersionId, "READY", now);
+    const userIds = candidate ? await this.settleRecipeWikiRequests(tx, item.contentVersionId, "READY", now) : [];
     await tx.auditEvent.create({
       data: {
         actorType: "ADMIN",
         actorAdminId: adminId,
-        action: "RECIPE_WIKI_IMPORTED",
+        action: selectedFields.has("tags") || selectedFields.has("assistant.steps") ? "RECIPE_WIKI_IMPORTED" : "RECIPE_CONTENT_REPLACED",
         objectType: "RECIPE",
         objectId: item.recipeId,
-        payload: { contentVersionId: item.contentVersionId, tagCount: importedTags.length, assistantStepCount: item.assistantSteps.length, notifiedUserCount: userIds.length }
+        payload: { contentVersionId: item.contentVersionId, replacedFields: [...selectedFields], tagCount: importedTags.length, assistantStepCount: candidate ? item.assistantSteps.length : 0, contentReplaced: Boolean(updatedContent), notifiedUserCount: userIds.length }
       }
     });
   }

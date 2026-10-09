@@ -143,13 +143,17 @@ export class CookAssistantAccessService {
       const existingUnlock = await tx.cookAssistantUnlock.findFirst({
         where: { userId, recipeVersionId, status: "CONSUMED" }
       });
-      if (existingRequest?.status === "READY" || existingUnlock || existingRequest?.status === "REJECTED") {
+      const dismissedRequest = existingRequest?.status === "REJECTED"
+        ? await tx.recipeCookAssistant.findUnique({ where: { recipeVersionId } })
+        : null;
+      const canReapplyAfterDismissal = existingRequest?.status === "REJECTED" && dismissedRequest?.isQueueDismissed === true;
+      if (existingRequest?.status === "READY" || existingUnlock || (existingRequest?.status === "REJECTED" && !canReapplyAfterDismissal)) {
         const result = this.wikiRequestResult(existingRequest, false, await this.todayCount(tx, userId, unlockedOn), now);
         await completeIdempotentOperation(tx, operationId, wikiRequestOperationType, userId, null, requestHash, result);
         return result;
       }
 
-      if (!existingRequest) {
+      if (!existingRequest || canReapplyAfterDismissal) {
         if (!activityEnabled(now)) {
           throw new HttpException({ code: 429, message: "活动未开放", data: null }, 429);
         }
@@ -167,6 +171,11 @@ export class CookAssistantAccessService {
         });
       }
 
+      await tx.recipeCookAssistant.updateMany({
+        where: { recipeVersionId, isQueueDismissed: true },
+        data: { isQueueDismissed: false }
+      });
+
       const request = await tx.recipeCookAssistantRequest.upsert({
         where: { userId_recipeVersionId: { userId, recipeVersionId } },
         create: {
@@ -183,7 +192,7 @@ export class CookAssistantAccessService {
         }
       });
       const usedCount = await this.todayCount(tx, userId, unlockedOn);
-      const result = this.wikiRequestResult(request, !existingRequest, usedCount, now);
+      const result = this.wikiRequestResult(request, !existingRequest || canReapplyAfterDismissal, usedCount, now);
       await completeIdempotentOperation(tx, operationId, wikiRequestOperationType, userId, null, requestHash, result);
       return result;
     });

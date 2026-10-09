@@ -26,10 +26,13 @@ import {
   AdminUnitPayloadDto,
   AdminLoginDto,
     AdminRecipeContentDto,
-    AdminRecipeExportQueryDto,
+  AdminRecipeExportQueryDto,
+  AdminRecipeWikiRevisionExportDto,
     AdminRecipeQueryDto,
     AdminRecipeImageBackfillDto,
   AdminRecipeWikiExportDto,
+  AdminRecipeWikiDismissDto,
+  AdminRecipeWikiDismissBatchDto,
   AdminRecipeWikiQuickFillDto,
   AdminRecipeWikiConfirmCandidatesDto,
   AdminRecipeImportContentSyncDto,
@@ -108,7 +111,8 @@ import {
     AdminPendingUnitRecommendationModel,
     AdminPendingRecipeModel,
     AdminRecipeDetailModel,
-    AdminRecipeImageExportItemModel,
+  AdminRecipeImageExportItemModel,
+  AdminRecipeWikiRevisionExportDocumentModel,
     AdminRecipeImageBackfillResultModel,
   AdminReviewIngredientFeedbackResultModel,
     AdminReviewPendingRecipeResultModel,
@@ -129,6 +133,8 @@ import {
   AdminRecipeWikiBatchExportDocumentModel,
   AdminRecipeWikiExportDocumentModel,
   AdminRecipeWikiRejectResultModel,
+  AdminRecipeWikiDismissResultModel,
+  AdminRecipeWikiDismissBatchResultModel,
   AdminRecipeWikiSummaryModel,
   AdminUserEntitlementModel,
   AdminUserPhoneRevealModel,
@@ -622,6 +628,14 @@ export class AdminController {
     return this.adminService.exportRecipes(query.page, query.pageSize, query.keyword, query.status, query.categoryId, request.admin.adminId).then(result => ok(result));
   }
 
+  @Post("recipes/wiki-revision-export")
+  @UseGuards(AdminAuthGuard, SuperAdminGuard)
+  @ApiBearerAuth("AdminBearerAuth")
+  @ApiOkModel(AdminRecipeWikiRevisionExportDocumentModel, "导出当前版本 READY Wiki 修订文件")
+  exportRecipeWikiRevision(@Req() request: RequestWithAdmin, @Body() body: AdminRecipeWikiRevisionExportDto) {
+    return this.adminService.exportRecipeWikiRevision(body, request.admin.adminId).then(result => ok(result));
+  }
+
   @Post("recipes/:recipeId/images/backfill")
   @UseGuards(AdminAuthGuard, SuperAdminGuard)
   @ApiBearerAuth("AdminBearerAuth")
@@ -666,14 +680,16 @@ export class AdminController {
   @ApiIdempotencyKey()
   @UseInterceptors(FileInterceptor("file", { storage: recipeJsonUploadStorage, limits: recipeJsonUploadLimits }))
   @ApiConsumes("multipart/form-data")
-  @ApiOkModel(AdminRecipeWikiImportResultModel, "批量导入菜谱 Wiki JSON")
+  @ApiBody({ schema: { type: "object", required: ["file"], properties: { file: { type: "string", format: "binary" }, fields: { type: "string", example: "[\"name\",\"tags\"]" } } } })
+  @ApiOkModel(AdminRecipeWikiImportResultModel, "按勾选字段批量替换菜谱内容")
   importRecipeWiki(
     @Req() request: RequestWithAdmin,
     @ReadIdempotencyKey() operationId: string,
-    @UploadedFile() file?: { buffer?: Buffer }
+    @UploadedFile() file?: { buffer?: Buffer },
+    @Body("fields") fields?: string
   ) {
     if (!file?.buffer) throw new BadRequestException("请上传 Wiki JSON 文件");
-    return this.adminService.importRecipeWiki(file.buffer, operationId, request.admin.adminId).then(result => ok(result));
+    return this.adminService.importRecipeWiki(file.buffer, operationId, request.admin.adminId, fields).then(result => ok(result));
   }
 
   @Post("recipe-wiki/:recipeId/quick-fill")
@@ -702,6 +718,33 @@ export class AdminController {
     @Body() body: AdminRecipeWikiRejectDto
   ) {
     return this.adminService.rejectRecipeWiki(recipeId, body.reason, operationId, request.admin.adminId).then(result => ok(result));
+  }
+
+  @Delete("recipe-wiki/:recipeId")
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth("AdminBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(AdminRecipeWikiDismissResultModel, "从待补充列表移除当前版本 Wiki 条目")
+  dismissRecipeWiki(
+    @Req() request: RequestWithAdmin,
+    @Param("recipeId", ParseIntPipe) recipeId: number,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: AdminRecipeWikiDismissDto
+  ) {
+    return this.adminService.dismissRecipeWiki(recipeId, body.expectedContentVersionId, operationId, request.admin.adminId).then(result => ok(result));
+  }
+
+  @Post("recipe-wiki/dismiss")
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth("AdminBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(AdminRecipeWikiDismissBatchResultModel, "批量从待补充列表移除当前版本 Wiki 条目")
+  dismissRecipeWikiBatch(
+    @Req() request: RequestWithAdmin,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: AdminRecipeWikiDismissBatchDto
+  ) {
+    return this.adminService.dismissRecipeWikiBatch(body.items, operationId, request.admin.adminId).then(result => ok(result));
   }
 
   @Post("recipe-import-jobs/json")

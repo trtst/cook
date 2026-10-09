@@ -2755,6 +2755,32 @@ export class AdminRecipeExportQueryDto extends PageQueryDto {
   status?: string;
 }
 
+export class AdminRecipeWikiRevisionExportDto {
+  @ApiPropertyOptional({ type: [Number], maxItems: 100, example: [10_000_001, 10_000_002] })
+  @IsOptional()
+  @IsArray()
+  @ArrayNotEmpty()
+  @ArrayMaxSize(100)
+  @ArrayUnique()
+  @Type(() => Number)
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  recipeIds?: number[];
+
+  @ApiPropertyOptional({ example: resourceIdExample })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  categoryId?: number;
+
+  @ApiPropertyOptional({ example: "排骨" })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  keyword?: string;
+}
+
 export class AdminRecipeImageBackfillFileDto {
   @ApiProperty({ example: "10000002_10000001_step1.jpg" })
   @IsString()
@@ -2897,6 +2923,39 @@ export class AdminRecipeWikiQuickFillDto {
   @IsInt()
   @Min(1)
   expectedContentVersionId!: number;
+}
+
+export class AdminRecipeWikiDismissDto {
+  @ApiProperty({ example: resourceIdExample })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  expectedContentVersionId!: number;
+}
+
+export class AdminRecipeWikiDismissItemDto {
+  @ApiProperty({ example: resourceIdExample })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  recipeId!: number;
+
+  @ApiProperty({ example: resourceIdExample })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  expectedContentVersionId!: number;
+}
+
+export class AdminRecipeWikiDismissBatchDto {
+  @ApiProperty({ type: [AdminRecipeWikiDismissItemDto], minItems: 1, maxItems: 100 })
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(100)
+  @ArrayUnique(item => item?.recipeId)
+  @ValidateNested({ each: true })
+  @Type(() => AdminRecipeWikiDismissItemDto)
+  items!: AdminRecipeWikiDismissItemDto[];
 }
 
 export class AdminRecipeWikiConfirmCandidatesDto {

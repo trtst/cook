@@ -1530,6 +1530,7 @@ model RecipeCookAssistant {
   lastError     String?               @map("last_error") @db.VarChar(500)
   source        RecipeDerivedSource   @default(AUTO)
   isLocked      Boolean               @default(false) @map("is_locked")
+  isQueueDismissed Boolean             @default(false) @map("is_queue_dismissed")
   updatedByAdminId Int?               @map("updated_by_admin_id")
   updatedAt     DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
 

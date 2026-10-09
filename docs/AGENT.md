@@ -99,7 +99,7 @@ V1 does not implement receipt scanning, OCR, AI, fridge-item photos, owner trans
 ## Domain Rules
 
 1. Recipe content uses `RecipeContentVersion`.
-2. `RecipeContentVersion` is immutable after creation.
+2. `RecipeContentVersion` is immutable after creation except for explicit SUPER_ADMIN field replacement through the Wiki revision importer. That operation updates selected fields in place, keeps the same version ID, and changes content seen by every reference to that ID; no old copy or rollback is retained.
 3. `MealPlanItem`, public recipe versions, and share snapshots must reference a fixed content version.
 4. Importing a recipe creates a user-owned light entry that points to a fixed base version.
 5. Text edits use structured user overrides; services return the merged effective recipe.

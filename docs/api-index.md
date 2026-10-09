@@ -219,8 +219,11 @@
 | AdminRecipeWiki | GET | `/admin/recipe-wiki` | ACTIVE 当前版本待补充 Wiki 列表，含来源和最近申请信息 |
 | AdminRecipeWiki | GET | `/admin/recipe-wiki/{recipeId}/export` | 导出单个菜谱 Wiki JSON |
 | AdminRecipeWiki | POST | `/admin/recipe-wiki/export` | 批量导出菜谱 Wiki JSON |
-| AdminRecipeWiki | POST | `/admin/recipe-wiki/import` | 批量导入 Wiki，仅更新 Wiki 并置为 READY |
+| AdminRecipeWiki | POST | `/admin/recipe-wiki/import` | 按勾选字段批量原位替换菜谱正文或 Wiki |
+| AdminRecipe | POST | `/admin/recipes/wiki-revision-export` | 导出当前筛选或勾选菜谱的完整 Wiki 修订 JSON |
 | AdminRecipeWiki | POST | `/admin/recipe-wiki/{recipeId}/reject` | 拒绝当前版本 Wiki 申请并释放预扣次数 |
+| AdminRecipeWiki | DELETE | `/admin/recipe-wiki/{recipeId}` | 从待补充列表移除当前版本 Wiki 条目并处理待申请 |
+| AdminRecipeWiki | POST | `/admin/recipe-wiki/dismiss` | 批量移除选中的当前版本 Wiki 条目，单事务全量成功或失败 |
 | AdminRecipe | GET | `/admin/pending-recipes` | 后台待审核菜谱分页列表 |
 | AdminRecipe | POST | `/admin/pending-recipes/{recommendationId}/review` | 后台审核个人菜谱推荐 |
 | AdminRecipe | GET | `/admin/recipe-reports` | 后台举报查询 |

@@ -12,6 +12,8 @@
 - 用户申请按 `(userId, recipeVersionId)` 独立；申请时冻结 1 次，READY 转正式消耗，拒绝/失败释放；重复申请幂等。
 - Wiki READY 后通知申请人；申请人以后打开 Wiki 不再次扣次。
 - 编辑前存在 READY Wiki 时，发布确认后才保存新正文版本；新版本 Wiki 重新进入待补充状态。
+- 管理后台可单条或批量从待补充列表移除当前版本条目；批量最多 100 条且单事务全量成功或失败。保留菜谱和 Wiki 数据，处理并释放该版本待处理申请；新正文版本或新申请可重新进入队列。
+- 菜谱管理页可按当前筛选或勾选导出 ACTIVE 且 READY 的 Wiki 修订文件，完整菜谱正文仅供对照；Wiki 导入同时接受完整 `recipe.import.v1` / `recipe.import.batch.v1` 修订文件和 Wiki-only 格式，始终只按数值型 `recipeId + contentVersionId` 写入当前版本 Wiki。导入整体替换标签和助手步骤，不修改正文或创建正文版本。
 
 ## 数据与状态
 
