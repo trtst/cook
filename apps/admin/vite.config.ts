@@ -38,7 +38,13 @@ export default defineConfig(({ mode }) => {
       port: readPort(env.VITE_DEV_PORT, 5174),
       strictPort: true,
       // 允许联调域名访问开发服务器，外部访问控制由联调环境负责。
-      allowedHosts: true
+      allowedHosts: true,
+      proxy: {
+        "/api": {
+          target: "http://127.0.0.1:3100",
+          changeOrigin: true
+        }
+      }
     },
     build: {
       rollupOptions: {

@@ -55,6 +55,18 @@ export interface AdminRecipeWikiSummary {
   updatedAt: IsoDateTime;
 }
 
+export interface AdminRecipeWikiDismissResult {
+  recipeId: UUID;
+  contentVersionId: UUID;
+  status: "DISMISSED";
+  dismissedRequestCount: number;
+}
+
+export interface AdminRecipeWikiDismissBatchResult {
+  dismissedCount: number;
+  dismissedRequestCount: number;
+}
+
 export interface AdminRecipeWikiQuery extends PageQuery {
   keyword?: string;
 }
@@ -74,11 +86,52 @@ export interface AdminRecipeWikiBatchExportDocument {
   recipes: Array<Omit<AdminRecipeWikiExportDocument, "schemaVersion">>;
 }
 
-export interface AdminRecipeWikiImportResult {
-  importedCount: number;
-  rejectedCount: number;
-  items: Array<{ recipeId: UUID; status: "READY" | "REJECTED"; message: string | null }>;
+export interface AdminRecipeWikiRevisionExportDocument {
+  schemaVersion: "recipe.import.batch.v1";
+  recipes: Array<{
+    recipe: {
+      recipeId: UUID;
+      contentVersionId: UUID;
+      inspirationCategoryId: UUID;
+      coverImageUrl: string | null;
+      content: {
+        name: string;
+        story: string;
+        baseServings: number;
+        difficulty: string;
+        duration: string;
+        tips: string;
+        keywords: string[];
+        ingredients: Array<{ name: string; quantity: string | null; unit: string | null; fuzzyText: "适量" | null; categoryCode: string | null }>;
+        tools: Array<{ name: string }>;
+        steps: Array<{ text: string; imageUrl: string | null; imagePrompt: string | null }>;
+      };
+    };
+    wiki: {
+      tags: Array<{ tagCode: string; tagValue: string }>;
+      assistant: { steps: RecipeImportAssistantStepDraft[] };
+    };
+  }>;
 }
+
+export interface AdminRecipeWikiImportResult {
+  replacedCount: number;
+  rejectedCount: number;
+  items: Array<{ recipeId: UUID; status: "REPLACED" | "REJECTED"; message: string | null }>;
+}
+
+export type AdminRecipeWikiReplaceField =
+  | "name"
+  | "story"
+  | "difficulty"
+  | "duration"
+  | "tips"
+  | "keywords"
+  | "ingredients"
+  | "tools"
+  | "steps"
+  | "tags"
+  | "assistant.steps";
 
 export interface AdminRecipeWikiRejectResult {
   recipeId: UUID;
@@ -590,9 +643,16 @@ export const recipeApi = {
       body: { recipeIds }
     });
   },
-  importWiki(file: File, operationId: OperationId) {
+  exportWikiRevision(body: { recipeIds?: UUID[]; categoryId?: UUID; keyword?: string }) {
+    return requestData<AdminRecipeWikiRevisionExportDocument>("/admin/recipes/wiki-revision-export", {
+      method: "POST",
+      body
+    });
+  },
+  importWiki(file: File, operationId: OperationId, fields: AdminRecipeWikiReplaceField[] = ["tags", "assistant.steps"]) {
     const formData = new FormData();
     formData.append("file", file);
+    formData.append("fields", JSON.stringify(fields));
     return uploadForm<AdminRecipeWikiImportResult>("/admin/recipe-wiki/import", formData, { idempotencyKey: operationId });
   },
   quickFillWikiFromImport(recipeId: UUID, expectedContentVersionId: UUID, operationId: OperationId) {
@@ -606,6 +666,20 @@ export const recipeApi = {
     return requestData<AdminRecipeWikiRejectResult>(`/admin/recipe-wiki/${encodeURIComponent(String(recipeId))}/reject`, {
       method: "POST",
       body: { reason },
+      idempotencyKey: operationId
+    });
+  },
+  dismissWiki(recipeId: UUID, expectedContentVersionId: UUID, operationId: OperationId) {
+    return requestData<AdminRecipeWikiDismissResult>(`/admin/recipe-wiki/${encodeURIComponent(String(recipeId))}`, {
+      method: "DELETE",
+      body: { expectedContentVersionId },
+      idempotencyKey: operationId
+    });
+  },
+  dismissWikiBatch(items: Array<{ recipeId: UUID; expectedContentVersionId: UUID }>, operationId: OperationId) {
+    return requestData<AdminRecipeWikiDismissBatchResult>("/admin/recipe-wiki/dismiss", {
+      method: "POST",
+      body: { items },
       idempotencyKey: operationId
     });
   },

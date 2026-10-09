@@ -20,6 +20,7 @@ const total = ref(0);
 const blockedRecipeCount = ref(0);
 const blockedView = ref(false);
 const exporting = ref(false);
+const exportingWikiRevision = ref(false);
 const confirmingCandidates = ref(false);
 const syncingImportedContent = ref(false);
 let requestId = 0;
@@ -245,6 +246,39 @@ async function exportFilteredRecipes() {
   }
 }
 
+async function exportWikiRevision() {
+  if (exportingWikiRevision.value) return;
+  if (selectedRecipes.value.size > 100) {
+    ElMessage.warning("一次最多导出 100 道菜谱 Wiki，请减少勾选数量");
+    return;
+  }
+  exportingWikiRevision.value = true;
+  try {
+    const result = await recipeApi.exportWikiRevision(selectedRecipes.value.size
+      ? { recipeIds: Array.from(selectedRecipes.value) }
+      : {
+          categoryId: query.categoryId || undefined,
+          keyword: query.keyword.trim() || undefined
+        });
+    if (!result.recipes.length) {
+      ElMessage.info("当前筛选没有可修订的 READY Wiki");
+      return;
+    }
+    const blob = new Blob([JSON.stringify(result, null, 2)], { type: "application/json;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `recipe-wiki-revision-${new Date().toISOString().slice(0, 10)}.json`;
+    anchor.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+    ElMessage.success(`已导出 ${result.recipes.length} 道菜谱的 Wiki 修订文件`);
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : "导出 Wiki 修订文件失败");
+  } finally {
+    exportingWikiRevision.value = false;
+  }
+}
+
 async function selectCategory(categoryId: UUID | "") {
   if (query.categoryId === categoryId && !blockedView.value) return;
   selectedRecipes.value.clear();
@@ -381,6 +415,7 @@ onMounted(() => {
           {{ allCurrentPageRecipesSelected ? "取消本页全选" : "全选当前页" }}
         </el-button>
         <el-button :icon="Download" :loading="exporting" @click="exportFilteredRecipes">批量导出</el-button>
+        <el-button :icon="Download" :loading="exportingWikiRevision" :disabled="blockedView || (query.status !== '' && query.status !== 'ACTIVE') || exporting || confirmingCandidates || syncingImportedContent" @click="exportWikiRevision">导出 Wiki 修订文件</el-button>
         <el-button class="toolbar-main-action" type="primary" :icon="Plus" @click="openCreate">新增系统菜谱</el-button>
       </div>
     </div>
