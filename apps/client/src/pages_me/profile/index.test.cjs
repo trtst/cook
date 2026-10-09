@@ -22,6 +22,7 @@ function expectNotIncludes(source, fragment) {
 
 expectIncludes(pagesJson, '"path": "profile/index"');
 expectIncludes(pagesJson, '"path": "profile-field/index"');
+expectNotIncludes(pagesJson, '"enableShareAppMessage": true');
 
 expectIncludes(mePage, 'navigateTo("/pages_me/profile/index")');
 expectNotIncludes(mePage, 'profileEditorOpen');
