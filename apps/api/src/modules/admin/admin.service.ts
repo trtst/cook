@@ -11,6 +11,7 @@ import {
 } from "@nestjs/common";
 import { Prisma, type IngredientStatus, type RecipeStatus } from "@prisma/client";
 import { recipeDifficultyText, recipeDurationText } from "../../common/display-text";
+import type { RecipeImagePosition } from "../../common/recipe-image-name";
 import { maskPhone } from "../../common/phone";
 import type {
   AdminRecipeContentInput,
@@ -4877,9 +4878,11 @@ export class AdminService {
       });
 
       const recipeId = await this.reserveRecipeId(this.prisma);
+      const contentVersionId = await this.reserveRecipeContentVersionId(this.prisma);
       const stagedImages = await this.stageRecipeImportImages(
         request,
         recipeId,
+        contentVersionId,
         preflightRawBody,
         preflightRecipeBody,
         publishedStorageKeys,
@@ -4960,7 +4963,7 @@ export class AdminService {
         this.assertAdminRecipeContent(content);
 
         const nextVersion = await tx.recipeContentVersion.create({
-          data: this.buildAdminRecipeVersionCreateInput(content, stagedImages.coverImageUrl)
+          data: { id: contentVersionId, ...this.buildAdminRecipeVersionCreateInput(content, stagedImages.coverImageUrl) }
         });
         await indexRecipeVersionIngredients(tx, nextVersion.id, nextVersion.ingredientsJson);
         await loadRecipeNutritionSummary(tx, nextVersion.id, content);
@@ -5064,6 +5067,7 @@ export class AdminService {
   private async stageRecipeImportImages(
     request: { protocol?: string; get?: (name: string) => string | undefined },
     recipeId: UUID,
+    contentVersionId: number,
     rawBody: RecipeImportRawBody,
     recipeBody: RecipeImportRecipeBody,
     publishedStorageKeys: string[],
@@ -5074,9 +5078,9 @@ export class AdminService {
     const remoteImageStartedAt = Date.now();
     let remoteImageCount = 0;
     let remoteImageBytes = 0;
-    const publishRemoteImage = (scene: "COVER" | "STEP", imageUrl: string) => {
+    const publishRemoteImage = (scene: "COVER" | "STEP", imageUrl: string, position: RecipeImagePosition) => {
       const normalizedUrl = imageUrl.trim();
-      const cacheKey = `${scene}:${normalizedUrl}`;
+      const cacheKey = `${scene}:${JSON.stringify(position)}:${normalizedUrl}`;
       const cached = remoteImageCache.get(cacheKey);
       if (cached) return cached;
       if (remoteImageCount >= maxImportRemoteImages) {
@@ -5087,7 +5091,7 @@ export class AdminService {
       }
       remoteImageCount += 1;
       const published = (async () => {
-        const result = await this.adminRecipeImageService.publishRemoteImage(request, recipeId, scene, normalizedUrl);
+        const result = await this.adminRecipeImageService.publishRemoteImage(request, recipeId, contentVersionId, scene, normalizedUrl, position);
         const sizeBytes = Number(result.sizeBytes) || 0;
         remoteImageBytes += sizeBytes;
         if (remoteImageBytes > maxImportRemoteImageBytes) {
@@ -5106,7 +5110,7 @@ export class AdminService {
 
     let coverImageUrl: string | null = null;
     if (recipeBody.coverImageTempKey) {
-      const published = await this.adminRecipeImageService.publishTempImage(request, recipeId, "COVER", recipeBody.coverImageTempKey);
+      const published = await this.adminRecipeImageService.publishTempImage(request, recipeId, contentVersionId, "COVER", recipeBody.coverImageTempKey, { type: "COVER" });
       tempImageKeys.push(recipeBody.coverImageTempKey);
       publishedStorageKeys.push(published.storageKey);
       coverImageUrl = published.imageUrl;
@@ -5114,19 +5118,20 @@ export class AdminService {
       const image = imageMap.get(recipeBody.coverImageKey);
       if (!image) throw new BadRequestException("封面图片不存在");
       const buffer = await readImageBuffer(rawBody.assetFolder, image.fileName);
-      const published = await this.adminRecipeImageService.publishImageBuffer(request, recipeId, "COVER", buffer);
+      const published = await this.adminRecipeImageService.publishImageBuffer(request, recipeId, contentVersionId, "COVER", buffer, { type: "COVER" });
       publishedStorageKeys.push(published.storageKey);
       coverImageUrl = published.imageUrl;
     } else if (recipeBody.coverImageUrl) {
-      const published = await publishRemoteImage("COVER", recipeBody.coverImageUrl);
+      const published = await publishRemoteImage("COVER", recipeBody.coverImageUrl, { type: "COVER" });
       publishedStorageKeys.push(published.storageKey);
       coverImageUrl = published.imageUrl;
     }
 
     const stepImageUrls: Array<string | null> = [];
-    for (const step of recipeBody.steps) {
+    for (const [index, step] of recipeBody.steps.entries()) {
+      const position: RecipeImagePosition = { type: "STEP", order: index + 1 };
       if (step.imageTempKey) {
-        const published = await this.adminRecipeImageService.publishTempImage(request, recipeId, "STEP", step.imageTempKey);
+        const published = await this.adminRecipeImageService.publishTempImage(request, recipeId, contentVersionId, "STEP", step.imageTempKey, position);
         tempImageKeys.push(step.imageTempKey);
         publishedStorageKeys.push(published.storageKey);
         stepImageUrls.push(published.imageUrl);
@@ -5137,7 +5142,7 @@ export class AdminService {
           stepImageUrls.push(null);
           continue;
         }
-        const published = await publishRemoteImage("STEP", step.imageUrl);
+        const published = await publishRemoteImage("STEP", step.imageUrl, position);
         publishedStorageKeys.push(published.storageKey);
         stepImageUrls.push(published.imageUrl);
         continue;
@@ -5145,15 +5150,16 @@ export class AdminService {
       const image = imageMap.get(step.imageKey);
       if (!image) throw new BadRequestException("步骤图片不存在");
       const buffer = await readImageBuffer(rawBody.assetFolder, image.fileName);
-      const published = await this.adminRecipeImageService.publishImageBuffer(request, recipeId, "STEP", buffer);
+      const published = await this.adminRecipeImageService.publishImageBuffer(request, recipeId, contentVersionId, "STEP", buffer, position);
       publishedStorageKeys.push(published.storageKey);
       stepImageUrls.push(published.imageUrl);
     }
 
     const assistantSteps: NonNullable<RecipeImportRecipeBody["assistantSteps"]> = [];
-    for (const assistantStep of recipeBody.assistantSteps ?? []) {
+    for (const [index, assistantStep] of (recipeBody.assistantSteps ?? []).entries()) {
+      const position: RecipeImagePosition = { type: "WIKI_STEP", order: Number(assistantStep.order) || index + 1 };
       if (assistantStep.imageTempKey) {
-        const published = await this.adminRecipeImageService.publishTempImage(request, recipeId, "STEP", assistantStep.imageTempKey);
+        const published = await this.adminRecipeImageService.publishTempImage(request, recipeId, contentVersionId, "STEP", assistantStep.imageTempKey, position);
         tempImageKeys.push(assistantStep.imageTempKey);
         publishedStorageKeys.push(published.storageKey);
         assistantSteps.push({ ...assistantStep, imageTempKey: null, imageUrl: published.imageUrl });
@@ -5163,7 +5169,7 @@ export class AdminService {
         assistantSteps.push(assistantStep);
         continue;
       }
-      const published = await publishRemoteImage("STEP", assistantStep.imageUrl);
+      const published = await publishRemoteImage("STEP", assistantStep.imageUrl, position);
       publishedStorageKeys.push(published.storageKey);
       assistantSteps.push({ ...assistantStep, imageUrl: published.imageUrl });
     }
@@ -5855,6 +5861,7 @@ export class AdminService {
         throw new NotFoundException("正常系统菜谱不存在");
       }
       if (source.currentVersionId !== sourceVersionId) throw new ConflictException("菜谱正文版本已变化，请重新导出");
+      const nextContentVersionId = await this.reserveRecipeContentVersionId(this.prisma);
 
       const content = versionToContent(source.currentVersion);
       const sourceWiki = versionAssistantToSnapshot(source.currentVersion.cookAssistant);
@@ -5867,19 +5874,23 @@ export class AdminService {
         }
       }
 
-        const published: Array<{ target: typeof targets[number]; imageUrl: string }> = [];
-        for (const target of targets) {
-          const result = await this.adminRecipeImageService.publishTempImage(
-            request,
-            recipeId,
-            target.target === "COVER" ? "COVER" : "STEP",
-            target.tempKey
-          );
-          publishedStorageKeys.push(result.storageKey);
-          published.push({ target, imageUrl: result.imageUrl });
-        }
-        const publishedByFile = new Map(published.map(item => [item.target.fileName, item.imageUrl]));
-        const result = await this.prisma.$transaction(async tx => {
+      const published: Array<{ target: typeof targets[number]; imageUrl: string }> = [];
+      for (const target of targets) {
+        const result = await this.adminRecipeImageService.publishTempImage(
+          request,
+          recipeId,
+          nextContentVersionId,
+          target.target === "COVER" ? "COVER" : "STEP",
+          target.tempKey,
+          target.target === "COVER"
+            ? { type: "COVER" }
+            : { type: target.target === "WIKI_STEP" ? "WIKI_STEP" : "STEP", order: target.order as number }
+        );
+        publishedStorageKeys.push(result.storageKey);
+        published.push({ target, imageUrl: result.imageUrl });
+      }
+      const publishedByFile = new Map(published.map(item => [item.target.fileName, item.imageUrl]));
+      const result = await this.prisma.$transaction(async tx => {
           const repeated = await getAdminIdempotentResult<AdminRecipeImageBackfillResult>(
             tx,
             body.operationId,
@@ -5932,23 +5943,20 @@ export class AdminService {
             }
           }
 
-          let nextContentVersionId = current.currentVersionId;
-          if (targets.some(item => item.target !== "COVER")) {
-            const nextVersion = await tx.recipeContentVersion.create({
-              data: this.buildAdminRecipeVersionCreateInput(updatedContent, coverImageUrl)
-            });
-            await indexRecipeVersionIngredients(tx, nextVersion.id, nextVersion.ingredientsJson);
-            nextContentVersionId = nextVersion.id;
-            if (current.currentVersion.versionTags.length) {
+          const nextVersion = await tx.recipeContentVersion.create({
+            data: { id: nextContentVersionId, ...this.buildAdminRecipeVersionCreateInput(updatedContent, coverImageUrl) }
+          });
+          await indexRecipeVersionIngredients(tx, nextVersion.id, nextVersion.ingredientsJson);
+          if (current.currentVersion.versionTags.length) {
               await tx.recipeVersionTag.createMany({
                 data: current.currentVersion.versionTags.map(({ id: _id, recipeVersionId: _recipeVersionId, createdAt: _createdAt, updatedAt: _updatedAt, ...tag }) => ({
                   ...tag,
                   recipeVersionId: nextVersion.id
                 }))
               });
-            }
-            const nutrition = current.currentVersion.nutritionSnapshots[0];
-            if (nutrition) {
+          }
+          const nutrition = current.currentVersion.nutritionSnapshots[0];
+          if (nutrition) {
               const { id: _id, recipeVersionId: _recipeVersionId, createdAt: _createdAt, updatedAt: _updatedAt, ...snapshot } = nutrition;
               await tx.recipeNutritionSnapshot.create({
                 data: {
@@ -5958,8 +5966,8 @@ export class AdminService {
                   perRecipeJson: snapshot.perRecipeJson ?? Prisma.DbNull
                 }
               });
-            }
-            if (current.currentVersion.completenessSnapshots.length) {
+          }
+          if (current.currentVersion.completenessSnapshots.length) {
               await tx.recipeCompletenessSnapshot.createMany({
                 data: current.currentVersion.completenessSnapshots.map(({ id: _id, recipeVersionId: _recipeVersionId, createdAt: _createdAt, updatedAt: _updatedAt, ...snapshot }) => ({
                   ...snapshot,
@@ -5973,9 +5981,9 @@ export class AdminService {
                   randomMenuBlockingReasons: snapshot.randomMenuBlockingReasons ?? Prisma.JsonNull
                 }))
               });
-            }
-            const assistant = current.currentVersion.cookAssistant;
-            if (assistant) {
+          }
+          const assistant = current.currentVersion.cookAssistant;
+          if (assistant) {
               const updateImages = (value: unknown) => {
                 if (value == null) return null;
                 const snapshot = fromJson<{ steps: Array<{ order: number; imageUrl: string | null }> }>(value);
@@ -6002,21 +6010,19 @@ export class AdminService {
                   updatedByAdminId: adminId
                 }
               });
-            }
-            if (current.currentVersion.cookAssistantUnlocks.length) {
+          }
+          if (current.currentVersion.cookAssistantUnlocks.length) {
               await tx.cookAssistantUnlock.createMany({
                 data: current.currentVersion.cookAssistantUnlocks.map(({ id: _id, recipeVersionId: _recipeVersionId, ...unlock }) => ({
                   ...unlock,
                   recipeVersionId: nextVersion.id
                 }))
               });
-            }
           }
-
           const updatedRecipe = await tx.recipe.updateMany({
             where: { id: recipeId, currentVersionId: sourceVersionId, version: current.version },
             data: {
-              ...(nextContentVersionId !== current.currentVersionId ? { currentVersionId: nextContentVersionId } : {}),
+              currentVersionId: nextContentVersionId,
               coverImageUrl,
               version: { increment: 1 }
             }
@@ -6821,10 +6827,12 @@ export class AdminService {
 
         const inspirationCategory = await this.requireInspirationCategory(tx, body.inspirationCategoryId);
         const recipeId = await this.reserveRecipeId(tx);
+        const contentVersionId = await this.reserveRecipeContentVersionId(tx);
         cleanupRecipeId = recipeId;
         const imageState = await this.buildAdminRecipeImageState(
           request,
           recipeId,
+          contentVersionId,
           body.coverImageUrl,
           body.coverImageTempKey,
           body.content,
@@ -6836,7 +6844,7 @@ export class AdminService {
         this.assertAdminRecipeContent(content);
 
         const nextVersion = await tx.recipeContentVersion.create({
-          data: this.buildAdminRecipeVersionCreateInput(content, imageState.coverImageUrl)
+          data: { id: contentVersionId, ...this.buildAdminRecipeVersionCreateInput(content, imageState.coverImageUrl) }
         });
         await indexRecipeVersionIngredients(tx, nextVersion.id, nextVersion.ingredientsJson);
         await replaceAutoRecipeVersionTags(tx, nextVersion.id, content);
@@ -7327,9 +7335,11 @@ export class AdminService {
         }
 
         const inspirationCategory = await this.requireInspirationCategory(tx, body.inspirationCategoryId);
+        const contentVersionId = await this.reserveRecipeContentVersionId(tx);
         const imageState = await this.buildAdminRecipeImageState(
           request,
           recipeId,
+          contentVersionId,
           body.coverImageUrl,
           body.coverImageTempKey,
           body.content,
@@ -7344,7 +7354,7 @@ export class AdminService {
         this.assertAdminRecipeContent(content);
 
         const nextVersion = await tx.recipeContentVersion.create({
-          data: this.buildAdminRecipeVersionCreateInput(content, imageState.coverImageUrl)
+          data: { id: contentVersionId, ...this.buildAdminRecipeVersionCreateInput(content, imageState.coverImageUrl) }
         });
         await indexRecipeVersionIngredients(tx, nextVersion.id, nextVersion.ingredientsJson);
         await replaceAutoRecipeVersionTags(tx, nextVersion.id, content);
@@ -8672,6 +8682,7 @@ export class AdminService {
   private async buildAdminRecipeImageState(
     request: { protocol?: string; get?: (name: string) => string | undefined },
     recipeId: UUID,
+    contentVersionId: number,
     coverImageUrl: string | null,
     coverImageTempKey: string | null,
     content: AdminRecipeContentInput,
@@ -8693,7 +8704,9 @@ export class AdminService {
     const nextCoverImageUrl = await this.resolveAdminRecipeImageUrl(
       request,
       recipeId,
+      contentVersionId,
       "COVER",
+      { type: "COVER" },
       normalizeImageUrl(coverImageUrl),
       coverImageTempKey,
       allowedCoverImageUrls,
@@ -8703,11 +8716,13 @@ export class AdminService {
     );
 
     const stepImageUrls: Array<string | null> = [];
-    for (const step of content.steps) {
+    for (const [index, step] of content.steps.entries()) {
       const nextStepImageUrl = await this.resolveAdminRecipeImageUrl(
         request,
         recipeId,
+        contentVersionId,
         "STEP",
+        { type: "STEP", order: index + 1 },
         normalizeImageUrl(step.imageUrl),
         step.imageTempKey,
         allowedStepUrls,
@@ -8727,7 +8742,9 @@ export class AdminService {
   private async resolveAdminRecipeImageUrl(
     request: { protocol?: string; get?: (name: string) => string | undefined },
     recipeId: UUID,
+    contentVersionId: number,
     scene: "COVER" | "STEP",
+    position: RecipeImagePosition,
     imageUrl: string | null,
     imageTempKey: string | null,
     allowedUrls: Set<string>,
@@ -8737,7 +8754,7 @@ export class AdminService {
   ) {
     const normalizedTempKey = imageTempKey?.trim() || null;
     if (normalizedTempKey) {
-      const published = await this.adminRecipeImageService.publishTempImage(request, recipeId, scene, normalizedTempKey);
+      const published = await this.adminRecipeImageService.publishTempImage(request, recipeId, contentVersionId, scene, normalizedTempKey, position);
       publishedStorageKeys.push(published.storageKey);
       consumedTempKeys.add(normalizedTempKey);
       return published.imageUrl;
@@ -8829,6 +8846,15 @@ export class AdminService {
       throw new ConflictException("无法创建菜谱，请稍后重试");
     }
     return recipeId;
+  }
+
+  private async reserveRecipeContentVersionId(tx: Prisma.TransactionClient | PrismaService = this.prisma): Promise<number> {
+    const rows = await tx.$queryRaw<Array<{ id: bigint | number }>>`SELECT nextval(pg_get_serial_sequence('recipe_content_versions', 'id')) AS id`;
+    const contentVersionId = Number(rows[0]?.id);
+    if (!Number.isSafeInteger(contentVersionId) || contentVersionId <= 0) {
+      throw new ConflictException("无法创建菜谱内容版本，请稍后重试");
+    }
+    return contentVersionId;
   }
 
   private async requireSuperAdmin(adminId: UUID) {

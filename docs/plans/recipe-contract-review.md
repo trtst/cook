@@ -357,7 +357,7 @@ contentSizeBytes
 createdAt
 ```
 
-`ingredientsJson` 保存食材 ID、食材名快照、精确/模糊用量、单位 ID 和单位名快照。`stepsJson` 当前保存“有序步骤文本 + 已发布步骤图 URL 快照”；`imagesJson` 保存该固定版本实际引用到的封面图与步骤图快照来源。用户菜谱版本里它仍承载草稿绑定后的图片槽位状态；后台系统菜谱版本里则记录本次固化后的封面图和步骤图 URL 快照，用于保持新旧版本图片资源分离。
+`ingredientsJson` 保存食材 ID、食材名快照、精确/模糊用量、单位 ID 和单位名快照。`stepsJson` 当前保存“有序步骤文本 + 已发布步骤图 URL 快照”；`imagesJson` 保存该固定版本实际引用到的封面图与步骤图快照来源。用户菜谱版本里它仍承载草稿绑定后的图片槽位状态；后台系统菜谱版本里则记录本次固化后的封面图和步骤图 URL 快照。正式 OSS 对象统一存放在 `uploads/recipe-images/{recipeId}/` 下，文件名包含菜谱 ID、`contentVersionId` 和图片槽位（封面 `{recipeId}_{contentVersionId}.{ext}`、普通步骤 `_step-{order}`、Wiki 步骤 `_wiki-step-{order}`）。每个新版本使用独立文件名；未替换图片继续引用原 URL，旧固定版本不会因新图上传而改变。
 
 ### 灵感平台分类
 

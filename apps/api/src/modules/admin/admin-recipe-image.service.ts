@@ -8,6 +8,7 @@ import { BadRequestException, Injectable, Logger, NotFoundException, Optional } 
 import sharp from "sharp";
 import { assetKey, AssetStorageService } from "../../common/asset-storage.service";
 import { compressUploadedImage } from "../../common/image-compression";
+import { recipeImageFileName, type RecipeImagePosition } from "../../common/recipe-image-name";
 import type { AdminRecipeImageScene, AdminRecipeImageUploadResponse } from "../../contracts/types";
 
 type RequestLike = {
@@ -350,7 +351,7 @@ export class AdminRecipeImageService {
     return this.stageTempImage({}, scene, { buffer, size: buffer.length });
   }
 
-  async publishTempImage(request: RequestLike, recipeId: number, scene: AdminRecipeImageScene, tempKey: string) {
+  async publishTempImage(request: RequestLike, recipeId: number, contentVersionId: number, scene: AdminRecipeImageScene, tempKey: string, position: RecipeImagePosition) {
     const normalizedTempKey = this.normalizeTempKey(tempKey);
     let buffer: Buffer;
     try {
@@ -368,7 +369,7 @@ export class AdminRecipeImageService {
       publishedBuffer = normalized.buffer;
     }
     assertSceneMeta(scene, meta);
-    return this.writePublishedImage(request, recipeId, meta, publishedBuffer);
+    return this.writePublishedImage(request, recipeId, contentVersionId, meta, publishedBuffer, position);
   }
 
   async readTempImageBuffer(tempKey: string) {
@@ -380,18 +381,18 @@ export class AdminRecipeImageService {
     }
   }
 
-  async publishImageBuffer(request: RequestLike, recipeId: number, scene: AdminRecipeImageScene, buffer: Buffer) {
+  async publishImageBuffer(request: RequestLike, recipeId: number, contentVersionId: number, scene: AdminRecipeImageScene, buffer: Buffer, position: RecipeImagePosition) {
     const normalized = await normalizeImage(buffer);
     assertSceneMeta(scene, normalized.meta);
-    return this.writePublishedImage(request, recipeId, normalized.meta, normalized.buffer);
+    return this.writePublishedImage(request, recipeId, contentVersionId, normalized.meta, normalized.buffer, position);
   }
 
-  private async writePublishedImage(request: RequestLike, recipeId: number, meta: ImageMeta, buffer: Buffer) {
+  private async writePublishedImage(request: RequestLike, recipeId: number, contentVersionId: number, meta: ImageMeta, buffer: Buffer, position: RecipeImagePosition) {
     if (buffer.length > maxOutputImageBytes) {
       throw new BadRequestException("菜谱图片成品不能超过 500 KB");
     }
 
-    const fileName = `${randomUUID()}.${meta.extension}`;
+    const fileName = recipeImageFileName(recipeId, contentVersionId, position, meta.extension);
     const storageKey = this.finalKey(recipeId, fileName);
     await this.assetStorage.writeObject(storageKey, buffer, meta.contentType);
     return {
@@ -402,10 +403,10 @@ export class AdminRecipeImageService {
     };
   }
 
-  async publishRemoteImage(request: RequestLike, recipeId: number, scene: AdminRecipeImageScene, imageUrl: string) {
+  async publishRemoteImage(request: RequestLike, recipeId: number, contentVersionId: number, scene: AdminRecipeImageScene, imageUrl: string, position: RecipeImagePosition) {
     await assertSafeRemoteUrl(imageUrl);
     const buffer = await this.remoteImageReader(imageUrl);
-    return this.publishImageBuffer(request, recipeId, scene, buffer);
+    return this.publishImageBuffer(request, recipeId, contentVersionId, scene, buffer, position);
   }
 
   async discardTempImages(tempKeys: Iterable<string>) {

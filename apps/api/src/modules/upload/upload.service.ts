@@ -5,6 +5,7 @@ import { assetKey, AssetStorageService } from "../../common/asset-storage.servic
 import { compressUploadedImage, type CompressedImage } from "../../common/image-compression";
 import { completeIdempotentOperation, getIdempotentResult, startIdempotentOperation } from "../../common/idempotency";
 import { PrismaService } from "../../common/prisma.service";
+import { recipeImageFileName, type RecipeImagePosition } from "../../common/recipe-image-name";
 import type { IsoDateTime, OperationId, UploadImageResponse, UploadImageSummary, UUID } from "../../contracts/types";
 
 type RequestLike = {
@@ -51,6 +52,14 @@ function publicIdFromFileName(value: string) {
     throw new NotFoundException("图片不存在");
   }
   return match[1];
+}
+
+function recipeImageKeyFromFileName(recipeId: UUID, fileName: string) {
+  const legacyName = /^[0-9a-f-]+\.(?:jpg|png|webp)$/i.test(fileName);
+  const recipeKey = String(recipeId).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const currentName = new RegExp(`^${recipeKey}_[1-9]\\d*(?:_step-[1-9]\\d*|_wiki-step-[1-9]\\d*)?\\.(?:jpg|png|webp)$`, "i").test(fileName);
+  if (!legacyName && !currentName) throw new NotFoundException("图片不存在");
+  return assetKey("uploads", "recipe-images", recipeId, fileName);
 }
 
 function toIsoDate(value: Date): IsoDateTime {
@@ -379,8 +388,7 @@ export class UploadService {
   }
 
   async getRecipeImageAsset(recipeId: UUID, fileName: string) {
-    const publicId = publicIdFromFileName(fileName);
-    const expectedStorageKey = this.buildRecipeImageStorageKey(recipeId, publicId, contentTypeOfFileName(fileName));
+    const expectedStorageKey = recipeImageKeyFromFileName(recipeId, fileName);
     const stored = await this.assetStorage.readObject(expectedStorageKey, contentTypeOfFileName(fileName)).catch(() => null);
     if (!stored) throw new NotFoundException("图片不存在");
     return {
@@ -643,9 +651,11 @@ export class UploadService {
     userId: UUID,
     draftId: UUID,
     recipeId: UUID,
+    contentVersionId: number,
     uploadIds: UUID[],
     promotedStorageKeys: string[],
-    temporaryStorageKeys: string[]
+    temporaryStorageKeys: string[],
+    imagePositions: Map<UUID, RecipeImagePosition>
   ) {
     const keys = new Map<UUID, {
       sourceStorageKey: string;
@@ -663,8 +673,10 @@ export class UploadService {
       throw new BadRequestException("草稿图片状态已变更，请重新保存后再试");
     }
     for (const item of items) {
+      const position = imagePositions.get(item.id);
+      if (!position) throw new BadRequestException("草稿图片步骤信息缺失，请重新保存后再试");
       const targetPublicId = randomUUID();
-      const targetStorageKey = this.buildRecipeImageStorageKey(recipeId, targetPublicId, item.contentType);
+      const targetStorageKey = this.buildRecipeImageStorageKey(recipeId, contentVersionId, position, item.contentType);
       promotedStorageKeys.push(targetStorageKey);
       temporaryStorageKeys.push(item.storageKey);
       await this.assetStorage.copyObject(item.storageKey, targetStorageKey);
@@ -736,9 +748,9 @@ export class UploadService {
     return assetKey("uploads", "recipe-images", ".tmp", draftId, `${publicId}.${extension}`);
   }
 
-  private buildRecipeImageStorageKey(recipeId: UUID, publicId: string, contentType: string) {
+  private buildRecipeImageStorageKey(recipeId: UUID, contentVersionId: number, position: RecipeImagePosition, contentType: string) {
     const extension = getContentTypeExtension(contentType);
-    return assetKey("uploads", "recipe-images", recipeId, `${publicId}.${extension}`);
+    return assetKey("uploads", "recipe-images", recipeId, recipeImageFileName(recipeId, contentVersionId, position, extension));
   }
 
   async removeStorageFiles(storageKeys: Iterable<string>) {

@@ -199,11 +199,11 @@ test("draft upload storage copies are prepared before the publication transactio
   const promotedKeys: string[] = [];
   const temporaryKeys: string[] = [];
 
-  const prepared = await service.copyDraftUploads(17, 31, 91, [51], promotedKeys, temporaryKeys);
+  const prepared = await service.copyDraftUploads(17, 31, 91, 901, [51], promotedKeys, temporaryKeys, new Map([[51, { type: "STEP", order: 1 }]]));
 
   assert.deepEqual(copied, [{
     source: upload.storageKey,
-    target: `uploads/recipe-images/91/${prepared.get(51)?.targetPublicId}.png`
+    target: "uploads/recipe-images/91/91_901_step-1.png"
   }]);
   assert.deepEqual(promotedKeys, [prepared.get(51)?.targetStorageKey]);
   assert.deepEqual(temporaryKeys, [upload.storageKey]);

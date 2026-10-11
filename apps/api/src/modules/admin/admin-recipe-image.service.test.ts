@@ -33,14 +33,14 @@ test("downloads a remote image and stores it through the current asset driver", 
     return pngBuffer();
   };
 
-  const published = await createService(writes, remoteReader).publishRemoteImage({}, 10000042, "STEP", "https://1.1.1.1/step.png");
+  const published = await createService(writes, remoteReader).publishRemoteImage({}, 10000042, 9001, "STEP", "https://1.1.1.1/step.png", { type: "STEP", order: 1 });
 
   assert.deepEqual(requestedUrls, ["https://1.1.1.1/step.png"]);
   assert.equal(writes.length, 1);
   assert.equal(writes[0]?.contentType, "image/webp");
   assert.notDeepEqual(writes[0]?.buffer, pngBuffer());
-  assert.match(writes[0]?.key ?? "", /^uploads\/recipe-images\/10000042\/[0-9a-f-]+\.webp$/);
-  assert.match(published.imageUrl, /^https:\/\/cdn\.example\/uploads\/recipe-images\/10000042\/[0-9a-f-]+\.webp$/);
+  assert.equal(writes[0]?.key, "uploads/recipe-images/10000042/10000042_9001_step-1.webp");
+  assert.equal(published.imageUrl, "https://cdn.example/uploads/recipe-images/10000042/10000042_9001_step-1.webp");
 });
 
 test("rejects private remote addresses before making a request", async () => {
@@ -51,7 +51,7 @@ test("rejects private remote addresses before making a request", async () => {
   };
 
   await assert.rejects(
-    () => createService([], remoteReader).publishRemoteImage({}, 10000042, "COVER", "http://127.0.0.1/image.png"),
+    () => createService([], remoteReader).publishRemoteImage({}, 10000042, 9001, "COVER", "http://127.0.0.1/image.png", { type: "COVER" }),
     (error: unknown) => error instanceof BadRequestException && error.message === "远程图片地址不安全"
   );
   assert.equal(readerCalls, 0);
@@ -59,12 +59,12 @@ test("rejects private remote addresses before making a request", async () => {
 
 test("rejects non-image and oversized remote responses", async () => {
   await assert.rejects(
-    () => createService([], async () => Buffer.from("not an image")).publishRemoteImage({}, 10000042, "STEP", "https://1.1.1.1/page"),
+    () => createService([], async () => Buffer.from("not an image")).publishRemoteImage({}, 10000042, 9001, "STEP", "https://1.1.1.1/page", { type: "STEP", order: 1 }),
     /图片损坏或无法压缩/
   );
 
   await assert.rejects(
-    () => createService([], async () => Buffer.alloc(10 * 1024 * 1024 + 1)).publishRemoteImage({}, 10000042, "STEP", "https://1.1.1.1/large.png"),
+    () => createService([], async () => Buffer.alloc(10 * 1024 * 1024 + 1)).publishRemoteImage({}, 10000042, 9001, "STEP", "https://1.1.1.1/large.png", { type: "STEP", order: 1 }),
     /不能超过 10 MB/
   );
 });

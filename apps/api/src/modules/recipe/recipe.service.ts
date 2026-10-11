@@ -9,6 +9,7 @@ import {
 import { Prisma, RecipeStatus, type UploadAsset } from "@prisma/client";
 import { recipeDifficultyText, recipeDurationText } from "../../common/display-text";
 import { PrismaService } from "../../common/prisma.service";
+import type { RecipeImagePosition } from "../../common/recipe-image-name";
 import { publicInspirationRecipeWhere } from "./public-content-user-pool";
 import { indexRecipeVersionIngredients } from "./recipe-version-ingredients";
 import { toOwnerNicknameSnapshot } from "./recipe-owner-snapshot";
@@ -1331,6 +1332,15 @@ export class RecipeService {
     return recipeId;
   }
 
+  private async reserveRecipeContentVersionId(tx: RecipeDb = this.prisma) {
+    const rows = await tx.$queryRaw<Array<{ id: bigint | number }>>`SELECT nextval(pg_get_serial_sequence('recipe_content_versions', 'id')) AS id`;
+    const contentVersionId = Number(rows[0]?.id);
+    if (!Number.isSafeInteger(contentVersionId) || contentVersionId <= 0) {
+      throw new ConflictException("无法创建菜谱内容版本，请稍后重试");
+    }
+    return contentVersionId;
+  }
+
   private async removeRecipeImageStorageWithAudit(
     storageKeys: Iterable<string>,
     userId: UUID,
@@ -1406,13 +1416,16 @@ export class RecipeService {
       const uploadIds = Array.from(this.collectDraftUploadIds(snapshotContent));
       const recipeId = draftSnapshot.recipeId ?? await this.prisma.$transaction(tx => this.reserveRecipeId(tx));
       cleanupRecipeId = recipeId;
+      const contentVersionId = await this.prisma.$transaction(tx => this.reserveRecipeContentVersionId(tx));
       preparedStorageKeys = await this.uploadService.copyDraftUploads(
         userId,
         draftId,
         recipeId,
+        contentVersionId,
         uploadIds,
         promotedStorageKeys,
-        temporaryStorageKeys
+        temporaryStorageKeys,
+        this.buildRecipeImagePositions(snapshotContent)
       );
 
       publication = await this.prisma.$transaction(async tx => {
@@ -1459,7 +1472,7 @@ export class RecipeService {
         const currentRecipe = await this.requireOwnedPublishedRecipe(tx, userId, draft.recipeId);
         await this.assertRecipeRecommendationMutable(tx, currentRecipe.id);
         const version = await tx.recipeContentVersion.create({
-          data: this.buildVersionCreateInput(userId, recipeContent, versionImages, ingredientAliasMap)
+          data: { id: contentVersionId, ...this.buildVersionCreateInput(userId, recipeContent, versionImages, ingredientAliasMap) }
         });
         await indexRecipeVersionIngredients(tx, version.id, version.ingredientsJson);
         await tx.recipeCookAssistant.create({
@@ -1495,7 +1508,7 @@ export class RecipeService {
         recipe = await this.loadOwnedRecipe(tx, userId, currentRecipe.id);
       } else {
         const version = await tx.recipeContentVersion.create({
-          data: this.buildVersionCreateInput(userId, recipeContent, versionImages, ingredientAliasMap)
+          data: { id: contentVersionId, ...this.buildVersionCreateInput(userId, recipeContent, versionImages, ingredientAliasMap) }
         });
         await indexRecipeVersionIngredients(tx, version.id, version.ingredientsJson);
         await tx.recipeCookAssistant.create({
@@ -3446,6 +3459,18 @@ export class RecipeService {
       }
     }
     return ids;
+  }
+
+  private buildRecipeImagePositions(content: RecipeDraftContentInput) {
+    const positions = new Map<UUID, RecipeImagePosition>();
+    if (content.coverUploadId) positions.set(content.coverUploadId, { type: "COVER" });
+    let order = 0;
+    for (const step of content.steps) {
+      if (!step.text.trim() && !step.uploadId && !step.imageUrl) continue;
+      order += 1;
+      if (step.uploadId) positions.set(step.uploadId, { type: "STEP", order });
+    }
+    return positions;
   }
 
   private buildVersionImageState(content: RecipeDraftContentInput): VersionImageState {
