@@ -113,6 +113,7 @@
       "root": "pages_home",
       "pages": [
         { "path": "topic/index", "style": { "navigationBarTitleText": "本周灵感", "navigationStyle": "custom" } },
+        { "path": "topic-list/index", "style": { "navigationBarTitleText": "往期周刊", "navigationStyle": "custom" } },
         { "path": "table-topic/index", "style": { "navigationBarTitleText": "餐桌话题", "navigationStyle": "custom" } },
         { "path": "table-topic-detail/index", "style": { "navigationBarTitleText": "话题详情", "navigationStyle": "custom" } }
       ]

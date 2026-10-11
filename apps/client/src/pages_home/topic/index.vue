@@ -105,7 +105,7 @@
             <view v-if="visibleHistory.length" class="topic-section">
               <view class="topic-section__head">
                 <text class="topic-section__title">往期回顾</text>
-                <text class="topic-section__meta">查看更多</text>
+                <text class="topic-section__meta" @click="openHistoryList">查看更多</text>
               </view>
 
               <scroll-view scroll-x class="history-scroll" show-scrollbar="false">
@@ -175,6 +175,7 @@ const loading = ref(false);
 const errorText = ref("");
 const topic = ref<HomeTopicDetail | null>(null);
 const topicId = ref(0);
+const historyBrowse = ref(false);
 const scrollAnchor = ref("");
 const scrollTop = ref(0);
 const planSheetVisible = ref(false);
@@ -221,7 +222,9 @@ const navTitleStyle = computed(() => ({
 
 onLoad(query => {
   const rawTopicId = Array.isArray(query?.topicId) ? query.topicId[0] : query?.topicId;
+  const rawHistoryBrowse = Array.isArray(query?.historyBrowse) ? query.historyBrowse[0] : query?.historyBrowse;
   topicId.value = Number.isInteger(Number(rawTopicId)) && Number(rawTopicId) > 0 ? Number(rawTopicId) : 0;
+  historyBrowse.value = rawHistoryBrowse === "1";
   void loadTopic();
 });
 
@@ -281,8 +284,12 @@ function openRecipe(recipeId: number, refreshOnShow = true) {
 
 function openHistory(nextId: number) {
   if (nextId === topicId.value) return;
-  topicId.value = nextId;
-  void loadTopic(nextId);
+  const path = `/pages_home/topic/index?topicId=${encodeURIComponent(String(nextId))}&historyBrowse=1`;
+  void (historyBrowse.value ? uniPlatform.navigation.redirectTo(path) : uniPlatform.navigation.navigateTo(path));
+}
+
+function openHistoryList() {
+  void uniPlatform.navigation.navigateTo("/pages_home/topic-list/index");
 }
 
 function handleRecipeAction(item: HomeTopicDetail["items"][number]) {

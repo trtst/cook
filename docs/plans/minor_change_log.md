@@ -1,5 +1,7 @@
 # 项目变更记录
 
+| 2026-10-11 | 周刊详情无 `topicId` 时继续展示最新一期，有 ID 时读取指定期；新增往期周刊列表页，“查看更多”和往期期刊卡片改为按期 ID 导航。列表复用当前周刊接口返回的往期数据，未新增 API。 | `apps/client/src/pages_home/topic/index.vue`、`apps/client/src/pages_home/topic-list/index.vue`、`apps/client/src/pages.json`、`docs/plans/minor_change_log.md` | Client type-check、`pnpm --filter @next-meal/client build:mp-weixin`、`git diff --check` 通过；未运行自动化测试或微信开发者工具/真机验收。 |
+
 | 2026-10-11 | 封面快照修复命令增加显式 `--skip-conflicts`，允许跳过冲突项并执行其余可修复项；命令输出冲突数量和跳过明细。 | `apps/api/scripts/repair-recipe-cover-snapshots.ts`、`docs/api-contract.md`、`docs/plans/minor_change_log.md` | `git diff --check` 通过；未运行自动化测试。 |
 
 | 2026-10-11 | 主“私房菜”Tab 合并显示本人创建的菜谱和收藏的灵感；仅灵感列表中的已收藏菜谱显示高亮收藏图标，主“私房菜”列表不显示。收藏项保留固定版本详情，列表筛选支持个人分类、灵感分类、难度和时长；收藏关系仍由原接口维护推荐统计。 | `apps/client/src/pages/recipe/index.vue`、`apps/client/src/apis/recipe.ts`、`apps/client/src/pages_recipe/detail/index.vue`、`apps/client/src/pages_recipe/list/index.vue`、`apps/api/src/contracts/dtos.ts`、`apps/api/src/modules/recipe/recipe.controller.ts`、`apps/api/src/modules/recipe/recipe.service.ts`、`docs/api-contract.md`、`docs/plans/minor_change_log.md` | API/Worker/Client/Admin/Site type-check 与 `git diff --check` 通过；未运行自动化测试或小程序 DevTools/真机验收。 |

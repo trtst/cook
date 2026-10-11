@@ -1,5 +1,5 @@
 import { cfg } from "@/config";
-import { get, post, type IsoDateTime, type OperationId, type UUID } from "./http";
+import { get, post, type IsoDateTime, type OperationId, type PageResult, type UUID } from "./http";
 
 export type HomeEntryPlacement = "QUICK_1" | "QUICK_2" | "QUICK_3" | "QUICK_4";
 export type HomeEntryTargetType = "PAGE" | "WEB_VIEW";
@@ -196,6 +196,11 @@ export const homeApi = {
   },
   getCurrentTopic() {
     return get<HomeTopicCurrentResponse>(`${cfg.domain}/api/home-topics/current`);
+  },
+  getTopicHistory(page: number, pageSize: number) {
+    return get<PageResult<HomeTopicHistoryItem>>(
+      `${cfg.domain}/api/home-topics/history?page=${encodeURIComponent(String(page))}&pageSize=${encodeURIComponent(String(pageSize))}`
+    );
   },
   getTopic(topicId: number) {
     return get<HomeTopicDetailResponse>(`${cfg.domain}/api/home-topics/${encodeURIComponent(String(topicId))}`);
