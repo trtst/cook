@@ -110,6 +110,7 @@
 | 方法 | 路径 | 用途 | 权限 | 幂等 | 版本字段 | 状态 |
 | --- | --- | --- | --- | --- | --- | --- |
 | `GET` | `/home-topics/current` | 读取当前“本周灵感”专题页 | 公开 | 否 | 无 | 本轮新增 |
+| `GET` | `/home-topics/history` | 分页读取当前最新期之前的已上架往期专题摘要 | 公开 | 否 | 无 | 本轮新增 |
 | `GET` | `/home-topics/{topicId}` | 读取一个指定专题页 | 公开 | 否 | 无 | 本轮新增 |
 | `GET` | `/admin/home-topics` | 读取后台专题列表与当前编辑详情 | `AdminBearerAuth` | 否 | 无 | 本轮新增 |
 | `POST` | `/admin/home-topics` | 新建一个专题 | `AdminBearerAuth` | 是 | 无 | 本轮新增 |

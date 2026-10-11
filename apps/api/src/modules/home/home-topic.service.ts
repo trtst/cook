@@ -15,6 +15,7 @@ import type {
   HomeTopicDetail,
   HomeTopicDetailResponse,
   HomeTopicHistoryItem,
+  PageResult,
   HomeTopicRecipeItem,
   HomeTopicRecipeSearchResponse,
   HomeTopicType,
@@ -64,6 +65,29 @@ const topicTypes: HomeTopicTypeOption[] = topicTypeOptions;
 const activeOwnedRecipeStatus = "ACTIVE";
 const topicImagePath = /^(?:https?:\/\/[^/]+)?\/(?:static\/)?uploads\/home-topics\/\d+(?:\.(?:jpg|png|webp))?$/i;
 const recipeWhere: Prisma.RecipeWhereInput = publicInspirationRecipeWhere("ACTIVE");
+const publicTopicInclude = {
+  items: {
+    where: { recipe: recipeWhere },
+    include: {
+      sourceVersion: true,
+      recipe: { include: { inspirationCategory: true } }
+    },
+    orderBy: [{ sortOrder: "asc" }, { id: "asc" }]
+  }
+} satisfies Prisma.HomeTopicInclude;
+const historyTopicSelect = {
+  id: true,
+  title: true,
+  subTitle: true,
+  recType: true,
+  issueNo: true,
+  description: true,
+  coverImageUrl: true,
+  publishedAt: true,
+  updatedAt: true,
+  _count: { select: { items: { where: { recipe: recipeWhere } } } }
+} satisfies Prisma.HomeTopicSelect;
+type HistoryTopicRow = Prisma.HomeTopicGetPayload<{ select: typeof historyTopicSelect }>;
 
 function cleanText(value: string | null | undefined) {
   const text = value?.trim() ?? "";
@@ -76,6 +100,10 @@ function hashText(value: string) {
 
 function toIso(value: Date) {
   return value.toISOString();
+}
+
+function toPositiveInt(value: number, fallback: number) {
+  return Number.isSafeInteger(value) && value > 0 ? value : fallback;
 }
 
 function isTopicImagePath(value: string | null | undefined) {
@@ -91,24 +119,45 @@ export class HomeTopicService {
   ) {}
 
   async getCurrentTopic(request: RequestLike): Promise<HomeTopicCurrentResponse> {
-    const topics = await this.listPublicTopics(this.prisma);
-    const current = topics[0];
-    const ownedRecipeMap = await this.loadOwnedRecipeMap(request, current ? current.items.map(item => item.sourceVersionId) : []);
+    const current = await this.prisma.homeTopic.findFirst({
+      where: { status: TopicStatus.LISTED },
+      include: publicTopicInclude,
+      orderBy: [{ issueNo: "desc" }]
+    });
+    if (!current) return { topic: null };
+
+    const ownedRecipeMap = await this.loadOwnedRecipeMap(request, current.items.map(item => item.sourceVersionId));
+    const history = await this.queryTopicHistory(request, current.issueNo, 1, 5);
     return {
-      topic: current ? this.toTopicDetail(request, current, topics, ownedRecipeMap) : null
+      topic: this.toTopicDetail(request, current, ownedRecipeMap, history.items)
     };
   }
 
   async getTopic(request: RequestLike, topicId: UUID): Promise<HomeTopicDetailResponse> {
-    const topics = await this.listPublicTopics(this.prisma);
-    const current = topics.find(item => item.id === topicId);
+    const current = await this.prisma.homeTopic.findFirst({
+      where: { id: topicId, status: TopicStatus.LISTED },
+      include: publicTopicInclude
+    });
     if (!current) {
       throw new NotFoundException("本周灵感专题不存在");
     }
     const ownedRecipeMap = await this.loadOwnedRecipeMap(request, current.items.map(item => item.sourceVersionId));
+    const history = await this.queryTopicHistory(request, current.issueNo, 1, 5);
     return {
-      topic: this.toTopicDetail(request, current, topics, ownedRecipeMap)
+      topic: this.toTopicDetail(request, current, ownedRecipeMap, history.items)
     };
+  }
+
+  async listTopicHistory(request: RequestLike, page: number, pageSize: number): Promise<PageResult<HomeTopicHistoryItem>> {
+    const current = await this.prisma.homeTopic.findFirst({
+      where: { status: TopicStatus.LISTED },
+      orderBy: [{ issueNo: "desc" }],
+      select: { issueNo: true }
+    });
+    const nextPage = toPositiveInt(page, 1);
+    const nextPageSize = Math.min(toPositiveInt(pageSize, 20), 100);
+    if (!current) return { items: [], page: nextPage, pageSize: nextPageSize, total: 0, hasNext: false };
+    return this.queryTopicHistory(request, current.issueNo, nextPage, nextPageSize);
   }
 
   async getAdminTopics(): Promise<AdminHomeTopicsResponse> {
@@ -440,25 +489,31 @@ export class HomeTopicService {
     return this.toAdminTopic(topic);
   }
 
-  private async listPublicTopics(db: TopicDb) {
-    return db.homeTopic.findMany({
-      where: { status: "LISTED" },
-      include: {
-        items: {
-          where: { recipe: recipeWhere },
-          include: {
-            sourceVersion: true,
-            recipe: {
-              include: {
-                inspirationCategory: true
-              }
-            }
-          },
-          orderBy: [{ sortOrder: "asc" }, { id: "asc" }]
-        }
-      },
-      orderBy: [{ issueNo: "desc" }, { publishedAt: "desc" }, { id: "desc" }]
-    });
+  private async queryTopicHistory(
+    request: RequestLike,
+    currentIssueNo: number,
+    page: number,
+    pageSize: number
+  ): Promise<PageResult<HomeTopicHistoryItem>> {
+    const where = { status: TopicStatus.LISTED, issueNo: { lt: currentIssueNo } } satisfies Prisma.HomeTopicWhereInput;
+    const skip = (page - 1) * pageSize;
+    const [topics, total] = await Promise.all([
+      this.prisma.homeTopic.findMany({
+        where,
+        select: historyTopicSelect,
+        orderBy: [{ issueNo: "desc" }],
+        skip,
+        take: pageSize
+      }),
+      this.prisma.homeTopic.count({ where })
+    ]);
+    return {
+      items: topics.map(item => this.toHistoryItem(request, item)),
+      page,
+      pageSize,
+      total,
+      hasNext: skip + topics.length < total
+    };
   }
 
   private async listAdminTopics(db: TopicDb) {
@@ -547,9 +602,12 @@ export class HomeTopicService {
     };
   }
 
-  private toTopicDetail(request: RequestLike, topic: TopicRow, allTopics: TopicRow[], ownedRecipeMap: Map<UUID, UUID>): HomeTopicDetail {
-    const historyItems = allTopics.filter(item => item.id !== topic.id && item.issueNo < topic.issueNo);
-
+  private toTopicDetail(
+    request: RequestLike,
+    topic: TopicRow,
+    ownedRecipeMap: Map<UUID, UUID>,
+    historyItems: HomeTopicHistoryItem[]
+  ): HomeTopicDetail {
     return {
       id: topic.id,
       title: topic.title,
@@ -565,7 +623,7 @@ export class HomeTopicService {
       items: topic.items.map(item =>
         this.toTopicRecipe(item, ownedRecipeMap.get(item.sourceVersionId) ?? null)
       ),
-      history: historyItems.map(item => this.toHistoryItem(request, item))
+      history: historyItems
     };
   }
 
@@ -588,7 +646,7 @@ export class HomeTopicService {
     };
   }
 
-  private toHistoryItem(request: RequestLike, topic: TopicRow): HomeTopicHistoryItem {
+  private toHistoryItem(request: RequestLike, topic: HistoryTopicRow): HomeTopicHistoryItem {
     return {
       id: topic.id,
       title: topic.title,
@@ -598,7 +656,7 @@ export class HomeTopicService {
       issueNo: topic.issueNo,
       description: topic.description,
       coverImageUrl: this.resolveImageUrl(request, topic.coverImageUrl, topic.updatedAt),
-      recipeCount: topic.items.length,
+      recipeCount: topic._count.items,
       publishedAt: toIso(topic.publishedAt),
       updatedAt: toIso(topic.updatedAt)
     };

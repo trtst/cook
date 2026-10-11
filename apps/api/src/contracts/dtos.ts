@@ -963,6 +963,23 @@ export class PageQueryDto {
   keyword?: string;
 }
 
+export class HomeTopicHistoryQueryDto {
+  @ApiPropertyOptional({ default: 1 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page = 1;
+
+  @ApiPropertyOptional({ default: 20, maximum: 100 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  pageSize = 20;
+}
+
 export class FridgeTracePageQueryDto {
   @ApiPropertyOptional({ default: 1 })
   @IsOptional()

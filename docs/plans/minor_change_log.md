@@ -1,6 +1,6 @@
 # 项目变更记录
 
-| 2026-10-11 | 周刊详情无 `topicId` 时继续展示最新一期，有 ID 时读取指定期；新增往期周刊列表页，“查看更多”和往期期刊卡片改为按期 ID 导航。列表复用当前周刊接口返回的往期数据，未新增 API。 | `apps/client/src/pages_home/topic/index.vue`、`apps/client/src/pages_home/topic-list/index.vue`、`apps/client/src/pages.json`、`docs/plans/minor_change_log.md` | Client type-check、`pnpm --filter @next-meal/client build:mp-weixin`、`git diff --check` 通过；未运行自动化测试或微信开发者工具/真机验收。 |
+| 2026-10-12 | 周刊详情无 `topicId` 时继续展示最新一期，有 ID 时读取指定期；往期周刊列表新增分页 API，详情预览限制为最近 5 期，列表和详情跳转保留历史浏览导航状态。修正历史浏览 query 静态契约断言和点击重试的事件类型。 | `apps/api/src/contracts/dtos.ts`、`apps/api/src/contracts/openapi.ts`、`apps/api/src/modules/home/home-topic.controller.ts`、`apps/api/src/modules/home/home-topic.service.ts`、`apps/api/src/modules/home/home-topic-history.service.test.ts`、`apps/client/src/apis/home.ts`、`apps/client/src/pages_home/topic-list/index.vue`、`apps/client/src/pages_home/topic-list/index.test.ts`、`apps/client/src/pages_home/topic/index.vue`、`apps/client/src/pages.json`、`docs/api-contract.md`、`docs/api-index.md`、`docs/plans/home-weekly-topic-execution.md`、`docs/plans/minor_change_log.md` | API 分页服务测试、Client 静态路由与接口契约、API/Client type-check、API build、Client mp-weixin build、`git diff --check` 通过；完整 `pnpm gate:ci` 被无关图片迁移目标测试阻断，未做微信开发者工具/真机验收。 |
 
 | 2026-10-11 | 封面快照修复命令增加显式 `--skip-conflicts`，允许跳过冲突项并执行其余可修复项；命令输出冲突数量和跳过明细。 | `apps/api/scripts/repair-recipe-cover-snapshots.ts`、`docs/api-contract.md`、`docs/plans/minor_change_log.md` | `git diff --check` 通过；未运行自动化测试。 |
 

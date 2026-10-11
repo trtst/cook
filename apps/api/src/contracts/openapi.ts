@@ -870,7 +870,7 @@ export class HomeTopicDetailModel {
   @ApiProperty(dateTime) publishedAt!: string;
   @ApiProperty(dateTime) updatedAt!: string;
   @ApiProperty({ type: [HomeTopicRecipeItemModel] }) items!: HomeTopicRecipeItemModel[];
-  @ApiProperty({ type: [HomeTopicHistoryItemModel] }) history!: HomeTopicHistoryItemModel[];
+  @ApiProperty({ type: [HomeTopicHistoryItemModel], maxItems: 5 }) history!: HomeTopicHistoryItemModel[];
 }
 
 export class HomeTopicCurrentResponseModel {

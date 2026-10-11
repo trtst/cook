@@ -1,8 +1,9 @@
-import { Controller, Get, Inject, NotFoundException, Param, ParseIntPipe, Req, Res } from "@nestjs/common";
+import { Controller, Get, Inject, NotFoundException, Param, ParseIntPipe, Query, Req, Res } from "@nestjs/common";
 import { ApiExcludeController, ApiTags } from "@nestjs/swagger";
 import type { Writable } from "node:stream";
 import { ok } from "../../common/api-response";
-import { ApiOkModel, HomeTopicCurrentResponseModel, HomeTopicDetailResponseModel } from "../../contracts/openapi";
+import { ApiOkModel, ApiOkPage, HomeTopicCurrentResponseModel, HomeTopicDetailResponseModel, HomeTopicHistoryItemModel } from "../../contracts/openapi";
+import { HomeTopicHistoryQueryDto } from "../../contracts/dtos";
 import { HomeTopicService } from "./home-topic.service";
 
 type TopicRequest = {
@@ -26,6 +27,12 @@ export class HomeTopicController {
   @ApiOkModel(HomeTopicCurrentResponseModel, "读取当前本周灵感专题")
   getCurrentTopic(@Req() request: TopicRequest) {
     return this.homeTopicService.getCurrentTopic(request).then(result => ok(result));
+  }
+
+  @Get("home-topics/history")
+  @ApiOkPage(HomeTopicHistoryItemModel, "分页读取往期本周灵感专题摘要")
+  listTopicHistory(@Req() request: TopicRequest, @Query() query: HomeTopicHistoryQueryDto) {
+    return this.homeTopicService.listTopicHistory(request, query.page, query.pageSize).then(result => ok(result));
   }
 
   @Get("home-topics/:topicId")

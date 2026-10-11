@@ -30,6 +30,7 @@
 | Home | GET | `/home-entries` | 首页快捷入口四宫格：只返回当前已上架的 `QUICK_1 ... QUICK_4` |
 | Home | GET | `/home/week-overview` | 首页左侧“这周吃饭安排”状态聚合主卡 |
 | HomeTopic | GET | `/home-topics/current` | 当前本周灵感专题页 |
+| HomeTopic | GET | `/home-topics/history` | 分页读取往期本周灵感专题摘要 |
 | HomeTopic | GET | `/home-topics/{topicId}` | 指定本周灵感专题页 |
 | TableTopic | GET | `/table-topics` | 餐桌话题列表，按活动时间倒序返回历次话题摘要 |
 | TableTopic | GET | `/table-topics/{topicId}` | 指定餐桌话题详情，公开返回是否已参与需依赖可选用户 token |
