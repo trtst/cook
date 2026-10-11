@@ -1251,10 +1251,12 @@ model RecipeCategory {
 
   user    User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   recipes Recipe[]
+  collections RecipeCollection[]
   drafts  RecipeDraft[]
 
   @@unique([userId, searchKey])
   @@unique([userId, sortOrder])
+  @@unique([id, userId], map: "recipe_categories_id_user_id_key")
   @@index([userId, sortOrder, id])
   @@map("recipe_categories")
 }
@@ -1940,6 +1942,7 @@ model RecipeCollection {
   userId          Int      @map("user_id")
   sourceRecipeId  Int      @map("source_recipe_id")
   sourceVersionId Int      @map("source_version_id")
+  categoryId      Int      @map("category_id")
   version         Int      @default(1)
   createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
@@ -1947,12 +1950,14 @@ model RecipeCollection {
   user          User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
   sourceRecipe  Recipe                  @relation("RecipeCollectionSource", fields: [sourceRecipeId], references: [id])
   sourceVersion RecipeContentVersion    @relation("RecipeCollectionVersion", fields: [sourceVersionId], references: [id])
+  category      RecipeCategory          @relation(fields: [categoryId, userId], references: [id, userId], onDelete: Restrict, map: "recipe_collections_category_id_user_id_fkey")
   sceneLinks    RecipeCollectionScene[]
 
   @@unique([userId, sourceRecipeId, sourceVersionId])
   @@index([userId, updatedAt, id])
   @@index([sourceRecipeId, userId, id])
   @@index([sourceRecipeId, createdAt, userId], map: "recipe_collections_source_created_user_idx")
+  @@index([userId, categoryId, createdAt, id])
   @@map("recipe_collections")
 }
 

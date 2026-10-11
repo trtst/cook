@@ -1305,54 +1305,6 @@ export class RecipeDetailModel {
   @ApiProperty(dateTime) updatedAt!: string;
 }
 
-export class CollectionSceneModel {
-  @ApiProperty(uuid) id!: string;
-  @ApiProperty({ type: String }) name!: string;
-  @ApiProperty({ type: Number, minimum: 1 }) version!: number;
-  @ApiProperty({ type: Number, minimum: 0 }) recipeCount!: number;
-  @ApiProperty({ ...dateTime, nullable: true }) updatedAt!: string | null;
-}
-
-export class CollectionListModel {
-  @ApiProperty({ type: [CollectionSceneModel] }) items!: CollectionSceneModel[];
-  @ApiProperty({ type: Number, minimum: 0 }) totalCount!: number;
-}
-
-export class CollectedRecipeSummaryModel {
-  @ApiProperty(uuid) id!: string;
-  @ApiProperty(uuid) sourceRecipeId!: string;
-  @ApiProperty({ type: String }) title!: string;
-  @ApiProperty(nullableString) coverImageUrl!: string | null;
-  @ApiProperty({ type: String, nullable: true, enum: ["BEGINNER", "EASY", "SKILLED", "CHALLENGING"] }) difficulty!: string | null;
-  @ApiProperty({ type: String, nullable: true, enum: ["WITHIN_15", "BETWEEN_15_30", "BETWEEN_30_60", "OVER_60"] }) duration!: string | null;
-  @ApiProperty(nullableString) difficultyText!: string | null;
-  @ApiProperty(nullableString) durationText!: string | null;
-  @ApiProperty({ type: InspirationCategoryModel }) category!: InspirationCategoryModel;
-  @ApiProperty(uuid) contentVersionId!: string;
-  @ApiProperty(dateTime) collectedAt!: string;
-  @ApiProperty(dateTime) updatedAt!: string;
-}
-
-export class CollectedRecipeDetailModel {
-  @ApiProperty(uuid) id!: string;
-  @ApiProperty(uuid) sourceRecipeId!: string;
-  @ApiProperty({ type: String }) title!: string;
-  @ApiProperty(nullableString) coverImageUrl!: string | null;
-  @ApiProperty(nullableString) difficultyText!: string | null;
-  @ApiProperty(nullableString) durationText!: string | null;
-  @ApiProperty({ type: InspirationCategoryModel }) category!: InspirationCategoryModel;
-  @ApiProperty(uuid) contentVersionId!: string;
-  @ApiProperty({ type: RecipeContentModel }) content!: RecipeContentModel;
-  @ApiProperty({ type: RecipeNutritionModel }) nutrition!: RecipeNutritionModel;
-  @ApiProperty({ type: Boolean }) assistantAvailable!: boolean;
-  @ApiProperty(dateTime) collectedAt!: string;
-  @ApiProperty(dateTime) updatedAt!: string;
-}
-
-export class SaveCollectionRecipeResultModel {
-  @ApiProperty({ type: CollectedRecipeDetailModel }) recipe!: CollectedRecipeDetailModel;
-}
-
 export class SavedInspirationMutationResultModel {
   @ApiProperty(uuid) saveId!: string;
   @ApiProperty(uuid) sourceRecipeId!: string;
@@ -1373,6 +1325,7 @@ export class SavedInspirationSummaryModel {
   @ApiProperty(nullableString) durationText!: string | null;
   @ApiProperty({ type: InspirationCategoryModel, nullable: true }) category!: InspirationCategoryModel | null;
   @ApiProperty({ type: RecipeOwnerModel }) owner!: RecipeOwnerModel;
+  @ApiProperty({ type: RecipeCategoryModel }) personalCategory!: RecipeCategoryModel;
   @ApiProperty(dateTime) savedAt!: string;
   @ApiProperty({ type: Boolean }) isAvailable!: boolean;
 }

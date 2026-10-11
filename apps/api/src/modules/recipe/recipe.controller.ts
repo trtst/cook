@@ -43,7 +43,6 @@ import {
   ApiOkModel,
   ApiOkNull,
   ApiOkPage,
-  CollectedRecipeDetailModel,
   DeleteRecipeDraftResultModel,
   DeleteRecipeResultModel,
   IngredientCategoryModel,
@@ -173,10 +172,10 @@ export class RecipeController {
   @Get("recipes/saved-inspiration")
   @UseGuards(UserAuthGuard)
   @ApiBearerAuth("UserBearerAuth")
-  @ApiOkPage(SavedInspirationSummaryModel, "分页读取我的私房菜收藏灵感")
+  @ApiOkPage(SavedInspirationSummaryModel, "分页读取已添加到私房菜的灵感")
   listSavedInspirations(@Req() request: RequestWithUser, @Query() query: SavedInspirationListQueryDto) {
     return this.recipeService
-      .listSavedInspirations(request.user.userId, query.page, query.pageSize, query.keyword)
+      .listSavedInspirations(request.user.userId, query.page, query.pageSize, query.keyword, query.categoryId)
       .then(result => ok(result));
   }
 
@@ -192,14 +191,14 @@ export class RecipeController {
   @UseGuards(UserAuthGuard)
   @ApiBearerAuth("UserBearerAuth")
   @ApiIdempotencyKey()
-  @ApiOkModel(SavedInspirationMutationResultModel, "收藏一条灵感固定版本到私房菜")
+  @ApiOkModel(SavedInspirationMutationResultModel, "将灵感固定版本添加到私房菜")
   saveInspirationToPrivate(
     @Req() request: RequestWithUser,
     @ReadIdempotencyKey() operationId: string,
     @Body() body: CreateSavedInspirationDto
   ) {
     return this.recipeService
-      .saveInspirationToPrivate(request.user.userId, operationId, body.sourceRecipeId, body.sourceVersionId)
+      .saveInspirationToPrivate(request.user.userId, operationId, body.sourceRecipeId, body.sourceVersionId, body.categoryId)
       .then(result => ok(result));
   }
 
@@ -207,7 +206,7 @@ export class RecipeController {
   @UseGuards(UserAuthGuard)
   @ApiBearerAuth("UserBearerAuth")
   @ApiIdempotencyKey()
-  @ApiOkModel(SavedInspirationMutationResultModel, "从私房菜移除一条灵感收藏")
+  @ApiOkModel(SavedInspirationMutationResultModel, "从私房菜移除一条灵感")
   removeSavedInspiration(
     @Req() request: RequestWithUser,
     @Param("saveId", ParseIntPipe) saveId: number,
@@ -653,17 +652,6 @@ export class RecipeController {
     @Body() body: DeleteRecipeDto
   ) {
     return this.recipeService.deleteRecipe(request.user.userId, recipeId, operationId, body.expectedVersion).then(result => ok(result));
-  }
-
-  @Get("collections/recipes/:collectionRecipeId")
-  @UseGuards(UserAuthGuard)
-  @ApiBearerAuth("UserBearerAuth")
-  @ApiOkModel(CollectedRecipeDetailModel, "兼容读取本人历史固定版本收藏详情")
-  getCollectionRecipe(
-    @Req() request: RequestWithUser,
-    @Param("collectionRecipeId", ParseIntPipe) collectionRecipeId: number
-  ) {
-    return this.recipeService.getCollectionRecipe(request.user.userId, collectionRecipeId).then(result => ok(result));
   }
 
   @Post("recipes/:recipeId/report")

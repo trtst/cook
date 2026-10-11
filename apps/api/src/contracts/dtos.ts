@@ -1377,7 +1377,7 @@ export class InspirationRecipeListQueryDto extends PageQueryDto {
 }
 
 export class InspirationRecipeDetailQueryDto {
-  @ApiPropertyOptional({ example: resourceIdExample, description: "可选的菜谱固定正文版本，用于分享已收藏的旧版本" })
+  @ApiPropertyOptional({ example: resourceIdExample, description: "可选的菜谱固定正文版本，用于分享已添加到私房菜的旧版本" })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
@@ -1385,7 +1385,14 @@ export class InspirationRecipeDetailQueryDto {
   versionId?: number;
 }
 
-export class SavedInspirationListQueryDto extends PageQueryDto {}
+export class SavedInspirationListQueryDto extends PageQueryDto {
+  @ApiPropertyOptional({ example: resourceIdExample })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  categoryId?: number;
+}
 
 export class CreateSavedInspirationDto extends OperationDto {
   @ApiProperty({ example: resourceIdExample })
@@ -1399,15 +1406,12 @@ export class CreateSavedInspirationDto extends OperationDto {
   @IsInt()
   @Min(1)
   sourceVersionId!: number;
-}
 
-export class CollectionRecipeListQueryDto extends PageQueryDto {
-  @ApiPropertyOptional({ example: resourceIdExample })
-  @IsOptional()
+  @ApiProperty({ example: resourceIdExample, description: "添加到当前用户拥有的个人分类" })
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  sceneId?: number;
+  categoryId!: number;
 }
 
 export class MealPlanQueryDto extends PageQueryDto {
@@ -1445,20 +1449,20 @@ export class DiningEventListQueryDto extends PageQueryDto {
 }
 
 export class RecipeCategoryNameDto extends OperationDto {
-  @ApiProperty()
+  @ApiProperty({ maxLength: 16 })
   @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
   @IsString()
   @MinLength(1)
-  @MaxLength(8)
+  @MaxLength(16)
   name!: string;
 }
 
 export class UpdateRecipeCategoryDto extends VersionedOperationDto {
-  @ApiProperty()
+  @ApiProperty({ maxLength: 16 })
   @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
   @IsString()
   @MinLength(1)
-  @MaxLength(8)
+  @MaxLength(16)
   name!: string;
 }
 

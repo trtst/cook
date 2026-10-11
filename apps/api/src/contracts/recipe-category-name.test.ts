@@ -4,9 +4,9 @@ import { plainToInstance } from "class-transformer";
 import { validateSync } from "class-validator";
 import { RecipeCategoryNameDto, UpdateRecipeCategoryDto } from "./dtos";
 
-test("personal recipe category names accept eight Chinese characters and reject a ninth", () => {
-  const validName = "家常快手周末宴客";
-  const tooLongName = "家常快手周末宴客菜";
+test("personal recipe category names accept sixteen Chinese characters and reject a seventeenth", () => {
+  const validName = "家常快手周末宴客简餐下饭拿手好菜";
+  const tooLongName = "家常快手周末宴客简餐下饭拿手好菜呀";
   const createValid = plainToInstance(RecipeCategoryNameDto, { name: validName });
   const createTooLong = plainToInstance(RecipeCategoryNameDto, { name: tooLongName });
   const updateValid = plainToInstance(UpdateRecipeCategoryDto, { expectedVersion: 1, name: validName });

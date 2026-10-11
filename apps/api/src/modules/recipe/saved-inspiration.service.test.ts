@@ -42,6 +42,9 @@ function createSaveHarness() {
       count: async () => 0
     },
     recipeDraft: { count: async () => 0 },
+    recipeCategory: {
+      findFirst: async ({ where }: any) => ({ id: where.id, userId: where.userId, name: "个人分类", version: 1 })
+    },
     recipeContentVersion: {
       findUnique: async ({ where }: any) => ({
         id: where.id,
@@ -81,6 +84,7 @@ function createSaveHarness() {
           (where.userId === undefined || save.userId === where.userId)
         ).map(save => ({
           ...save,
+          category: { id: 5001, userId: save.userId, name: "个人分类", version: 1 },
           sourceVersion: {
             id: save.sourceVersionId,
             name: "固定版本",
@@ -146,10 +150,10 @@ test("saving multiple fixed versions counts one collector per user and recipe", 
   const harness = createSaveHarness();
   const { service, source, saves } = harness;
 
-  const first = await service.saveInspirationToPrivate(11, "op-1", 1001, 3001);
+  const first = await service.saveInspirationToPrivate(11, "op-1", 1001, 3001, 5001);
   source.currentVersionId = 3002;
-  const secondVersion = await service.saveInspirationToPrivate(11, "op-2", 1001, 3002);
-  const secondUser = await service.saveInspirationToPrivate(12, "op-3", 1001, 3002);
+  const secondVersion = await service.saveInspirationToPrivate(11, "op-2", 1001, 3002, 5001);
+  const secondUser = await service.saveInspirationToPrivate(12, "op-3", 1001, 3002, 5002);
 
   assert.equal(saves.length, 3);
   assert.equal(first.collectCount, 1);
@@ -161,9 +165,9 @@ test("saving multiple fixed versions counts one collector per user and recipe", 
 test("removing one of several saved versions preserves the collector count", async () => {
   const harness = createSaveHarness();
   const { service, source } = harness;
-  await service.saveInspirationToPrivate(11, "op-1", 1001, 3001);
+  await service.saveInspirationToPrivate(11, "op-1", 1001, 3001, 5001);
   source.currentVersionId = 3002;
-  await service.saveInspirationToPrivate(11, "op-2", 1001, 3002);
+  await service.saveInspirationToPrivate(11, "op-2", 1001, 3002, 5001);
 
   const result = await service.removeSavedInspiration(11, 4000, "op-3");
 
@@ -175,8 +179,8 @@ test("removing one of several saved versions preserves the collector count", asy
 test("repeating a save operation returns the first result without duplicating the save", async () => {
   const { service, saves } = createSaveHarness();
 
-  const first = await service.saveInspirationToPrivate(11, "op-repeat", 1001, 3001);
-  const repeated = await service.saveInspirationToPrivate(11, "op-repeat", 1001, 3001);
+  const first = await service.saveInspirationToPrivate(11, "op-repeat", 1001, 3001, 5001);
+  const repeated = await service.saveInspirationToPrivate(11, "op-repeat", 1001, 3001, 5001);
 
   assert.deepEqual(repeated, first);
   assert.equal(saves.length, 1);
@@ -186,9 +190,9 @@ test("repeating a save operation returns the first result without duplicating th
 test("removing the last saved version removes that user from the distinct collector count", async () => {
   const harness = createSaveHarness();
   const { service, source } = harness;
-  await service.saveInspirationToPrivate(11, "op-1", 1001, 3001);
+  await service.saveInspirationToPrivate(11, "op-1", 1001, 3001, 5001);
   source.currentVersionId = 3002;
-  await service.saveInspirationToPrivate(12, "op-2", 1001, 3002);
+  await service.saveInspirationToPrivate(12, "op-2", 1001, 3002, 5002);
   source.status = "BLOCKED";
 
   const result = await service.removeSavedInspiration(11, 4000, "op-3");
@@ -200,7 +204,7 @@ test("removing the last saved version removes that user from the distinct collec
 
 test("keeps an existing saved version readable and removable after its source recipe is taken down", async () => {
   const { service, source } = createSaveHarness();
-  await service.saveInspirationToPrivate(11, "op-save-before-block", 1001, 3001);
+  await service.saveInspirationToPrivate(11, "op-save-before-block", 1001, 3001, 5001);
   source.currentVersionId = 3002;
   source.status = "BLOCKED";
   (service as any).toInspirationRecipeDetail = async (_tx: unknown, recipe: any) => ({
@@ -218,7 +222,7 @@ test("keeps an existing saved version readable and removable after its source re
 
 test("saved inspiration summary uses the saved version cover snapshot", async () => {
   const { service, source } = createSaveHarness();
-  await service.saveInspirationToPrivate(11, "op-save-cover", 1001, 3001);
+  await service.saveInspirationToPrivate(11, "op-save-cover", 1001, 3001, 5001);
   source.coverImageUrl = "https://example.test/current-cover.jpg";
 
   const result = await service.listSavedInspirations(11, 1, 20);
@@ -228,7 +232,7 @@ test("saved inspiration summary uses the saved version cover snapshot", async ()
 
 test("inspiration detail does not report another saved version as the current version save", async () => {
   const { service, source } = createSaveHarness();
-  await service.saveInspirationToPrivate(11, "op-save-old-version", 1001, 3001);
+  await service.saveInspirationToPrivate(11, "op-save-old-version", 1001, 3001, 5001);
   source.currentVersionId = 3002;
   (service as any).toInspirationRecipeDetail = async (_tx: unknown, recipe: any, _userId: number, saveId: number | null) => ({
     id: recipe.id,
@@ -246,7 +250,7 @@ test("inspiration detail does not report another saved version as the current ve
 
 test("public inspiration detail can load the exact publicly referenced saved version", async () => {
   const { service, source } = createSaveHarness();
-  await service.saveInspirationToPrivate(11, "op-save-shared-version", 1001, 3001);
+  await service.saveInspirationToPrivate(11, "op-save-shared-version", 1001, 3001, 5001);
   source.currentVersionId = 3002;
   (service as any).toInspirationRecipeDetail = async (_tx: unknown, recipe: any) => ({
     id: recipe.id,
@@ -265,7 +269,7 @@ test("rejects saving an inspiration version after the source recipe has moved to
   source.currentVersionId = 3002;
 
   await assert.rejects(
-    service.saveInspirationToPrivate(11, "op-stale-version", 1001, 3001),
+    service.saveInspirationToPrivate(11, "op-stale-version", 1001, 3001, 5001),
     /灵感版本已更新/
   );
   assert.equal(saves.length, 0);
@@ -276,7 +280,7 @@ test("rejects saving an inspiration recipe after it has been taken down", async 
   source.status = "BLOCKED";
 
   await assert.rejects(
-    service.saveInspirationToPrivate(11, "op-blocked-recipe", 1001, 3001),
+    service.saveInspirationToPrivate(11, "op-blocked-recipe", 1001, 3001, 5001),
     /灵感菜谱不存在/
   );
   assert.equal(saves.length, 0);

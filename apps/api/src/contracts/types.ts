@@ -1773,22 +1773,6 @@ export interface CollectedRecipeSummary {
   updatedAt: IsoDateTime;
 }
 
-export interface CollectedRecipeDetail {
-  id: UUID;
-  sourceRecipeId: UUID;
-  title: string;
-  coverImageUrl: string | null;
-  difficultyText: string | null;
-  durationText: string | null;
-  category: InspirationCategorySummary;
-  contentVersionId: UUID;
-  content: RecipeContentSnapshot;
-  nutrition: RecipeNutritionSummary;
-  assistantAvailable: boolean;
-  collectedAt: IsoDateTime;
-  updatedAt: IsoDateTime;
-}
-
 export interface SavedInspirationSaveResponse {
   saveId: UUID;
   sourceRecipeId: UUID;
@@ -1864,6 +1848,7 @@ export interface SavedInspirationSummary {
   difficultyText: string | null;
   durationText: string | null;
   category: InspirationCategorySummary | null;
+  personalCategory: RecipeCategorySummary;
   owner: RecipeOwnerSummary;
   savedAt: IsoDateTime;
   isAvailable: boolean;
