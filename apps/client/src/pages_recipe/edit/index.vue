@@ -510,7 +510,7 @@
                 <view class="sheet-section__head">
                   <view class="sheet-section__meta">
                     <text class="sheet-section__title">个人分类</text>
-                    <text class="sheet-section__tag">最多8字</text>
+                    <text class="sheet-section__tag">最多16字</text>
                   </view>
                   <view class="sheet-section__action" @click="toggleCategoryCreator">
                     {{ showCategoryCreator ? "取消" : "添加分类" }}
@@ -520,7 +520,7 @@
                   <input
                     v-model="categoryDraftName"
                     class="sheet-creator__input"
-                    maxlength="8"
+                    maxlength="16"
                     placeholder="输入分类名称"
                     :disabled="categorySubmitting"
                   />
@@ -2093,8 +2093,8 @@ function toggleCategoryCreator() {
 async function createCategoryTag() {
   const name = categoryDraftName.value.trim();
   if (!name || categorySubmitting.value) return;
-  if (name.length > 8) {
-    await uniPlatform.feedback.toast({ title: "分类最多8个字", icon: "none" });
+  if (name.length > 16) {
+    await uniPlatform.feedback.toast({ title: "分类最多16个字", icon: "none" });
     return;
   }
   categorySubmitting.value = true;

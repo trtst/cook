@@ -34,7 +34,7 @@ onShow(() => {
 @font-face {
 	font-family: 'SC-Medium';
 	font-display: block;
-	src: url("https://static.trtst.com/O/fonts/chuihuoji_Medium.ttf") format("truetype");
+	src: url("https://static.trtst.com/O/fonts/chuihuoji_Medium.ttf?v=20261011-cors1") format("truetype");
 	font-weight: 500;
 	font-style: normal;
 	font-display: swap;
@@ -43,7 +43,7 @@ onShow(() => {
 @font-face {
 	font-family: 'CHJ-Kai';
 	font-display: block;
-	src: url("https://static.trtst.com/O/fonts/chuihuoji_han.ttf") format("truetype");
+	src: url("https://static.trtst.com/O/fonts/chuihuoji_han.ttf?v=20261011-cors1") format("truetype");
 	font-weight: 500;
 	font-style: normal;
 	font-display: swap;

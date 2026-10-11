@@ -13,12 +13,14 @@ test("normalizes a missing recipe keyword list before cards read its length", ()
 
 test("recipe details expose assistant availability instead of embedding assistant json", () => {
   assert.match(recipeApiSource, /assistantAvailable: boolean/);
-  for (const name of ["MyRecipeDetail", "CollectedRecipeDetail", "InspirationRecipeDetail"]) {
+  for (const name of ["MyRecipeDetail", "InspirationRecipeDetail"]) {
     const match = recipeApiSource.match(new RegExp(`export interface ${name} \\{[\\s\\S]*?\\n\\}`));
     assert.ok(match, `missing ${name}`);
     assert.match(match[0], /assistantAvailable: boolean/);
     assert.doesNotMatch(match[0], /assistant: RecipeAssistantSnapshot \| null/);
   }
+  assert.match(recipeApiSource, /export interface SavedInspirationDetail extends InspirationRecipeDetail \{/);
+  assert.match(recipeApiSource, /getSavedInspiration\(saveId: UUID\)\s*\{\s*return get<SavedInspirationDetail>/);
 });
 
 test("single recipe cook assistant uses fixed recipe version endpoints", () => {

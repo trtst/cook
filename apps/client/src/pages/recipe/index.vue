@@ -271,13 +271,6 @@
                         <text v-if="item.caloriesText" class="recipe-card__calories">{{ item.caloriesText }}</text>
                       </view>
                       <text v-if="item.subline" class="recipe-card__sub">{{ item.subline }}</text>
-                      <button
-                        v-if="item.kind === 'inspiration'"
-                        class="recipe-card__save"
-                        :class="{ 'recipe-card__save--active': item.isSavedToPrivate }"
-                        :disabled="savingRecipeId === item.id"
-                        @click.stop="togglePrivateSave(item)"
-                      >{{ savingRecipeId === item.id ? '处理中…' : item.isSavedToPrivate ? '已收藏' : '收藏到私房菜' }}</button>
                     </view>
                   </view>
                 </view>
@@ -381,7 +374,7 @@ import { usePageScrollLock } from "@/composables/usePageScrollLock";
 import { buildThemePageStyle } from "@/composables/theme-page-style";
 import { useTheme } from "@/composables/useTheme";
 import { uniPlatform } from "@/platform/uni";
-import { getRecipeViewVersion, markRecipeHomeDirty } from "@/pages/recipe/utils/recipe-view-sync";
+import { getRecipeViewVersion } from "@/pages/recipe/utils/recipe-view-sync";
 import { useLoginModalStore } from "@/stores/login-modal";
 import { useSessionStore } from "@/stores/session";
 import { useRecipeTabIntentStore } from "@/stores/recipe-tab-intent";
@@ -390,7 +383,6 @@ import { formatThemeText } from "@/themes";
 import { difficultyOptions, durationOptions } from "@/utils/recipe-meta";
 import { defaultRecipeTab } from "@/utils/recipe-access";
 import { APP_NAME } from "@/config/app";
-import { createOperationId } from "@/utils/operation-id";
 
 type RecipeTab = "my" | "inspiration";
 type SheetMode = "" | "my";
@@ -411,8 +403,6 @@ interface CardItem {
 	caloriesText: string;
 	subline: string;
 	kind: "my" | "inspiration";
-	saveId: UUID | null;
-	isSavedToPrivate: boolean;
 }
 
 function isSeedCoverUrl(value: string) {
@@ -504,7 +494,6 @@ const filterDuration = ref<RecipeDuration | "">("");
 const filterInspirationCategoryId = ref<UUID | "">("");
 const myRecipes = ref<MyRecipeSummary[]>([]);
 const inspirationRecipes = ref<InspirationRecipeSummary[]>([]);
-const savingRecipeId = ref<UUID | null>(null);
 const loginIntentTab = ref<RecipeTab | null>(null);
 const sheetMode = ref<SheetMode>("");
 const sheetVisible = ref(false);
@@ -1148,9 +1137,7 @@ function toMyCard(item: MyRecipeSummary): CardItem {
 		estimatedCalories: item.estimatedCalories,
 		caloriesText: formatCardCalories(item.estimatedCalories),
 		subline: "",
-		kind: "my",
-		saveId: null,
-		isSavedToPrivate: false
+		kind: "my"
 	};
 }
 
@@ -1164,41 +1151,8 @@ function toInspirationCard(item: InspirationRecipeSummary): CardItem {
 		estimatedCalories: item.estimatedCalories,
 		caloriesText: formatCardCalories(item.estimatedCalories),
 		subline: "",
-		kind: "inspiration",
-		saveId: item.saveId,
-		isSavedToPrivate: item.isSavedToPrivate
+		kind: "inspiration"
 	};
-}
-
-async function togglePrivateSave(item: CardItem) {
-	if (item.kind !== "inspiration" || savingRecipeId.value || !item.contentVersionId) return;
-	if (!sessionStore.isLoggedIn) {
-		loginModalStore.open(null, () => void togglePrivateSave(item));
-		return;
-	}
-	savingRecipeId.value = item.id;
-	try {
-		const result = item.isSavedToPrivate && item.saveId
-			? await recipeApi.removeSavedInspiration(item.saveId, createOperationId())
-			: await recipeApi.saveInspirationToPrivate({
-				operationId: createOperationId(),
-				sourceRecipeId: item.id,
-				sourceVersionId: item.contentVersionId
-			});
-		inspirationRecipes.value = inspirationRecipes.value.map(recipe => recipe.id === item.id
-			? { ...recipe, saveId: result.isSavedToPrivate ? result.saveId : null, isSavedToPrivate: result.isSavedToPrivate, collectCount: result.collectCount }
-			: recipe);
-		markRecipeHomeDirty(["my"]);
-		await uniPlatform.feedback.toast({ title: result.isSavedToPrivate ? "已收藏到私房菜" : "已从私房菜移除", icon: "success" });
-	} catch (error) {
-		if (error instanceof UnauthorizedError) {
-			loginModalStore.open(null, () => void togglePrivateSave(item));
-		} else {
-			await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "收藏操作失败", icon: "none" });
-		}
-	} finally {
-		savingRecipeId.value = null;
-	}
 }
 
 async function automatorApplySession(snapshot: { token: string; uid?: number; expiresAt: string; refreshCheckedAt?: number }) {
@@ -1678,27 +1632,6 @@ defineExpose({
   flex-direction: column;
   gap: 12rpx;
   padding: 22rpx 20rpx 24rpx;
-}
-
-.recipe-card__save {
-	align-self: flex-start;
-	margin: 14rpx 0 0;
-	padding: 8rpx 16rpx;
-	border: 1rpx solid var(--color-border);
-	border-radius: 999rpx;
-	background: transparent;
-	color: var(--color-text-secondary);
-	font-size: 22rpx;
-	line-height: 1.4;
-}
-
-.recipe-card__save::after {
-	border: 0;
-}
-
-.recipe-card__save--active {
-	border-color: var(--color-border-active);
-	color: var(--color-support-action);
 }
 
 .recipe-card__info {

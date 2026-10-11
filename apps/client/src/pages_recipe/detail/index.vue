@@ -233,7 +233,7 @@
 	            </view>
 
               <view v-if="savedInspirationUnavailable" class="saved-inspiration-unavailable">
-                这道灵感当前已不可用，你仍可从私房菜移除收藏。
+                这道灵感当前已不可用，你仍可从私房菜移除。
               </view>
               <text v-if="attributionText" class="detail-curated">{{ attributionText }}</text>
 
@@ -268,7 +268,7 @@
 	                  </button>
 	                  <button v-if="!detailActionsVisible" class="detail-inline-actions__item" @click="openPrivateSheet">
 	                    <view class="cookfont detail-inline-actions__icon icon-collect" />
-	                    <view class="detail-inline-actions__text">{{ inspirationDetail?.isSavedToPrivate ? "已收藏" : "收藏到私房菜" }}</view>
+	                    <view class="detail-inline-actions__text">{{ inspirationDetail?.isSavedToPrivate ? "已添加到私房菜" : "添加到私房菜" }}</view>
 	                  </button>
                   <button v-if="!detailActionsVisible && !savedInspirationUnavailable" class="detail-inline-actions__item" @click="handleExternalPrimaryAction">
                     <view class="cookfont detail-inline-actions__icon icon-add-plan" />
@@ -331,7 +331,7 @@
           <template v-if="isExternalDetail">
             <button class="detail-actions__item" @click="openPrivateSheet">
               <view class="cookfont icon-collect detail-actions__icon" />
-              <view class="detail-actions__text">{{ inspirationDetail?.isSavedToPrivate ? "已收藏" : "收藏到私房菜" }}</view>
+              <view class="detail-actions__text">{{ inspirationDetail?.isSavedToPrivate ? "已添加到私房菜" : "添加到私房菜" }}</view>
             </button>
             <button v-if="!savedInspirationUnavailable" class="detail-actions__item" @click="handleExternalPrimaryAction">
               <view class="cookfont icon-add-plan detail-actions__icon" />
@@ -1348,7 +1348,8 @@ function handlePrivateSuccess(result: import("@/apis/recipe").SavedInspirationMu
   inspirationDetail.value.saveId = result.isSavedToPrivate ? result.saveId : null;
   inspirationDetail.value.isSavedToPrivate = result.isSavedToPrivate;
   inspirationDetail.value.collectCount = result.collectCount;
-  markRecipeHomeDirty(["my"]);
+  markRecipeHomeDirty(["inspiration"]);
+  markRecipeManageDirty(["saved"]);
 }
 
 function closePlanSheet() {

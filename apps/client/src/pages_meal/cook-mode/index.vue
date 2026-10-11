@@ -432,7 +432,7 @@ async function loadRecipeDetail(kind: RecipeKind, targetRecipeId: UUID) {
     return recipeApi.getInspirationRecipe(targetRecipeId);
   }
   if (kind === "collection") {
-    return recipeApi.getCollectionRecipe(targetRecipeId);
+    return recipeApi.getSavedInspiration(targetRecipeId);
   }
   return recipeApi.getRecipeDetail(targetRecipeId);
 }

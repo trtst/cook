@@ -49,9 +49,9 @@ assert.ok(
 );
 assert.ok(!source.includes("family-recipe__badges"), "Expected fridge recipe cards not to render clipped image badges.");
 assert.ok(
-  source.includes('const segments = [];') && !source.includes('item.durationText || "时长待补"'),
-  "Expected fridge recipe metadata not to include a duration fallback."
+  /function fridgeRecipeMeta\(item: HomeFridgeRecipeItem\)\s*\{\s*return `已匹配\$\{item\.matchedIngredientCount\}样`;\s*\}/.test(source),
+  "Expected fridge recipe metadata to show matched ingredient count without a duration fallback."
 );
-assert.ok(source.includes("已配上${item.matchedIngredientCount}样"), "Expected complete matches to remain visible in recipe metadata.");
+assert.ok(source.includes("已匹配${item.matchedIngredientCount}样"), "Expected complete matches to remain visible in recipe metadata.");
 
 console.log("home fridge recipe copy tests passed");

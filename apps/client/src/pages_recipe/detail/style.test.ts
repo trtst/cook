@@ -6,8 +6,8 @@ const source = readFileSync(resolve(__dirname, "index.vue"), "utf8");
 const recipeApiSource = readFileSync(resolve(__dirname, "../../apis/recipe.ts"), "utf8");
 const appSource = readFileSync(resolve(__dirname, "../../App.vue"), "utf8");
 
-assert.ok(appSource.includes("font-family: 'SC-Medium';") && appSource.includes("src: url(\"https://static.trtst.com/O/fonts/chuihuoji_Medium.ttf\") format(\"truetype\");"), "Expected the app to load its global SC-Medium font asset.");
-assert.ok(appSource.includes("font-family: 'CHJ-Kai';") && appSource.includes("src: url(\"https://static.trtst.com/O/fonts/chuihuoji_han.ttf\") format(\"truetype\");"), "Expected the shared medium class to use the CHJ-Kai font asset.");
+assert.ok(appSource.includes("font-family: 'SC-Medium';") && appSource.includes("src: url(\"https://static.trtst.com/O/fonts/chuihuoji_Medium.ttf?v=20261011-cors1\") format(\"truetype\");"), "Expected the app to load its global SC-Medium font asset with a fresh cache key.");
+assert.ok(appSource.includes("font-family: 'CHJ-Kai';") && appSource.includes("src: url(\"https://static.trtst.com/O/fonts/chuihuoji_han.ttf?v=20261011-cors1\") format(\"truetype\");"), "Expected the shared medium class to use the CHJ-Kai font asset with a fresh cache key.");
 assert.ok(appSource.includes(".font-medium {\n\tfont-family: 'CHJ-Kai';"), "Expected the app to keep the shared medium font class.");
 assert.ok(appSource.includes("font-family: 'SC-Medium', var(--font-family-base);"), "Expected the page base font to prefer SC-Medium with the platform stack as fallback.");
 assert.ok(!appSource.includes("font-family: 'SC-Black'"), "Expected the app not to keep the removed black font face.");

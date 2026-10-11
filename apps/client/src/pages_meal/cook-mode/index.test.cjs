@@ -99,7 +99,7 @@ if (!hasAutomatorRuntime && nodeTest) {
 
   nodeTest("recipe cook mode uses kind for the source endpoint, not ownership", () => {
     nodeAssert.match(pageSource, /if \(kind === "inspiration"\) \{[\s\S]*?return recipeApi\.getInspirationRecipe\(targetRecipeId\);/);
-    nodeAssert.match(pageSource, /if \(kind === "collection"\) \{[\s\S]*?return recipeApi\.getCollectionRecipe\(targetRecipeId\);/);
+    nodeAssert.match(pageSource, /if \(kind === "collection"\) \{[\s\S]*?return recipeApi\.getSavedInspiration\(targetRecipeId\);/);
     nodeAssert.match(pageSource, /return recipeApi\.getRecipeDetail\(targetRecipeId\);/);
     nodeAssert.doesNotMatch(pageSource, /return recipeApi\.getMyRecipe\(targetRecipeId\);/);
   });

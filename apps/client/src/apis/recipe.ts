@@ -333,22 +333,6 @@ export interface RecipeOwnerSummary {
 	nickname: string | null;
 }
 
-export interface CollectedRecipeDetail {
-	id: UUID;
-	sourceRecipeId: UUID;
-	title: string;
-	coverImageUrl: string | null;
-	difficultyText: string | null;
-	durationText: string | null;
-	category: InspirationCategorySummary;
-	contentVersionId: UUID;
-	content: RecipeContentSnapshot;
-	nutrition: RecipeNutritionSummary;
-	assistantAvailable: boolean;
-	collectedAt: IsoDateTime;
-	updatedAt: IsoDateTime;
-}
-
 export interface InspirationRecipeSummary {
 	id: UUID;
 	title: string;
@@ -397,6 +381,7 @@ export interface SavedInspirationSummary {
 	difficultyText: string | null;
 	durationText: string | null;
 	category: InspirationCategorySummary | null;
+  personalCategory: RecipeCategorySummary;
 	owner: RecipeOwnerSummary;
 	savedAt: IsoDateTime;
 	isAvailable: boolean;
@@ -418,6 +403,7 @@ export interface SavedInspirationMutationResult {
 
 export interface SavedInspirationQuery extends PageQuery {
 	keyword?: string;
+	categoryId?: UUID;
 }
 
 function toMyRecipeDetail(detail: RecipeDetail): MyRecipeDetail {
@@ -927,9 +913,6 @@ export const recipeApi = {
 			{ idempotencyKey: body.operationId }
 		);
 	},
-	getCollectionRecipe(collectionRecipeId: UUID) {
-		return get<CollectedRecipeDetail>(`${cfg.domain}/api/collections/recipes/${encodeURIComponent(String(collectionRecipeId))}`);
-	},
 	reorderRecipes(operationId: OperationId, categoryId: UUID, items: ReorderItem[]) {
 		return post<MyRecipeSummary[]>(`${cfg.domain}/api/recipes/reorder`, { categoryId, items }, { idempotencyKey: operationId });
 	},
@@ -962,7 +945,7 @@ export const recipeApi = {
 	getSavedInspiration(saveId: UUID) {
 		return get<SavedInspirationDetail>(`${cfg.domain}/api/recipes/saved-inspiration/${encodeURIComponent(String(saveId))}`);
 	},
-	saveInspirationToPrivate(body: { operationId: OperationId; sourceRecipeId: UUID; sourceVersionId: UUID }) {
+	saveInspirationToPrivate(body: { operationId: OperationId; sourceRecipeId: UUID; sourceVersionId: UUID; categoryId: UUID }) {
 		const { operationId, ...payload } = body;
 		return post<SavedInspirationMutationResult>(`${cfg.domain}/api/recipes/saved-inspiration`, payload, { idempotencyKey: operationId });
 	},

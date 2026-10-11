@@ -1135,17 +1135,18 @@ expectSelectorExcludes(addToPlanSheetSource, ".panel-note", ["border: 1rpx solid
 expectSelectorExcludes(addToPlanSheetSource, ".sheet-actions__button--cancel", ["border: 1rpx solid var(--button-secondary-border);"]);
 expectSelectorExcludes(addToPlanSheetSource, ".sheet-actions__button--confirm", ["border: 1rpx solid var(--button-primary-border);"]);
 
-expectIncludes(addToPrivateSheetSource, "<view class=\"save-note\">");
+expectIncludes(addToPrivateSheetSource, "<view v-if=\"isSaved\" class=\"save-note\">");
 expectIncludes(addToPrivateSheetSource, "background: var(--material-card-bg);");
 expectIncludes(addToPrivateSheetSource, "border-radius: var(--radius-sm);");
 expectIncludes(addToPrivateSheetSource, "background: var(--button-secondary-bg);");
 expectIncludes(addToPrivateSheetSource, "background: var(--button-primary-bg);");
-expectIncludes(addToPrivateSheetSource, "opacity: 0.55;");
+expectIncludes(addToPrivateSheetSource, ".sheet-creator__button--disabled { opacity: 0.55; }");
 expectExcludes(addToPrivateSheetSource, LEGACY_SECONDARY_OUTLINE);
 expectExcludes(addToPrivateSheetSource, "var(--material-card-shadow)");
 expectExcludes(addToPrivateSheetSource, "var(--material-input");
-expectExcludes(addToPrivateSheetSource, ".chip {");
-expectExcludes(addToPrivateSheetSource, ".sheet-creator__button");
+assert.match(addToPrivateSheetSource, /\.sheet-creator__button\s*\{[^}]*display: flex;[^}]*align-items: center;[^}]*justify-content: center;[^}]*background: var\(--button-primary-bg\);/s);
+assert.match(addToPrivateSheetSource, /\.sheet-actions__button--confirm\s*\{[^}]*background: var\(--button-primary-bg\);/s);
+assert.match(addToPrivateSheetSource, /\.sheet-actions__button--cancel\s*\{[^}]*background: var\(--button-secondary-bg\);/s);
 
 expectSelectorIncludes(sharePillButtonSource, ".share-pill", [
   "background: var(--color-tag-primary-bg);",
