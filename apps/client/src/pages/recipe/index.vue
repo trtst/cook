@@ -256,6 +256,7 @@
                   >
                     <view class="recipe-card__cover">
                       <ImageLoader class="recipe-card__cover-image" :src="item.coverImageUrl" />
+                      <view v-if="activeTab === 'inspiration' && item.isSavedToPrivate" class="cookfont icon-collect recipe-card__saved-icon" aria-hidden="true" />
                     </view>
 
                     <view class="recipe-card__body">
@@ -357,7 +358,8 @@ import {
 	type MyRecipeSummary,
 	type RecipeCategorySummary,
 	type RecipeDifficulty,
-	type RecipeDuration
+	type RecipeDuration,
+	type SavedInspirationSummary
 } from "@/apis/recipe";
 import { UnauthorizedError, type UUID } from "@/apis/http";
 import Empty from "@/components/Empty/Empty.vue";
@@ -394,7 +396,9 @@ interface CategoryItem {
 }
 
 interface CardItem {
-	id: UUID;
+	id: string;
+	recipeId: UUID;
+	savedId: UUID | null;
 	title: string;
 	coverImageUrl: string | null;
 	contentVersionId: UUID | null;
@@ -403,6 +407,8 @@ interface CardItem {
 	caloriesText: string;
 	subline: string;
 	kind: "my" | "inspiration";
+	isSavedToPrivate: boolean;
+	sortAt: string;
 }
 
 function isSeedCoverUrl(value: string) {
@@ -493,6 +499,7 @@ const filterDifficulty = ref<RecipeDifficulty | "">("");
 const filterDuration = ref<RecipeDuration | "">("");
 const filterInspirationCategoryId = ref<UUID | "">("");
 const myRecipes = ref<MyRecipeSummary[]>([]);
+const savedInspirations = ref<SavedInspirationSummary[]>([]);
 const inspirationRecipes = ref<InspirationRecipeSummary[]>([]);
 const loginIntentTab = ref<RecipeTab | null>(null);
 const sheetMode = ref<SheetMode>("");
@@ -513,6 +520,9 @@ const tabHasNext = ref<Record<RecipeTab, boolean>>({
 	my: false,
 	inspiration: false
 });
+const savedInspirationPage = ref(0);
+const savedInspirationHasNext = ref(false);
+const myRecipesHasNext = ref(false);
 const loadSource = ref<LoadSource>("idle");
 const { setLocked: setPageLocked } = usePageScrollLock(Symbol("recipe-page-sheet"));
 const {
@@ -550,7 +560,10 @@ const currentCategoryId = computed(() => {
 	return inspirationCategoryId.value;
 });
 const tabCards = computed<Record<RecipeTab, CardItem[]>>(() => ({
-	my: myRecipes.value.map(toMyCard),
+	my: [
+		...myRecipes.value.map(toMyCard),
+		...savedInspirations.value.map(toSavedCard)
+	].sort((left, right) => Date.parse(right.sortAt) - Date.parse(left.sortAt)),
 	inspiration: inspirationRecipes.value.map(toInspirationCard)
 }));
 const cards = computed<CardItem[]>(() => tabCards.value[activeTab.value]);
@@ -601,7 +614,7 @@ function emptyStateTitle(tab: RecipeTab) {
 
 function emptyStateDescription(tab: RecipeTab) {
 	return tab === "my"
-		? "把常做的家常菜和灵感改编记下来，慢慢建起自己的菜谱集。"
+		? "收藏喜欢的灵感，或记录自己创建的菜谱，慢慢建起自己的私房菜。"
 		: "换个分类、关键词或筛选条件试试。";
 }
 onShareAppMessage(() => ({
@@ -875,7 +888,11 @@ async function loadActiveTab(options: { force?: boolean; source?: LoadSource } =
 			if (!sessionStore.isLoggedIn) {
 				myCategories.value = [];
 				myRecipes.value = [];
+				savedInspirations.value = [];
 				tabPage.value.my = 0;
+				savedInspirationPage.value = 0;
+				myRecipesHasNext.value = false;
+				savedInspirationHasNext.value = false;
 				tabHasNext.value.my = false;
 				tabLoadedOnce.value.my = true;
 				syncTabLoadState(currentTab, requestKeyword);
@@ -891,18 +908,33 @@ async function loadActiveTab(options: { force?: boolean; source?: LoadSource } =
 				if (!myCategories.value.length || source === "refresh") myCategories.value = options[optionIndex++] as RecipeCategorySummary[];
 				if (!inspirationCategories.value.length || source === "refresh") inspirationCategories.value = options[optionIndex++] as InspirationCategorySummary[];
 			}
-			const result = await recipeApi.listMyRecipes({
-				page: 1,
-				pageSize: pageSizeMap.my,
-				keyword: requestKeyword || undefined,
-				categoryId: myCategoryId.value || undefined,
-				inspirationCategoryId: myInspirationCategoryId.value || undefined,
-				difficulty: myDifficulty.value || undefined,
-				duration: myDuration.value || undefined
-			});
+			const [result, savedResult] = await Promise.all([
+				recipeApi.listMyRecipes({
+					page: 1,
+					pageSize: pageSizeMap.my,
+					keyword: requestKeyword || undefined,
+					categoryId: myCategoryId.value || undefined,
+					inspirationCategoryId: myInspirationCategoryId.value || undefined,
+					difficulty: myDifficulty.value || undefined,
+					duration: myDuration.value || undefined
+				}),
+				recipeApi.listSavedInspirations({
+					page: 1,
+					pageSize: pageSizeMap.my,
+					keyword: requestKeyword || undefined,
+					categoryId: myCategoryId.value || undefined,
+					inspirationCategoryId: myInspirationCategoryId.value || undefined,
+					difficulty: myDifficulty.value || undefined,
+					duration: myDuration.value || undefined
+				})
+			]);
 			myRecipes.value = result.items;
+			savedInspirations.value = savedResult.items;
 			tabPage.value.my = result.page;
-			tabHasNext.value.my = result.hasNext;
+			myRecipesHasNext.value = result.hasNext;
+			savedInspirationPage.value = savedResult.page;
+			savedInspirationHasNext.value = savedResult.hasNext;
+			tabHasNext.value.my = result.hasNext || savedResult.hasNext;
 			loadedMoreOnceMap.value.my = false;
 			tabLoadedOnce.value.my = true;
 			syncTabLoadState(currentTab, requestKeyword);
@@ -976,19 +1008,42 @@ async function loadMoreActiveTab(tab: RecipeTab) {
 	try {
 		if (currentTab === "my") {
 			if (!sessionStore.isLoggedIn) return;
-			const result = await recipeApi.listMyRecipes({
-					page: tabPage.value.my + 1,
-					pageSize: pageSizeMap.my,
-					keyword: requestKeyword || undefined,
-					categoryId: myCategoryId.value || undefined,
-					inspirationCategoryId: myInspirationCategoryId.value || undefined,
-					difficulty: myDifficulty.value || undefined,
-					duration: myDuration.value || undefined
-				});
-			myRecipes.value = [...myRecipes.value, ...result.items];
-			tabPage.value.my = result.page;
-			tabHasNext.value.my = result.hasNext;
-			if (result.items.length > 0) {
+			const [result, savedResult] = await Promise.all([
+				myRecipesHasNext.value
+					? recipeApi.listMyRecipes({
+							page: tabPage.value.my + 1,
+							pageSize: pageSizeMap.my,
+							keyword: requestKeyword || undefined,
+							categoryId: myCategoryId.value || undefined,
+							inspirationCategoryId: myInspirationCategoryId.value || undefined,
+							difficulty: myDifficulty.value || undefined,
+							duration: myDuration.value || undefined
+						})
+					: Promise.resolve(null),
+				savedInspirationHasNext.value
+					? recipeApi.listSavedInspirations({
+							page: savedInspirationPage.value + 1,
+							pageSize: pageSizeMap.my,
+							keyword: requestKeyword || undefined,
+							categoryId: myCategoryId.value || undefined,
+							inspirationCategoryId: myInspirationCategoryId.value || undefined,
+							difficulty: myDifficulty.value || undefined,
+							duration: myDuration.value || undefined
+						})
+					: Promise.resolve(null)
+			]);
+			if (result) {
+				myRecipes.value = [...myRecipes.value, ...result.items];
+				tabPage.value.my = result.page;
+				myRecipesHasNext.value = result.hasNext;
+			}
+			if (savedResult) {
+				savedInspirations.value = [...savedInspirations.value, ...savedResult.items];
+				savedInspirationPage.value = savedResult.page;
+				savedInspirationHasNext.value = savedResult.hasNext;
+			}
+			tabHasNext.value.my = myRecipesHasNext.value || savedInspirationHasNext.value;
+			if ((result?.items.length ?? 0) > 0 || (savedResult?.items.length ?? 0) > 0) {
 				loadedMoreOnceMap.value.my = true;
 			}
 			syncTabLoadState(currentTab, requestKeyword);
@@ -1058,9 +1113,10 @@ async function handleRefresherRefresh(tab: RecipeTab) {
 }
 
 function openCard(item: CardItem) {
-		void uniPlatform.navigation.navigateTo(
-			`/pages_recipe/detail/index?recipeId=${encodeURIComponent(String(item.id))}&kind=${item.kind}`
-		);
+	const savedQuery = item.savedId ? `&savedId=${encodeURIComponent(String(item.savedId))}` : "";
+	void uniPlatform.navigation.navigateTo(
+		`/pages_recipe/detail/index?recipeId=${encodeURIComponent(String(item.recipeId))}&kind=${item.kind}${savedQuery}`
+	);
 }
 
 function openManage() {
@@ -1129,7 +1185,9 @@ function goToInspiration() {
 
 function toMyCard(item: MyRecipeSummary): CardItem {
 	return {
-		id: item.id,
+		id: `recipe-${item.id}`,
+		recipeId: item.id,
+		savedId: null,
 		title: item.title,
 		coverImageUrl: resolveCoverImageUrl(item.coverImageUrl),
 		contentVersionId: null,
@@ -1137,13 +1195,35 @@ function toMyCard(item: MyRecipeSummary): CardItem {
 		estimatedCalories: item.estimatedCalories,
 		caloriesText: formatCardCalories(item.estimatedCalories),
 		subline: "",
-		kind: "my"
+		kind: "my",
+		isSavedToPrivate: false,
+		sortAt: item.updatedAt
+	};
+}
+
+function toSavedCard(item: SavedInspirationSummary): CardItem {
+	return {
+		id: `saved-${item.saveId}`,
+		recipeId: item.sourceRecipeId,
+		savedId: item.saveId,
+		title: item.title,
+		coverImageUrl: resolveCoverImageUrl(item.coverImageUrl),
+		contentVersionId: item.sourceVersionId,
+		keywords: [],
+		estimatedCalories: null,
+		caloriesText: "",
+		subline: "",
+		kind: "inspiration",
+		isSavedToPrivate: true,
+		sortAt: item.savedAt
 	};
 }
 
 function toInspirationCard(item: InspirationRecipeSummary): CardItem {
 	return {
-		id: item.id,
+		id: `inspiration-${item.id}`,
+		recipeId: item.id,
+		savedId: null,
 		title: item.title,
 		coverImageUrl: resolveCoverImageUrl(item.coverImageUrl),
 		contentVersionId: item.contentVersionId,
@@ -1151,7 +1231,9 @@ function toInspirationCard(item: InspirationRecipeSummary): CardItem {
 		estimatedCalories: item.estimatedCalories,
 		caloriesText: formatCardCalories(item.estimatedCalories),
 		subline: "",
-		kind: "inspiration"
+		kind: "inspiration",
+		isSavedToPrivate: item.isSavedToPrivate,
+		sortAt: item.updatedAt
 	};
 }
 
@@ -1609,6 +1691,17 @@ defineExpose({
   width: 100%;
   aspect-ratio: 3 / 4;
   background: var(--page-cover-fresh-bg);
+}
+
+.recipe-card__saved-icon {
+  position: absolute;
+  top: 16rpx;
+  right: 16rpx;
+  z-index: 1;
+  color: var(--color-primary);
+  font-size: 36rpx;
+  line-height: 1;
+  text-shadow: 0 1rpx 6rpx rgba(0, 0, 0, 0.24);
 }
 
 .recipe-card__cover-image {

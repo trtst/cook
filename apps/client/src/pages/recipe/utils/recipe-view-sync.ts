@@ -1,20 +1,18 @@
 export type RecipeHomeTab = "my" | "inspiration" | "saved";
-export type RecipeManageMode = "recipes" | "drafts" | "saved";
+export type RecipeManageMode = "recipes" | "drafts";
 export type RecipeViewScope =
   | "home-my"
   | "home-inspiration"
   | "home-saved"
   | "manage-recipes"
-  | "manage-drafts"
-  | "manage-saved";
+  | "manage-drafts";
 
 const viewVersions: Record<RecipeViewScope, number> = {
   "home-my": 0,
   "home-inspiration": 0,
   "home-saved": 0,
   "manage-recipes": 0,
-  "manage-drafts": 0,
-  "manage-saved": 0
+  "manage-drafts": 0
 };
 
 function bumpView(scope: RecipeViewScope) {
@@ -39,16 +37,12 @@ export function markRecipeHomeDirty(tabs: RecipeHomeTab[] = ["my", "inspiration"
   });
 }
 
-export function markRecipeManageDirty(modes: RecipeManageMode[] = ["recipes", "drafts", "saved"]) {
+export function markRecipeManageDirty(modes: RecipeManageMode[] = ["recipes", "drafts"]) {
   modes.forEach(mode => {
     if (mode === "recipes") {
       bumpView("manage-recipes");
       return;
     }
-    if (mode === "drafts") {
-      bumpView("manage-drafts");
-      return;
-    }
-    bumpView("manage-saved");
+    bumpView("manage-drafts");
   });
 }

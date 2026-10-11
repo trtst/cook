@@ -404,6 +404,9 @@ export interface SavedInspirationMutationResult {
 export interface SavedInspirationQuery extends PageQuery {
 	keyword?: string;
 	categoryId?: UUID;
+	inspirationCategoryId?: UUID;
+	difficulty?: RecipeDifficulty;
+	duration?: RecipeDuration;
 }
 
 function toMyRecipeDetail(detail: RecipeDetail): MyRecipeDetail {

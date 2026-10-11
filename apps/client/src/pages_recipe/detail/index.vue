@@ -266,9 +266,14 @@
 	                    <view class="cookfont detail-inline-actions__icon icon-edit" />
 	                    <view class="detail-inline-actions__text">{{ externalEditActionLabel }}</view>
 	                  </button>
-	                  <button v-if="!detailActionsVisible" class="detail-inline-actions__item" @click="openPrivateSheet">
+	                  <button
+	                    v-if="!detailActionsVisible"
+	                    class="detail-inline-actions__item"
+	                    :class="{ 'detail-inline-actions__item--saved': inspirationDetail?.isSavedToPrivate }"
+	                    @click="openPrivateSheet"
+	                  >
 	                    <view class="cookfont detail-inline-actions__icon icon-collect" />
-	                    <view class="detail-inline-actions__text">{{ inspirationDetail?.isSavedToPrivate ? "已添加到私房菜" : "添加到私房菜" }}</view>
+	                    <view class="detail-inline-actions__text">{{ inspirationDetail?.isSavedToPrivate ? "已收藏" : "添加到私房菜" }}</view>
 	                  </button>
                   <button v-if="!detailActionsVisible && !savedInspirationUnavailable" class="detail-inline-actions__item" @click="handleExternalPrimaryAction">
                     <view class="cookfont detail-inline-actions__icon icon-add-plan" />
@@ -329,9 +334,13 @@
       >
         <view class="detail-actions" :class="{ 'detail-actions--visible': detailActionsVisible }">
           <template v-if="isExternalDetail">
-            <button class="detail-actions__item" @click="openPrivateSheet">
+            <button
+              class="detail-actions__item"
+              :class="{ 'detail-actions__item--saved': inspirationDetail?.isSavedToPrivate }"
+              @click="openPrivateSheet"
+            >
               <view class="cookfont icon-collect detail-actions__icon" />
-              <view class="detail-actions__text">{{ inspirationDetail?.isSavedToPrivate ? "已添加到私房菜" : "添加到私房菜" }}</view>
+              <view class="detail-actions__text">{{ inspirationDetail?.isSavedToPrivate ? "已收藏" : "添加到私房菜" }}</view>
             </button>
             <button v-if="!savedInspirationUnavailable" class="detail-actions__item" @click="handleExternalPrimaryAction">
               <view class="cookfont icon-add-plan detail-actions__icon" />
@@ -559,7 +568,7 @@ import { buildThemePageStyle } from "@/composables/theme-page-style";
 import { useTheme } from "@/composables/useTheme";
 import { usePageScrollLock } from "@/composables/usePageScrollLock";
 import { useSystemInfo } from "@/composables/useSystemInfo";
-import { markRecipeHomeDirty, markRecipeManageDirty } from "@/pages/recipe/utils/recipe-view-sync";
+import { markRecipeHomeDirty } from "@/pages/recipe/utils/recipe-view-sync";
 import { uniPlatform } from "@/platform/uni";
 import { useLoginModalStore } from "@/stores/login-modal";
 import { useRecipePreviewStore, type RecipePreviewAmount, type RecipePreviewDetail } from "../stores/recipe-preview";
@@ -1348,8 +1357,7 @@ function handlePrivateSuccess(result: import("@/apis/recipe").SavedInspirationMu
   inspirationDetail.value.saveId = result.isSavedToPrivate ? result.saveId : null;
   inspirationDetail.value.isSavedToPrivate = result.isSavedToPrivate;
   inspirationDetail.value.collectCount = result.collectCount;
-  markRecipeHomeDirty(["inspiration"]);
-  markRecipeManageDirty(["saved"]);
+  markRecipeHomeDirty(["my", "inspiration"]);
 }
 
 function closePlanSheet() {
@@ -3012,6 +3020,10 @@ defineExpose({
   border: 0;
 }
 
+.detail-actions__item--saved {
+  color: var(--color-primary);
+}
+
 .detail-actions__icon {
   display: flex;
   align-items: center;
@@ -3065,6 +3077,12 @@ defineExpose({
 
 .detail-inline-actions__item--disabled {
   opacity: 0.52;
+}
+
+.detail-inline-actions__item--saved,
+.detail-inline-actions__item--saved .detail-inline-actions__icon,
+.detail-inline-actions__item--saved .detail-inline-actions__text {
+  color: var(--color-primary);
 }
 
 .detail-inline-actions__icon {
