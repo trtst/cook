@@ -93,6 +93,9 @@ const router = useRouter();
 const loading = ref(false);
 const optionLoading = ref(false);
 const saving = ref(false);
+const recommendationRankSaving = ref(false);
+const recommendationRank = ref<AdminRecipeDetail["recommendationRank"]>("NORMAL");
+const recommendationRankReason = ref("");
 const imageSaving = ref(false);
 const assistantSaving = ref(false);
 const candidateSaving = ref(false);
@@ -155,7 +158,7 @@ function wikiNutritionStatusTextOf(status: string) {
 }
 
 function nutritionValue(value: number | null | undefined) {
-  return value === null ? "-" : String(value);
+  return value == null ? "-" : String(value);
 }
 
 const recipeImportTagCodes = new Set([
@@ -523,10 +526,36 @@ async function loadDetail() {
   try {
     if (!recipeId.value) throw new Error("菜谱 ID 缺失");
     detail.value = await recipeApi.getDetail(recipeId.value);
+    recommendationRank.value = detail.value.recommendationRank;
+    recommendationRankReason.value = detail.value.recommendationRankReason ?? "";
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : "加载菜谱详情失败");
   } finally {
     loading.value = false;
+  }
+}
+
+async function saveRecommendationRank() {
+  if (!detail.value || recommendationRankSaving.value) return;
+  const reason = recommendationRankReason.value.trim();
+  if (!reason) {
+    ElMessage.warning("请填写调整原因；恢复正常也需要记录原因");
+    return;
+  }
+  recommendationRankSaving.value = true;
+  try {
+    await recipeApi.setRecommendationRank(detail.value.id, {
+      operationId: createOperationId(),
+      expectedVersion: detail.value.version,
+      rank: recommendationRank.value,
+      reason
+    });
+    await loadDetail();
+    ElMessage.success("已更新推荐档位");
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : "更新推荐档位失败");
+  } finally {
+    recommendationRankSaving.value = false;
   }
 }
 
@@ -1249,6 +1278,27 @@ onBeforeUnmount(() => {
             </el-table>
           </div>
 
+        </section>
+
+        <section v-if="detail.inspirationCategory" class="table-panel detail-section">
+          <div class="panel-heading">
+            <h2>灵感推荐排序</h2>
+          </div>
+          <div class="form-grid form-grid--two">
+            <el-form-item label="推荐档位">
+              <el-select v-model="recommendationRank" :disabled="recommendationRankSaving">
+                <el-option label="正常" value="NORMAL" />
+                <el-option label="后移" value="DOWNRANK" />
+                <el-option label="明显后移" value="STRONG_DOWNRANK" />
+              </el-select>
+            </el-form-item>
+            <el-form-item :label="recommendationRank === 'NORMAL' ? '恢复原因' : '调整原因'">
+              <el-input v-model="recommendationRankReason" maxlength="255" show-word-limit placeholder="填写原因，记录在后台审计中" />
+            </el-form-item>
+          </div>
+          <div class="detail-toolbar__action-row">
+            <el-button type="primary" :loading="recommendationRankSaving" @click="saveRecommendationRank">保存推荐档位</el-button>
+          </div>
         </section>
 
         <section class="table-panel detail-section detail-section--ingredients-steps">

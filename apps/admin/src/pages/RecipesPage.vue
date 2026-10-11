@@ -42,6 +42,11 @@ const currentScopeName = computed(() => {
   if (!query.categoryId) return "全部系统菜谱";
   return categories.value.find(item => item.id === query.categoryId)?.name || "当前分类";
 });
+function recommendationRankLabel(rank: AdminRecipeSummary["recommendationRank"]) {
+  if (rank === "DOWNRANK") return "后移";
+  if (rank === "STRONG_DOWNRANK") return "明显后移";
+  return "正常推荐";
+}
 
 useAdminHeaderRefresh(() => {
   void loadPage();
@@ -474,6 +479,7 @@ onMounted(() => {
             <div class="recipe-card__meta">
               <span>{{ formatDateTime(row.updatedAt) }}</span>
               <span v-if="row.ownerUid !== null">源自 UID {{ row.ownerUid }}</span>
+              <el-tag v-if="row.recommendationRank !== 'NORMAL'" type="warning" size="small">{{ recommendationRankLabel(row.recommendationRank) }}</el-tag>
             </div>
           </div>
           <div class="recipe-card__actions">

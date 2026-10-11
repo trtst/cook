@@ -12,21 +12,14 @@ export interface AdminRecipeDomainCategory {
   version?: number;
 }
 
-export interface AdminRecipeDomainScene {
-  id: UUID;
-  name: string;
-  version?: number;
-}
-
 export interface AdminRecipeDomainOverview {
   user: AdminRecipeDomainUser;
   publishedCount: number;
   draftCount: number;
-  collectionCount: number;
-  sceneCount: number;
+  savedInspirationCount: number;
   latestPublishedAt: IsoDateTime | null;
   latestDraftAt: IsoDateTime | null;
-  latestCollectionAt: IsoDateTime | null;
+  latestSavedInspirationAt: IsoDateTime | null;
 }
 
 export interface AdminUserPublishedRecipe {
@@ -46,33 +39,6 @@ export interface AdminUserDraftRecipe {
   title: string | null;
   category: AdminRecipeDomainCategory | null;
   version: number;
-  updatedAt: IsoDateTime;
-}
-
-export interface AdminUserCollectionSummary {
-  id: UUID;
-  name: string;
-  recipeCount: number;
-  version: number;
-  updatedAt: IsoDateTime | null;
-}
-
-export interface AdminUserCollectionListResponse {
-  items: AdminUserCollectionSummary[];
-  totalCount: number;
-}
-
-export interface AdminUserCollectionRecipe {
-  id: UUID;
-  sourceRecipeId: UUID;
-  title: string;
-  coverImageUrl: string | null;
-  difficulty?: string | null;
-  duration?: string | null;
-  category: AdminRecipeDomainCategory;
-  scenes: AdminRecipeDomainScene[];
-  contentVersionId: UUID;
-  collectedAt: IsoDateTime;
   updatedAt: IsoDateTime;
 }
 
@@ -98,15 +64,4 @@ export const userRecipeApi = {
       query: { ...query }
     });
   },
-  listCollections(userId: UUID) {
-    return requestData<AdminUserCollectionListResponse>(`${getUserPath(userId)}/collections`);
-  },
-  listCollectionRecipes(userId: UUID, collectionId: UUID, query: PageQuery) {
-    return requestData<PageResult<AdminUserCollectionRecipe>>(
-      `${getUserPath(userId)}/collections/${encodeURIComponent(String(collectionId))}/recipes`,
-      {
-        query: { ...query }
-      }
-    );
-  }
 };

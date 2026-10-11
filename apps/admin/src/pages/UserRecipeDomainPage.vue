@@ -6,7 +6,6 @@ import { ElMessage } from "element-plus";
 import {
   userRecipeApi,
   type AdminRecipeDomainOverview,
-  type AdminUserCollectionSummary,
   type AdminUserDraftRecipe,
   type AdminUserPublishedRecipe
 } from "@/apis/user-recipe";
@@ -14,7 +13,7 @@ import type { UUID } from "@/apis/http";
 import { useAdminHeaderRefresh, useAdminHeaderTitle } from "@/composables/useAdminHeader";
 import { formatDateDay, formatDateTime } from "@/utils/date";
 
-type RecipeDomainTab = "published" | "drafts" | "collections";
+type RecipeDomainTab = "published" | "drafts";
 
 const route = useRoute();
 const router = useRouter();
@@ -39,14 +38,9 @@ const draftsTotal = ref(0);
 const draftsPage = ref(1);
 const draftsPageSize = ref(20);
 
-const collections = ref<AdminUserCollectionSummary[]>([]);
-const collectionsLoading = ref(false);
-const collectionsError = ref("");
-
 let overviewRequest = 0;
 let publishedRequest = 0;
 let draftsRequest = 0;
-let collectionsRequest = 0;
 
 function parseRouteId(value: unknown) {
   const normalized = typeof value === "string" ? Number(value) : Number(Array.isArray(value) ? value[0] : value);
@@ -65,10 +59,9 @@ useAdminHeaderRefresh(() => {
 
 const publishedLabel = computed(() => buildTabLabel("已发布", overview.value?.publishedCount));
 const draftsLabel = computed(() => buildTabLabel("草稿", overview.value?.draftCount));
-const collectionsLabel = computed(() => buildTabLabel("合集", overview.value?.collectionCount));
 
 function readTab(value: unknown): RecipeDomainTab {
-  if (value === "drafts" || value === "collections") return value;
+  if (value === "drafts") return value;
   return "published";
 }
 
@@ -102,8 +95,6 @@ function resetLists() {
   draftsPage.value = 1;
   draftsPageSize.value = 20;
 
-  collections.value = [];
-  collectionsError.value = "";
 }
 
 async function loadOverview() {
@@ -178,30 +169,8 @@ async function loadDrafts() {
   }
 }
 
-async function loadCollections() {
-  const current = ++collectionsRequest;
-  collectionsLoading.value = true;
-  collectionsError.value = "";
-
-  try {
-    const result = await userRecipeApi.listCollections(getUserId());
-    if (current !== collectionsRequest) return;
-    collections.value = result.items;
-  } catch (error) {
-    if (current !== collectionsRequest) return;
-    collections.value = [];
-    collectionsError.value = error instanceof Error ? error.message : "合集列表加载失败";
-    ElMessage.error(collectionsError.value);
-  } finally {
-    if (current === collectionsRequest) {
-      collectionsLoading.value = false;
-    }
-  }
-}
-
 function loadCurrentTab() {
   if (activeTab.value === "drafts") return loadDrafts();
-  if (activeTab.value === "collections") return loadCollections();
   return loadPublished();
 }
 
@@ -234,16 +203,6 @@ function refreshCurrent() {
 
 function backToUsers() {
   void router.push("/users");
-}
-
-function openCollection(row: AdminUserCollectionSummary) {
-  void router.push({
-    name: "user-collection-detail",
-    params: {
-      userId: getUserId(),
-      collectionId: row.id
-    }
-  });
 }
 
 watch(
@@ -296,7 +255,6 @@ onMounted(() => {
           <el-descriptions-item label="用户 ID">{{ overview.user.id }}</el-descriptions-item>
           <el-descriptions-item label="UID">{{ overview.user.uid }}</el-descriptions-item>
           <el-descriptions-item label="昵称">{{ overview.user.nickname || "-" }}</el-descriptions-item>
-          <el-descriptions-item label="合集场景">{{ formatMetric(overview.sceneCount) }}</el-descriptions-item>
         </el-descriptions>
       </template>
     </div>
@@ -313,9 +271,9 @@ onMounted(() => {
         <span class="metric-label">最近更新时间 {{ formatDateDay(overview.latestDraftAt) }}</span>
       </div>
       <div class="metric-panel">
-        <span class="metric-label">收藏条数</span>
-        <strong>{{ formatMetric(overview.collectionCount) }}</strong>
-        <span class="metric-label">最近更新时间 {{ formatDateDay(overview.latestCollectionAt) }}</span>
+        <span class="metric-label">灵感收藏条数</span>
+        <strong>{{ formatMetric(overview.savedInspirationCount) }}</strong>
+        <span class="metric-label">最近更新时间 {{ formatDateDay(overview.latestSavedInspirationAt) }}</span>
       </div>
     </div>
 
@@ -404,30 +362,6 @@ onMounted(() => {
           </div>
         </el-tab-pane>
 
-        <el-tab-pane :label="collectionsLabel" name="collections" lazy>
-          <el-alert
-            v-if="collectionsError"
-            type="error"
-            :closable="false"
-            :title="collectionsError"
-            style="margin-bottom: 16px"
-          />
-          <el-table v-loading="collectionsLoading" :data="collections" row-key="id" empty-text="暂无合集">
-            <el-table-column prop="name" label="合集名称" min-width="180" />
-            <el-table-column prop="recipeCount" label="内容数量" width="120" />
-            <el-table-column prop="version" label="版本" width="100" />
-            <el-table-column label="更新时间" min-width="180">
-              <template #default="{ row }">
-                {{ formatDateTime(row.updatedAt) }}
-              </template>
-            </el-table-column>
-            <el-table-column label="操作" width="140" fixed="right">
-              <template #default="{ row }">
-                <el-button link type="primary" @click="openCollection(row)">查看内容</el-button>
-              </template>
-            </el-table-column>
-          </el-table>
-        </el-tab-pane>
       </el-tabs>
     </div>
   </section>

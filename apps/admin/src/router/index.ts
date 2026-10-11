@@ -106,12 +106,6 @@ const router = createRouter({
           meta: { title: "用户菜谱域" }
         },
         {
-          path: "user-collections/:userId/:collectionId",
-          name: "user-collection-detail",
-          component: () => import("@/pages/UserCollectionDetailPage.vue"),
-          meta: { title: "合集内容" }
-        },
-        {
           path: "medals",
           name: "medals",
           component: () => import("@/pages/MedalTemplatesPage.vue"),

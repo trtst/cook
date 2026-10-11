@@ -12,6 +12,8 @@ export interface AdminRecipeSummary {
   updatedAt: IsoDateTime;
   ownerUid: number | null;
   hasWikiCandidate: boolean;
+  recommendationRank: "NORMAL" | "DOWNRANK" | "STRONG_DOWNRANK";
+  recommendationRankReason: string | null;
 }
 
 export interface ConfirmAdminRecipeWikiCandidatesResult {
@@ -326,6 +328,8 @@ export interface AdminRecipeDetail {
   reportCount: number;
   blockedReason: string | null;
   collectCount: number;
+  recommendationRank: "NORMAL" | "DOWNRANK" | "STRONG_DOWNRANK";
+  recommendationRankReason: string | null;
   canEdit: boolean;
   createdAt: IsoDateTime;
   updatedAt: IsoDateTime;
@@ -828,6 +832,19 @@ export const recipeApi = {
   unblock(recipeId: UUID, operationId: OperationId) {
     return requestData<AdminRecipeSummary>(`/admin/recipes/${encodeURIComponent(String(recipeId))}/unblock`, {
       method: "POST",
+      idempotencyKey: operationId
+    });
+  },
+  setRecommendationRank(recipeId: UUID, body: {
+    operationId: OperationId;
+    expectedVersion: number;
+    rank: "NORMAL" | "DOWNRANK" | "STRONG_DOWNRANK";
+    reason: string;
+  }) {
+    const { operationId, ...payload } = body;
+    return requestData<AdminRecipeSummary>(`/admin/recipes/${encodeURIComponent(String(recipeId))}/recommendation-rank`, {
+      method: "PUT",
+      body: payload,
       idempotencyKey: operationId
     });
   },

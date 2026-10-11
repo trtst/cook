@@ -1,6 +1,6 @@
 # 菜谱转 JSON 规范
 
-单菜使用 `recipe.import.v1`；批量使用 `recipe.import.batch.v1`，每个 `recipes[]` 元素都是完整的 `{ recipe, wiki }`。
+单菜和批量统一使用 `recipe.import.batch.v1`，单菜时 `recipes` 数组长度为 1，每个 `recipes[]` 元素都是完整的 `{ recipe, wiki }`。
 
 Wiki 修订文件由菜谱管理页生成，并额外在 `recipe` 中包含数值型 `recipeId` 和 `contentVersionId`。通过 Wiki 导入入口回导时，服务端只读取这两个 ID 和 `wiki`，忽略菜谱正文；不得把带 ID 的修订文件提交到菜谱新建导入入口。
 
@@ -10,78 +10,117 @@ Wiki 修订文件由菜谱管理页生成，并额外在 `recipe` 中包含数�
 
 ```json
 {
-  "schemaVersion": "recipe.import.v1",
-  "recipe": {
-    "inspirationCategoryId": 6001,
-    "coverImageUrl": null,
-    "content": {
-      "name": "海带排骨汤",
-      "story": "海带和排骨一起炖煮，汤味鲜美，适合家庭晚餐。",
-      "baseServings": 4,
-      "difficulty": "EASY",
-      "duration": "OVER_60",
-      "tips": "排骨先焯水。",
-      "keywords": ["清淡", "家常", "炖煮", "海带", "海带排骨汤"],
-      "ingredients": [
-        { "name": "排骨", "quantity": "500", "unit": "克", "fuzzyText": null, "categoryCode": "MEAT_POULTRY_EGG" },
-        { "name": "海带", "quantity": "200", "unit": "克", "fuzzyText": null, "categoryCode": "PRODUCE" },
-        { "name": "食盐", "quantity": null, "unit": null, "fuzzyText": "适量", "categoryCode": "SEASONING" }
-      ],
-      "tools": [
-        { "name": "汤锅" }
-      ],
-      "steps": [
-        {
-          "text": "排骨冷水下锅焯水，撇去浮沫后捞出洗净。",
-          "imageUrl": null,
-          "imagePrompt": "家常中式厨房中，排骨在冷水锅中焯水，水面浮起灰色浮沫，漏勺准备捞出，真实烹饪过程特写，不出现文字"
-        },
-        {
-          "text": "海带浸泡、清洗并切段。",
-          "imageUrl": null,
-          "imagePrompt": "厨房台面上，泡发后的海带被切成段，旁边放着装海带的碗，真实备菜场景，不出现文字"
-        },
-        {
-          "text": "汤锅中加水，放入排骨和海带，大火煮开后转小火炖至排骨熟透，最后调味盛出。",
-          "imageUrl": null,
-          "imagePrompt": "汤锅中排骨和海带一起炖煮，汤汁微沸，热气升起，家常炖汤场景，不出现文字"
+  "schemaVersion": "recipe.import.batch.v1",
+  "recipes": [
+    {
+      "recipe": {
+        "recipeId": 10002437,
+        "contentVersionId": 10001608,
+        "inspirationCategoryId": 6001,
+        "coverImageUrl": null,
+        "content": {
+          "name": "海带排骨汤",
+          "story": "海带和排骨一起炖煮，汤味鲜美，适合家庭晚餐。",
+          "baseServings": 4,
+          "difficulty": "EASY",
+          "duration": "OVER_60",
+          "tips": "排骨先焯水。",
+          "keywords": ["清淡", "家常", "炖煮", "海带", "海带排骨汤"],
+          "ingredients": [
+            { "name": "排骨", "quantity": "500", "unit": "克", "fuzzyText": null, "categoryCode": "MEAT_POULTRY_EGG" },
+            { "name": "海带", "quantity": "200", "unit": "克", "fuzzyText": null, "categoryCode": "PRODUCE" },
+            { "name": "食盐", "quantity": null, "unit": null, "fuzzyText": "适量", "categoryCode": "SEASONING" }
+          ],
+          "tools": [
+            { "name": "汤锅" }
+          ],
+          "steps": [
+            {
+              "text": "排骨冷水下锅焯水，撇去浮沫后捞出洗净。",
+              "imageUrl": null,
+              "imagePrompt": "家常中式厨房中，排骨在冷水锅中焯水，水面浮起灰色浮沫，漏勺准备捞出，真实烹饪过程特写，不出现文字"
+            },
+            {
+              "text": "海带浸泡、清洗并切段。",
+              "imageUrl": null,
+              "imagePrompt": "厨房台面上，泡发后的海带被切成段，旁边放着装海带的碗，真实备菜场景，不出现文字"
+            },
+            {
+              "text": "汤锅中加水，放入排骨和海带，大火煮开后转小火炖至排骨熟透，最后调味盛出。",
+              "imageUrl": null,
+              "imagePrompt": "汤锅中排骨和海带一起炖煮，汤汁微沸，热气升起，家常炖汤场景，不出现文字"
+            }
+          ]
         }
-      ]
-    }
-  },
-  "wiki": {
-    "tags": [
-      { "tagCode": "CUISINE", "tagValue": "OTHER" },
-      { "tagCode": "DISH_STYLE", "tagValue": "SOUP" },
-      { "tagCode": "MEAL_TYPE", "tagValue": "LUNCH" },
-      { "tagCode": "MEAL_TYPE", "tagValue": "DINNER" },
-      { "tagCode": "DISH_ROLE", "tagValue": "SOUP" },
-      { "tagCode": "MAIN_PROTEIN_TYPE", "tagValue": "PORK" },
-      { "tagCode": "FLAVOR_PROFILE", "tagValue": "LIGHT" },
-      { "tagCode": "SPICE_LEVEL", "tagValue": "NONE" }
-    ],
-    "assistant": {
-      "steps": [
-        {
-          "order": 1,
-          "phase": "SERVE",
-          "action": "PLATE",
-          "title": "调味装盘",
-          "detail": "调味后盛入汤碗。",
-          "imageUrl": null,
-          "imagePrompt": "调味完成的海带排骨汤盛入白色汤碗，排骨和海带清晰可见，热气轻起，家常晚餐摆盘，真实食物摄影，不出现文字",
-          "durationMinutes": 5,
-          "durationText": "约 5 分钟"
+      },
+      "wiki": {
+        "tags": [
+          { "tagCode": "CUISINE", "tagValue": "OTHER" },
+          { "tagCode": "DISH_STYLE", "tagValue": "SOUP" },
+          { "tagCode": "MEAL_TYPE", "tagValue": "LUNCH" },
+          { "tagCode": "MEAL_TYPE", "tagValue": "DINNER" },
+          { "tagCode": "DISH_ROLE", "tagValue": "SOUP" },
+          { "tagCode": "MAIN_PROTEIN_TYPE", "tagValue": "PORK" },
+          { "tagCode": "FLAVOR_PROFILE", "tagValue": "LIGHT" },
+          { "tagCode": "SPICE_LEVEL", "tagValue": "NONE" }
+        ],
+        "assistant": {
+          "steps": [
+            {
+              "order": 1,
+              "phase": "PREP",
+              "action": "BLANCH",
+              "title": "排骨焯水",
+              "detail": "排骨冷水下锅，水开后撇去浮沫，捞出用温水洗净。冷水下锅能让血水慢慢逼出来，汤更清。",
+              "imageUrl": null,
+              "imagePrompt": "家常中式厨房中，排骨在冷水锅中焯水，水面浮起灰色浮沫，漏勺准备捞出，真实操作指导画面，不出现文字",
+              "durationMinutes": 5,
+              "durationText": "约 5 分钟"
+            },
+            {
+              "order": 2,
+              "phase": "PREP",
+              "action": "CUT",
+              "title": "处理海带",
+              "detail": "海带提前泡发，洗净后切成段。海带表面黏液要冲洗干净，不然汤会发腥。",
+              "imageUrl": null,
+              "imagePrompt": "厨房台面上，泡发后的海带被切成段，旁边放着装海带的碗，真实切配教学场景，不出现文字",
+              "durationMinutes": 10,
+              "durationText": "约 10 分钟"
+            },
+            {
+              "order": 3,
+              "phase": "COOK",
+              "action": "SIMMER",
+              "title": "炖煮",
+              "detail": "汤锅加水，放入排骨和海带，大火煮开后转小火慢炖。炖到排骨软烂、海带入味即可。最后加盐调味，盛出。",
+              "imageUrl": null,
+              "imagePrompt": "汤锅中排骨和海带一起炖煮，汤汁微沸，热气升起，家常炖汤场景，真实操作指导画面，不出现文字",
+              "durationMinutes": 60,
+              "durationText": "约 60 分钟"
+            },
+            {
+              "order": 4,
+              "phase": "SERVE",
+              "action": "PLATE",
+              "title": "调味装盘",
+              "detail": "调味后盛入汤碗。",
+              "imageUrl": null,
+              "imagePrompt": "调味完成的海带排骨汤盛入白色汤碗，排骨和海带清晰可见，热气轻起，家常晚餐摆盘，真实食物摄影，不出现文字",
+              "durationMinutes": 5,
+              "durationText": "约 5 分钟"
+            }
+          ]
         }
-      ]
+      }
     }
-  }
+  ]
 }
 ```
 
 示例仅展示字段结构。实际转换时，原始步骤与助理步骤必须分别拆分；助理步骤应体现 `PREP → COOK → SERVE` 的阶段变化。
 
-### 1.1 批量导入最小结构（结构示意）
+### 1.1 批量导入最小结构
 
 ```json
 {
@@ -106,9 +145,9 @@ Wiki 修订文件由菜谱管理页生成，并额外在 `recipe` 中包含数�
 
 ### 1.2 灵感分类 ID
 
-`recipe.inspirationCategoryId` 填已确认 ID；无法确认填 `null`，不猜测。分类不替代 `wiki.tags`。
+`recipe.inspirationCategoryId` **必须填写**，不能为 `null`。根据菜谱主体内容推测选择 `6001–6009` 中一个 ID；推测失败时进入草稿并标 `NEEDS_FIX`，不允许提交有效 JSON。
 
-这里的 `null` 仅表示灵感分类待人工选择，不适用于 `ingredients[].categoryCode`。
+分类不替代 `wiki.tags`。
 
 | ID | 分类名称 |
 | --- | --- |
@@ -122,17 +161,32 @@ Wiki 修订文件由菜谱管理页生成，并额外在 `recipe` 中包含数�
 | `6008` | 清淡养生 |
 | `6009` | 宴客硬菜 |
 
+**推测优先级**（从上到下取第一个匹配）：
+1. 明确减脂/低卡/高蛋白/轻食/健身餐 → `6004`
+2. 明确快手/小炒/15分钟内 → `6003`
+3. 明确下饭/重口/下饭菜 → `6002`
+4. 明确清淡/养生/少油少盐 → `6008`
+5. 明确一人份/单人食 → `6006`
+6. 明确宴客/硬菜/大菜 → `6009`
+7. 明确地方风味/菜系特色 → `6007`
+8. 明确周末/慢炖/耗时较长 → `6005`
+9. 以上都不明显 → `6001`
+
+推测依据来自：菜名、特点标签、食材、做法、份量、烹饪时长。不允许瞎猜，必须有依据。
+
 ## 2. 字段规则
 
 ### 2.1 菜谱字段
 
 | 字段 | 要求 |
 | --- | --- |
-| `schemaVersion` | 固定为 `recipe.import.v1` |
-| `recipe.inspirationCategoryId` | 字段必须出现；填写上方 `6001–6009` 中已确认的 ID，无法确认时为 `null` |
+| `schemaVersion` | 固定为 `recipe.import.batch.v1` |
+| `recipe.recipeId` | 仅 Wiki 修订文件出现，数值型，原样保留 |
+| `recipe.contentVersionId` | 仅 Wiki 修订文件出现，数值型，原样保留 |
+| `recipe.inspirationCategoryId` | 字段必须出现；填写上方 `6001–6009` 中已确认的 ID，无法确认时进入草稿标 `NEEDS_FIX` |
 | `recipe.coverImageUrl` | 可省略；有可靠图片地址时填写 |
 | `content.name` | 必填，保留来源菜名 |
-| `content.story` | 必填，保留来源故事或介绍；无依据时写空字符串 `""`，可保存为草稿并产生错误项，补全前不得发布 |
+| `content.story` | **必填，必须根据菜名、食材、做法、特点写一段简短介绍，不能留空** |
 | `content.baseServings` | 必填，正数 |
 | `content.difficulty` | 必填，使用难度枚举 |
 | `content.duration` | 必填，使用加热烹饪时长枚举；不表示从切配到出锅的全流程耗时 |
@@ -147,13 +201,13 @@ Wiki 修订文件由菜谱管理页生成，并额外在 `recipe` 中包含数�
 | 字段 | 要求 |
 | --- | --- |
 | `content.keywords` | 中文数组，通常 3～6 项，最多 8 项；具体提取规则见下方；不写分类或结构化标签（如“川湘菜”“重辣”） |
-| `ingredients[].name` | 来源食材名称 |
+| `ingredients[].name` | 来源食材名称；按标准化映射处理，见 2.2.1 |
 | `ingredients[].quantity / unit / fuzzyText` | 三个字段都必须出现；精确用量为“字符串数量 / 项目单位名称 / null”，模糊用量为“null / null / 适量” |
 | `ingredients[].categoryCode` | 有效 JSON 中必填稳定分类代码；无法确定时不生成有效 JSON，保留草稿标记 `NEEDS_FIX`，不得填 `null` 或 `UNCLASSIFIED` |
 | `tools[].name` | 明确厨具；无依据填 `[]` |
-| `steps[].text` | 按顺序拆分核心操作；允许分句、去重和统一表达，但必须保留关键动作、用量、顺序和等待节点 |
+| `steps[].text` | 按顺序拆分核心操作；允许分句、去重和统一表达，但必须保留关键动作、用量、顺序和等待节点；不得出现“准备食材：”“处理主料：”“调好酱汁：”“下锅烹饪：”等前缀标签 |
 | `steps[].imageUrl` | 必须出现；无图为 `null` |
-| `steps[].imagePrompt` | 必填中文；只基于本步骤正文生成菜谱步骤图片 |
+| `steps[].imagePrompt` | 必填中文；只基于本步骤正文生成菜谱步骤图片；不出现“手”、文字、模型参数、URL 或内部 ID |
 
 关键词按「具体菜品类型 > 风味 > 场景 > 具体烹饪方式 > 主要食材 > 完整菜名」排序。
 
@@ -166,35 +220,59 @@ Wiki 修订文件由菜谱管理页生成，并额外在 `recipe` 中包含数�
 - 无可靠依据时填 `[]`。
 - 通常 3～6 项，最多 8 项，不重复。
 
-食材分类代码固定为：PRODUCE（蔬果菌菇）、MEAT_POULTRY_EGG（肉禽蛋）、SEAFOOD（水产海鲜）、SOY_DAIRY（豆乳制品）、GRAINS_STAPLES（米面杂粮）、SEASONING（调味料）、DRIED_PRESERVED（干货腌制）、BEVERAGE_ALCOHOL（酒水饮料）。
+#### 2.2.1 食材标准化映射
 
-分类判定：
+| 原始写法 | 标准化 |
+| --- | --- |
+| 鲜虾、虾仁 | 虾 |
+| 葱花、葱末 | 小葱 |
+| 盐 | 食盐 |
+| 蒜末、蒜片、蒜瓣 | 大蒜 |
+| 姜丝、姜片、姜末 | 姜 |
 
-categoryCode 是系统食材的稳定分类属性，不随单道菜谱中的用途、用量或角色变化。命中系统食材时，必须以系统食材当前分类为准。
+**水类忽略**：清水、温水、冷水、半碗水、1碗水等，全部不加入 `ingredients`。
 
-未命中系统食材、需要给出分类建议时，按食材的稳定身份判断：
+#### 2.2.2 用量规则
 
-SEASONING（调味料）：主要、稳定用途是赋味或增香，如食盐、糖、酱油、醋、料酒、蚝油、豆瓣酱、番茄酱、八角、香叶、花椒、胡椒粉、十三香等。
+精确用量：`quantity` 为大于 0 的数字字符串，`unit` 为项目单位名称，`fuzzyText` 必须为 `null`。
 
-DRIED_PRESERVED（干货腌制）：食材身份主要由干燥、腌制、风干等加工形态形成，通常作为可食用材料使用，如干香菇、木耳、海米、虾皮、干辣椒、榨菜、酸菜、梅干菜、萝卜干等。
+模糊用量：`quantity` 和 `unit` 为 `null`，`fuzzyText` 为 `"适量"`；来源的“少许”“几滴”“按需”等统一归一化。所有食材类别均可使用“适量”，菜谱食材分类不限制用量结构。
 
-菜谱中的“主体/调味”属于菜谱食材关系，不通过 categoryCode 表达。
+**单位处理**：
 
-无法确定分类时，不生成可通过导入校验的 JSON；保留原始食材和分类问题进入导入草稿，标记 NEEDS_FIX，确认系统食材主数据后再生成合法分类。不得填写 null、UNCLASSIFIED 或猜测。
-
-用量规则：
-
-精确用量：quantity 为大于 0 的数字字符串，unit 为项目单位名称，fuzzyText 必须为 null。
-
-模糊用量：quantity 和 unit 为 null，fuzzyText 为 "适量"；来源的“少许”“几滴”“按需”等统一归一化。所有食材类别均可使用“适量”，菜谱食材分类不限制用量结构。
+- 单位优先 克、毫升，可确定换算 kg / 千克、L / 升。
+- **汤匙 / 茶匙：保留原单位**。
+- **小勺 / 半勺 / 少许 / 几滴：统一转为 `{ quantity: null, unit: null, fuzzyText: "适量" }`**。
+- 两种结构互斥；`fuzzyText` 只允许 `null` 或 `"适量"`。
 
 当来源无法确定精确数量时，可保留为“适量”，不得估算；分类不确定仍按分类规则进入草稿，不生成有效 JSON。
 
-两种结构互斥；fuzzyText 只允许 null 或 "适量"。单位优先 克、毫升，可确定换算 kg / 千克、L / 升，汤匙保留原单位。
+#### 2.2.3 食材分类判定
+
+分类代码固定为：PRODUCE（蔬果菌菇）、MEAT_POULTRY_EGG（肉禽蛋）、SEAFOOD（水产海鲜）、SOY_DAIRY（豆乳制品）、GRAINS_STAPLES（米面杂粮）、SEASONING（调味料）、DRIED_PRESERVED（干货腌制）、BEVERAGE_ALCOHOL（酒水饮料）。
+
+分类判定：
+
+`categoryCode` 是系统食材的稳定分类属性，不随单道菜谱中的用途、用量或角色变化。命中系统食材时，必须以系统食材当前分类为准。
+
+未命中系统食材、需要给出分类建议时，按食材的稳定身份判断：
+
+- `PRODUCE`（蔬果菌菇）：新鲜蔬菜、水果、菌菇。例：番茄、口蘑、金针菇、青椒、鲜木耳、香菜。
+- `MEAT_POULTRY_EGG`（肉禽蛋）：畜禽肉及蛋类。例：牛里脊、猪肋排、鸡胸肉、鸡蛋、瘦牛肉片。
+- `SEAFOOD`（水产海鲜）：鱼、虾、蟹、贝类。例：巴沙鱼、虾滑、虾仁。
+- `SOY_DAIRY`（豆乳制品）：豆制品、乳制品。例：嫩豆腐、豆干、豆浆。
+- `GRAINS_STAPLES`（米面杂粮）：谷物、面粉、淀粉、粉丝、米饭。例：淀粉、粉丝、面粉。
+- `SEASONING`（调味料）：主要、稳定用途是赋味或增香。例：食盐、糖、酱油、醋、料酒、蚝油、豆瓣酱、番茄酱、八角、香叶、花椒、胡椒粉、十三香。
+- `DRIED_PRESERVED`（干货腌制）：食材身份主要由干燥、腌制、风干等加工形态形成，通常作为可食用材料使用。例：干香菇、干木耳、海米、虾皮、干辣椒、榨菜、酸菜、梅干菜、萝卜干。
+- `BEVERAGE_ALCOHOL`（酒水饮料）：酒水、饮料。例：料酒、黄酒、米酒。
+
+菜谱中的“主体/调味”属于菜谱食材关系，不通过 `categoryCode` 表达。
+
+无法确定分类时，不生成可通过导入校验的 JSON；保留原始食材和分类问题进入导入草稿，标记 `NEEDS_FIX`，确认系统食材主数据后再生成合法分类。不得填写 `null`、`UNCLASSIFIED` 或猜测。
 
 ### 2.3 步骤图片提示词
 
-`imagePrompt` 描述待生成画面，`imageUrl` 记录已有图片。同一菜谱内，每条原始步骤的提示词必须非空、中文且不重复；只写当前步骤有依据的操作、食材、工具和状态，不写模型参数、URL 或内部 ID。去重范围限于同一菜谱，跨菜谱不要求全局去重。
+`imagePrompt` 描述待生成画面，`imageUrl` 记录已有图片。同一菜谱内，每条原始步骤的提示词必须非空、中文且不重复；只写当前步骤有依据的操作、食材、工具和状态，不写模型参数、URL 或内部 ID，**不出现“手”**。去重范围限于同一菜谱，跨菜谱不要求全局去重。
 
 ### 2.4 加热烹饪时长规则
 
@@ -241,7 +319,7 @@ DRIED_PRESERVED（干货腌制）：食材身份主要由干燥、腌制、风�
 |  | `YUN_GUI` | 云贵菜 |
 |  | `TAIWAN` | 台湾菜 |
 |  | `FUSION` | 融合菜 |
-|  | `OTHER` | 其他菜系（待人工确认） |
+|  | `OTHER` | 其他菜系（无法归类时填此值） |
 | `DISH_STYLE` | `STIR_FRY` | 炒菜 | 单选 |
 |  | `COLD_DISH` | 凉菜 |
 |  | `SOUP` | 汤羹 |
@@ -253,6 +331,8 @@ DRIED_PRESERVED（干货腌制）：食材身份主要由干燥、腌制、风�
 |  | `BBQ` | 烧烤 |
 |  | `HOT_POT` | 火锅 |
 |  | `SNACK` | 小吃点心 |
+|  | `AIR_FRY` | 空气炸 |
+|  | `PAN_FRY` | 煎制 |
 | `MEAL_TYPE` | `BREAKFAST` | 早餐 | 可多选 |
 |  | `LUNCH` | 午餐 |
 |  | `AFTERNOON_TEA` | 下午茶 |
@@ -270,12 +350,15 @@ DRIED_PRESERVED（干货腌制）：食材身份主要由干燥、腌制、风�
 |  | `DUCK` | 鸭肉 |
 |  | `FISH` | 鱼类 |
 |  | `EGG` | 蛋类 |
+|  | `SEAFOOD` | 水产海鲜 |
 |  | `NONE` | 无主蛋白 |
-| `FLAVOR_PROFILE` | `LIGHT` | 清淡 | 单选 |
+|  | `OTHER` | 其他 |
+| `FLAVOR_PROFILE` | `LIGHT` | 清淡 | **可多选** |
 |  | `MILD` | 温和 |
 |  | `SPICY` | 辛辣 |
 |  | `SOUR` | 酸味 |
 |  | `SWEET` | 甜味 |
+|  | `PEPPERY` | 胡椒/黑椒风味 |
 | `SPICE_LEVEL` | `NONE` | 不辣 | 单选 |
 |  | `MILD` | 微辣 |
 |  | `MEDIUM` | 中辣 |
@@ -287,9 +370,11 @@ DRIED_PRESERVED（干货腌制）：食材身份主要由干燥、腌制、风�
   1. 来源明确只适合午餐时，只填 `LUNCH`；
   2. 来源明确只适合晚餐时，只填 `DINNER`；
   3. 来源没有明确餐次，或未强调餐次区分时，默认填 `LUNCH` 和 `DINNER`。
-- 其他标签代码均单选；不确定时见第 6 节。
-- 川/湘、江浙/淮扬、北方菜、云贵菜分别归入对应枚举；面食/米饭/粥归 `STAPLE_FOOD`，炖煮/焖/煲归 `STEW`，拌菜归 `COLD_DISH`，煎炸归 `FRIED`。`FUSION` 仅限明确融合菜，`OTHER` 待人工确认。
+- 其他标签代码均单选（`FLAVOR_PROFILE` 除外）。
+- 川/湘、江浙/淮扬、北方菜、云贵菜分别归入对应枚举；面食/米饭/粥归 `STAPLE_FOOD`，炖煮/焖/煲归 `STEW`，拌菜归 `COLD_DISH`，煎炸归 `FRIED`，空气炸归 `AIR_FRY`，煎制归 `PAN_FRY`。`FUSION` 仅限明确融合菜，`OTHER` 用于无法归入现有菜系时。
 - `DISH_STYLE.COLD_DISH` 是成品形式，`DISH_ROLE.COLD_DISH` 是餐桌角色；`PRIMARY_INGREDIENT` 由食材派生，不导入。
+- `DISH_STYLE.SOUP` 与 `DISH_ROLE.SOUP` 不冲突：`DISH_STYLE` 表示烹饪/成品形式，`DISH_ROLE` 表示餐桌角色。汤菜作为主菜时优先 `DISH_ROLE = SOUP`，若同时具备主菜属性可同时保留。
+- 含鸡蛋为主料的菜品，`MAIN_PROTEIN_TYPE` 填 `EGG`。
 
 ## 4. 美食助理
 
@@ -300,11 +385,19 @@ recipe.content.steps  = 完整原始步骤
 wiki.assistant.steps  = 整理后的执行流程
 ```
 
+### 4.1 助理步骤独立重写
+
+- **必须用自己的语言重新组织，不能复制 `content.steps` 的文案。**
+- 可以合并、拆分、调整顺序，以“让新手能读懂、能跟着做成功”为目标。
+- 事实必须与 `content.steps` 一致，但句式、语气、步骤划分完全独立。
+- 应包含新手指导：火候控制、判断标准、防翻车提示、操作要点。
+- 按 `PREP → COOK → SERVE` 阶段划分。
+
 助理可以合并连续的重复动作，但不能修改食材、用量、顺序、等待节点或其他关键操作事实。
 
 两类步骤图片和提示词也必须独立：`recipe.content.steps[].imagePrompt` 用于菜谱步骤图片；`wiki.assistant.steps[].imagePrompt` 用于做饭助理步骤图片。两者即使描述同一道菜，也不能互相复用或回退。
 
-### 4.1 助理字段
+### 4.2 助理字段
 
 | 字段 | 要求 |
 | --- | --- |
@@ -314,17 +407,17 @@ wiki.assistant.steps  = 整理后的执行流程
 | `title` | 简短标题 |
 | `detail` | 整理后的操作说明 |
 | `imageUrl` | 字段必须出现；无图片时为 `null` |
-| `imagePrompt` | 必填中文提示词；只描述该助理步骤对应的做饭助理步骤图片 |
+| `imagePrompt` | 必填中文提示词；只描述该助理步骤对应的做饭助理步骤图片；不出现“手”、文字、模型参数、URL 或内部 ID |
 | `durationMinutes` | 非 `SHOP` 步骤必填且为大于 `0` 的整数；`SHOP` 的取值待解析器与正式契约统一后确定，暂不作为最终依据 |
 | `durationText` | 字段必须出现；普通步骤为展示文案，`SHOP` 填 `null` |
 
 `content.duration` 的计入范围见 2.4；`durationMinutes` 与 `durationText` 必须表达同一步时长。`SHOP` 时长契约待统一。
 
-### 4.2 做饭助理步骤图片提示词
+### 4.3 做饭助理步骤图片提示词
 
-`wiki.assistant.steps[].imagePrompt` 用于助理步骤图片，和 `imageUrl` 分开。同一菜谱内，每条提示词必须非空、中文且不重复；只依据当前 `phase / action / title / detail` 的明确事实生成，不写模型参数、URL 或内部 ID，也不复用原始步骤提示词。去重范围同 2.3。
+`wiki.assistant.steps[].imagePrompt` 用于助理步骤图片，和 `imageUrl` 分开。同一菜谱内，每条提示词必须非空、中文且不重复；只依据当前 `phase / action / title / detail` 的明确事实生成，不写模型参数、URL 或内部 ID，也不复用原始步骤提示词。**不出现“手”**。去重范围同 2.3。
 
-### 4.3 阶段和动作枚举
+### 4.4 阶段和动作枚举
 
 | 阶段 | 动作 |
 | --- | --- |
@@ -348,8 +441,20 @@ wiki.assistant.steps  = 整理后的执行流程
 | 分类不确定 | 不允许提交 | 保留原始食材和分类问题，标记 `NEEDS_FIX` |
 | 任一类别使用“适量” | 允许提交 | 按模糊用量保存，不参与人数换算或精确数量合并 |
 | 标签不确定 | 不作为可消费快照提交 | 保留候选标签，待审核确认 |
-| `story / tips` 为空 | 不通过校验 | 可保存草稿并产生错误项，补全前不得发布 |
+| `story` 为空 | **不允许**，必须补全 | 不生成有效 JSON，返回补全 |
+| `tips` 为空 | 不通过校验 | 可保存草稿并产生错误项，补全前不得发布 |
+| `inspirationCategoryId` 不确定 | 不允许提交 | 标 `NEEDS_FIX`，待人工选择 |
 | `SHOP` 时长 | 暂不判定 | 待解析器与正式契约统一，暂不发布为最终 JSON |
+
+草稿结构建议：
+
+```json
+{
+  "importStatus": "NEEDS_FIX",
+  "needsFix": ["ingredientCategory", "tips", "inspirationCategoryId"],
+  "candidateTags": [ ... ]
+}
+```
 
 ## 7. 审核规则
 
@@ -362,6 +467,7 @@ wiki.assistant.steps  = 整理后的执行流程
 > 写作指导，不改变字段、枚举和校验规则；与正文冲突时以正文为准。
 
 - `content` 保留来源事实，可整理、拆分、去重，不补数量、时间、温度、替代食材或功效。
+- `content.story` 必须根据菜名、食材、做法、特点写一段简短介绍，不能留空。
 - `wiki.assistant.steps` 按 `PREP → COOK → SERVE` 重组，只补可观察的完成状态，如“表面凝固”“汤汁收浓”，不补造事实。
 - 句数、步骤数、字数等均为建议，不参与校验。
-- 转换顺序：读来源 → 拆 `content.steps` → 建助理步骤 → 补判断标准 → 提取 `keywords / tags` → 写两类 `imagePrompt` → 校对草稿边界。
+- 转换顺序：读来源 → 写 `story` → 拆 `content.steps` → 建助理步骤 → 补判断标准 → 提取 `keywords / tags` → 写两类 `imagePrompt` → 校对草稿边界。
