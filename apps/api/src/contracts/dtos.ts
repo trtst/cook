@@ -1392,6 +1392,23 @@ export class SavedInspirationListQueryDto extends PageQueryDto {
   @IsInt()
   @Min(1)
   categoryId?: number;
+
+  @ApiPropertyOptional({ example: resourceIdExample })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  inspirationCategoryId?: number;
+
+  @ApiPropertyOptional({ example: "BEGINNER" })
+  @IsOptional()
+  @IsIn(["BEGINNER", "EASY", "SKILLED", "CHALLENGING"])
+  difficulty?: string;
+
+  @ApiPropertyOptional({ example: "WITHIN_15" })
+  @IsOptional()
+  @IsIn(["WITHIN_15", "BETWEEN_15_30", "BETWEEN_30_60", "OVER_60"])
+  duration?: string;
 }
 
 export class CreateSavedInspirationDto extends OperationDto {

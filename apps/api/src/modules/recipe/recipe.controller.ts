@@ -175,7 +175,16 @@ export class RecipeController {
   @ApiOkPage(SavedInspirationSummaryModel, "分页读取已添加到私房菜的灵感")
   listSavedInspirations(@Req() request: RequestWithUser, @Query() query: SavedInspirationListQueryDto) {
     return this.recipeService
-      .listSavedInspirations(request.user.userId, query.page, query.pageSize, query.keyword, query.categoryId)
+      .listSavedInspirations(
+        request.user.userId,
+        query.page,
+        query.pageSize,
+        query.keyword,
+        query.categoryId,
+        query.inspirationCategoryId,
+        query.difficulty as "BEGINNER" | "EASY" | "SKILLED" | "CHALLENGING" | undefined,
+        query.duration as "WITHIN_15" | "BETWEEN_15_30" | "BETWEEN_30_60" | "OVER_60" | undefined
+      )
       .then(result => ok(result));
   }
 

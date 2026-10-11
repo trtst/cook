@@ -1942,7 +1942,16 @@ export class RecipeService {
     });
   }
 
-  async listSavedInspirations(userId: UUID, page: number, pageSize: number, keyword?: string, categoryId?: UUID) {
+  async listSavedInspirations(
+    userId: UUID,
+    page: number,
+    pageSize: number,
+    keyword?: string,
+    categoryId?: UUID,
+    inspirationCategoryId?: UUID,
+    difficulty?: RecipeContentSnapshot["difficulty"],
+    duration?: RecipeContentSnapshot["duration"]
+  ) {
     const normalizedPage = toPositiveInt(page, 1);
     const normalizedPageSize = toPositiveInt(pageSize, 20);
     const skip = (normalizedPage - 1) * normalizedPageSize;
@@ -1950,7 +1959,16 @@ export class RecipeService {
     const where: Prisma.RecipeCollectionWhereInput = {
       userId,
       ...(categoryId ? { categoryId } : {}),
-      ...(searchText ? { sourceVersion: { searchText: { contains: searchText } } } : {})
+      ...(inspirationCategoryId ? { sourceRecipe: { is: { inspirationCategoryId } } } : {}),
+      ...(searchText || difficulty || duration
+        ? {
+            sourceVersion: {
+              ...(searchText ? { searchText: { contains: searchText } } : {}),
+              ...(difficulty ? { difficulty } : {}),
+              ...(duration ? { duration } : {})
+            }
+          }
+        : {})
     };
     const [saves, total] = await this.prisma.$transaction([
       this.prisma.recipeCollection.findMany({

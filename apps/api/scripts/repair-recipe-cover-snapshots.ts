@@ -369,6 +369,7 @@ function summarize(plan: RepairPlan) {
 async function main() {
   const apply = process.argv.includes("--apply");
   const verify = process.argv.includes("--verify");
+  const skipConflicts = process.argv.includes("--skip-conflicts");
   const manifestArg = process.argv.find(argument => argument.startsWith("--manifest="))?.slice("--manifest=".length);
   const target = parseRecipeMigrationTarget(process.argv);
   assertRecipeMigrationTarget(target, apply, process.env, process.argv);
@@ -384,7 +385,9 @@ async function main() {
       throw new Error("当前数据库或对象存储与修复清单生成环境不同，拒绝执行");
     }
     if (apply) {
-      if (plan.conflicts.length) throw new Error("清单包含冲突，拒绝执行");
+      if (plan.conflicts.length && !skipConflicts) {
+        throw new Error("清单包含冲突；仅处理无冲突项请显式指定 --skip-conflicts");
+      }
       for (const item of plan.items) {
         if (item.nextVersionId && item.targetKey && item.targetUrl) continue;
         const source = storageKeyFromUrl(item.coverBefore);
@@ -413,7 +416,13 @@ async function main() {
       await writeFile(manifestPath, `${JSON.stringify(plan, null, 2)}\n`, "utf8");
     }
   }
-  console.log(JSON.stringify({ ...summarize(plan), manifest: manifestArg ? resolve(manifestArg) : null, applied: apply }, null, 2));
+  console.log(JSON.stringify({
+    ...summarize(plan),
+    skippedConflictCount: apply && skipConflicts ? plan.conflicts.length : 0,
+    skippedConflicts: apply && skipConflicts ? plan.conflicts : [],
+    manifest: manifestArg ? resolve(manifestArg) : null,
+    applied: apply
+  }, null, 2));
 }
 
 main()
