@@ -186,6 +186,21 @@ function storageKeyFromRef(reference: string) {
   }
 }
 
+function embeddedRecipeImageSourceKey(sourceKey: string) {
+  const parts = sourceKey.split("/");
+  if (parts[0] === "uploads" && parts[1] === "recipe-images" && /^\d+$/.test(parts[2] ?? "") && parts.length === 4) {
+    return sourceKey;
+  }
+  if (
+    parts[0] === "uploads" && parts[1] === "system-data-snapshots" && /^[\da-f-]{36}$/i.test(parts[2] ?? "")
+    && parts[3] === "source" && parts[4] === "uploads" && parts[5] === "recipe-images"
+    && /^\d+$/.test(parts[6] ?? "") && parts.length === 8
+  ) {
+    return parts.slice(4).join("/");
+  }
+  return null;
+}
+
 export function isLocalAssetReference(reference: string, request?: { protocol?: string; get?: (name: string) => string | undefined }) {
   if (reference.startsWith("/uploads/") || reference.startsWith("/static/uploads/")) return true;
   try {
@@ -322,7 +337,7 @@ export class AdminSystemDataSnapshotService {
 
     const mediaRows: SnapshotRows = {};
     for (const category of categories) {
-      for (const model of ["Recipe", "RecipeContentVersion", "SiteContent"]) {
+      for (const model of ["Recipe", "RecipeContentVersion", "RecipeCookAssistant", "SiteContent"]) {
         if (data[category][model]) mergeRows(mediaRows, { [model]: data[category][model] });
       }
     }
@@ -419,7 +434,10 @@ export class AdminSystemDataSnapshotService {
         const asset = document.assets[index] as SnapshotAsset;
         const source = files.get(asset.path)!;
         const extension = asset.sourceKey.split(".").pop()?.replace(/[^a-z0-9]/giu, "") || "jpg";
-        const key = assetKey(importKey, `${index}.${extension}`);
+        const recipeImageSourceKey = embeddedRecipeImageSourceKey(asset.sourceKey);
+        const key = recipeImageSourceKey
+          ? assetKey(importKey, "source", recipeImageSourceKey)
+          : assetKey(importKey, `${index}.${extension}`);
         await this.assetStorage.writeObject(key, source, asset.contentType);
         createdKeys.push(key);
         const targetUrl = this.assetStorage.publicUrl(request, key);
@@ -477,6 +495,24 @@ export class AdminSystemDataSnapshotService {
         let removedCount = 0;
         for (const model of [...ordered].reverse()) {
           if (model === "RecipeContentVersion") continue;
+          if (model === "RecipeVersionTag") {
+            const incomingIds = new Set((incoming[model] ?? []).map(row => rowKey(model, row)));
+            const rowsByUniqueKey = new Map((incoming[model] ?? []).map(row => [
+              JSON.stringify([row.recipeVersionId, row.tagCode, row.tagValue, row.source]),
+              row
+            ]));
+            const displacedIds = (existing[model] ?? [])
+              .filter(row => {
+                const incomingRow = rowsByUniqueKey.get(JSON.stringify([row.recipeVersionId, row.tagCode, row.tagValue, row.source]));
+                const currentId = rowKey(model, row);
+                return incomingRow && incomingIds.has(currentId) && rowKey(model, incomingRow) !== currentId;
+              })
+              .map(row => Number(row.id))
+              .filter(Number.isSafeInteger);
+            if (displacedIds.length) {
+              await modelDelegate(tx, model).deleteMany({ where: { id: { in: displacedIds } } });
+            }
+          }
           const wanted = new Set((incoming[model] ?? []).map(row => snapshotReplacementKey(model, row)));
           const extra = (existing[model] ?? []).filter(row => !wanted.has(snapshotReplacementKey(model, row))
             && !(model === "User" && retainedUserIds.has(Number(row.id))));
