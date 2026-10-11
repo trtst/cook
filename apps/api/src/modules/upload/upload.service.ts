@@ -55,10 +55,9 @@ function publicIdFromFileName(value: string) {
 }
 
 function recipeImageKeyFromFileName(recipeId: UUID, fileName: string) {
-  const legacyName = /^[0-9a-f-]+\.(?:jpg|png|webp)$/i.test(fileName);
   const recipeKey = String(recipeId).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const currentName = new RegExp(`^${recipeKey}_[1-9]\\d*(?:_step-[1-9]\\d*|_wiki-step-[1-9]\\d*)?\\.(?:jpg|png|webp)$`, "i").test(fileName);
-  if (!legacyName && !currentName) throw new NotFoundException("图片不存在");
+  if (!currentName) throw new NotFoundException("图片不存在");
   return assetKey("uploads", "recipe-images", recipeId, fileName);
 }
 

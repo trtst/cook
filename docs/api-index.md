@@ -89,10 +89,10 @@
 | Inspiration | GET | `/inspiration-categories` | 匿名灵感分类列表 |
 | Inspiration | GET | `/inspiration-recipes` | 匿名灵感菜谱分页 |
 | Inspiration | GET | `/inspiration-recipes/{recipeId}` | 匿名灵感菜谱详情 |
-| Inspiration | POST | `/recipes/saved-inspiration` | 将灵感固定版本收藏到当前用户私房菜 |
-| Inspiration | GET | `/recipes/saved-inspiration` | 当前用户收藏灵感分页 |
-| Inspiration | GET | `/recipes/saved-inspiration/{saveId}` | 当前用户收藏的固定版本详情 |
-| Inspiration | DELETE | `/recipes/saved-inspiration/{saveId}` | 从当前用户私房菜移除收藏 |
+| Inspiration | POST | `/recipes/saved-inspiration` | 将灵感固定版本添加到当前用户私房菜 |
+| Inspiration | GET | `/recipes/saved-inspiration` | 当前用户已添加到私房菜的灵感分页，支持个人分类筛选 |
+| Inspiration | GET | `/recipes/saved-inspiration/{saveId}` | 当前用户已添加灵感的固定版本详情 |
+| Inspiration | DELETE | `/recipes/saved-inspiration/{saveId}` | 从当前用户私房菜移除灵感 |
 | Recipe | GET | `/recipe-categories` | 当前用户个人分类列表 |
 | Recipe | POST | `/recipe-categories` | 新建个人分类 |
 | Recipe | PUT | `/recipe-categories/{categoryId}` | 修改个人分类 |
@@ -112,7 +112,6 @@
 | Recipe | POST | `/recipes/reorder` | 当前分类下重排我的菜谱 |
 | Recipe | POST | `/recipes/{recipeId}/delete` | 回收或删除菜谱 |
 | Recipe | POST | `/recipes/{recipeId}/report` | 举报菜谱 |
-| Inspiration | GET | `/collections/recipes/{collectionRecipeId}` | 只为旧固定版本引用保留的兼容详情读取，不提供合集列表或写入 |
 | AdminRecipeDomain | GET | `/admin/users/{userId}/recipe-domain` | 后台按用户读取菜谱域概览 |
 | AdminRecipeDomain | GET | `/admin/users/{userId}/recipes` | 后台按用户读取已发布菜谱 |
 | AdminRecipeDomain | GET | `/admin/users/{userId}/recipe-drafts` | 后台按用户读取菜谱草稿 |
@@ -245,7 +244,7 @@
 | RandomMenu | `POST /random-menus/generate`、`POST /random-menu-slots/replace`、`POST /meal-plans` | 生成与调整不读取库存数量或要求确认库存 |
 | MealPlanCookAssistant | `GET /meal-plans/{planItemId}/cook-assistant`、`POST /meal-plans/{planItemId}/cook-assistant` | 已冻结为计划附属快照：一次生成、挂靠计划、菜单变更后按签名判过期 |
 | HomeRecentArrangement | `GET /home/recent-arrangement` | 已冻结首页“最近安排”单卡摘要契约：`24h -> 24~36h` 补位，当前窗口内饭局优先于计划，只返回 1 条最小摘要 |
-| InspirationInteraction | 收藏统计与推荐排序治理 | 已确认非本轮范围，待契约；菜谱/灵感不提供点赞能力 |
+| InspirationInteraction | 添加到私房菜统计与推荐排序治理 | 已由添加关系提供排序信号；菜谱/灵感不提供点赞能力 |
 
 | 模块 | 路径 | 缺失内容 |
 | --- | --- | --- |

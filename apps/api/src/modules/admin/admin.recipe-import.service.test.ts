@@ -772,7 +772,7 @@ test("limits the number of remotely downloaded images in one publish", async () 
   });
 
   await assert.rejects(
-    () => (service as any).stageRecipeImportImages({}, 10000001, buildRawBody(), recipeBody, [], []),
+    () => (service as any).stageRecipeImportImages({}, 10000001, 22001, buildRawBody(), recipeBody, [], []),
     /远程图片数量不能超过 50 张/
   );
   assert.equal(publishCount, 50);
@@ -880,7 +880,7 @@ test("limits the total size of remotely downloaded images in one publish", async
   });
 
   await assert.rejects(
-    () => (service as any).stageRecipeImportImages({}, 10000001, buildRawBody(), recipeBody, [], []),
+    () => (service as any).stageRecipeImportImages({}, 10000001, 22001, buildRawBody(), recipeBody, [], []),
     /远程图片总大小不能超过 100 MB/
   );
   assert.equal(publishCount, 2);

@@ -283,8 +283,8 @@ test("draft upload promotion rejects an image replaced after external copy", asy
   assert.equal(updateAttempted, false);
 });
 
-test("recipe image public read uses recipe ID and file name", async () => {
-  const fileName = "11111111-1111-4111-8111-111111111111.png";
+test("recipe image public read uses recipe ID and versioned file name", async () => {
+  const fileName = "10000031_88_step-1.png";
   const storedKey = `uploads/recipe-images/10000031/${fileName}`;
   const assetStorage = {
     readObject: async (storageKey: string, contentType: string) => {
@@ -303,6 +303,20 @@ test("recipe image public read uses recipe ID and file name", async () => {
 
   assert.equal(asset.contentType, "image/png");
   assert.equal(asset.stat.size, png1x1.length);
+});
+
+test("recipe image public read rejects legacy UUID file names", async () => {
+  let readAttempted = false;
+  const assetStorage = {
+    readObject: async () => {
+      readAttempted = true;
+      return { contentType: "image/png", size: png1x1.length, stream: {} };
+    }
+  };
+  const service = new UploadService({} as never, assetStorage as never);
+
+  await assert.rejects(() => service.getRecipeImageAsset(10000031, "11111111-1111-4111-8111-111111111111.png"));
+  assert.equal(readAttempted, false);
 });
 
 test("memory share cover is copied to a snapshot-owned immutable key", async () => {

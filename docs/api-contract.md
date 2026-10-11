@@ -1086,7 +1086,7 @@ POST /admin/recipe-wiki/{recipeId}/reject
 
 ## 后台系统数据同步
 
-`GET /admin/system-data/export?categories=...` 导出 `cook.data-snapshot.v2` ZIP 快照；manifest 带 `sourceEnvironment = TEST | ONLINE`、导出时间、所选类别和图片清单。`POST /admin/system-data/preview` 与 `POST /admin/system-data/import` 通过 multipart 字段 `file` 接收 ZIP。三条接口只允许 `SUPER_ADMIN`，导入写操作还要求数字字符串 `Idempotency-Key`。
+`GET /admin/system-data/export?categories=...` 导出 `cook.data-snapshot.v2` ZIP 快照；manifest 带 `sourceEnvironment = TEST | ONLINE`、导出时间、所选类别和图片清单。菜谱类别的图片清单扫描 `Recipe`、`RecipeContentVersion` 与 `RecipeCookAssistant`，因此包含封面、普通步骤图和 Wiki 步骤图。`POST /admin/system-data/preview` 与 `POST /admin/system-data/import` 通过 multipart 字段 `file` 接收 ZIP。三条接口只允许 `SUPER_ADMIN`，导入写操作还要求数字字符串 `Idempotency-Key`。
 
 预览响应包含 `cleanupEffects`，逐类列出替换目标记录时由数据库级联删除或解除关联的本地行数；`retainedUserCount` 返回因受保护关联而保留的目标 TEST 本地账号数，`remappedUserCount` 返回按手机号匹配并沿用本地关联 ID 的线上账号数。目标为 TEST 且选择用户类别时，线上账号按手机号与被保留的本地账号匹配，快照内指向该用户的外键同步改写到本地 ID；会员兑换码、公共内容池、存储账本或用户审计关联保持不变。若无法唯一匹配或快照中的另一个账号占用映射目标 ID，预览阻止导入。菜谱营养快照/版本标签唯一键若命中本次选择类别所管理的菜谱版本，会纳入本次替换；仍属于未选类别的数据继续阻止导入。
 
@@ -2588,7 +2588,7 @@ interface RecipeDraftContentInput {
 
 后台菜谱正式图片与小程序共用 `uploads/recipe-images/{recipeId}/{fileName}`，文件名包含菜谱 ID、`contentVersionId` 和图片槽位：封面 `{recipeId}_{contentVersionId}.{ext}`，普通步骤 `{recipeId}_{contentVersionId}_step-{order}.{ext}`，Wiki 步骤 `{recipeId}_{contentVersionId}_wiki-step-{order}.{ext}`；不再写入 `admin-recipe-images/`。后台上传待保存图片使用 `uploads/recipe-images/.tmp/admin/{tempKey}`，正式保存时按所属菜谱 ID 和目标内容版本归档。后台图片回填不论只更新封面还是更新步骤图，都会创建新内容版本，避免旧固定版本的图片 URL 指向新图。
 
-菜谱图片读取不兼容旧后台路径。删除清理时仅兼容解析历史 `uploads/admin-recipe-images/{fileName}` 与 `admin-recipe-images/{fileName}` 对象键，清理器不会为这些路径提供读取服务。
+菜谱图片读取只接受带当前 `contentVersionId` 的文件名：封面 `{recipeId}_{contentVersionId}.{ext}`、普通步骤 `{recipeId}_{contentVersionId}_step-{order}.{ext}`、Wiki 步骤 `{recipeId}_{contentVersionId}_wiki-step-{order}.{ext}`，均从 `uploads/recipe-images/{recipeId}/` 读取；旧 UUID 和旧菜谱 ID/步骤序号文件名不再提供读取兼容，旧后台目录也不支持读取。一次性历史图片迁移命令 `pnpm --filter @next-meal/api migrate:recipe-image-keys -- --target=TEST --manifest=<清单路径>` 默认只扫描并输出迁移清单；`--target` 必须为 `TEST` 或 `ONLINE`，并绑定数据库、对象存储及静态资源公开域名环境。确认测试清单无冲突后，使用 `--target=TEST --apply --manifest=<清单路径>` 执行测试迁移；线上先在 `--target=ONLINE` 生成并复核清单，再用 `--target=ONLINE --apply --confirm-online-write --manifest=<清单路径>` 显式确认线上写入。脚本要求 `SYSTEM_DATA_ENVIRONMENT` 与目标环境一致，TEST 的 OSS 前缀为 `dev`、ONLINE 为 `prod`；目标环境或清单指纹不匹配、清单有任何冲突时整批拒绝执行。也可不传清单，在同一条命令中直接使用 `--target=TEST --apply` 或线上确认参数完成盘点和执行；生产操作应保存清单以便审计和回滚。迁移仅重写图片 URL，不变更正文、步骤顺序或 `contentVersionId`；对象先复制并校验 SHA-256，再分记录事务更新，源对象保留以便回滚。使用原清单加 `--rollback` 可恢复数据库 URL，不删除新对象。系统数据快照导出会收集菜谱 Wiki 图片，测试导入会在快照对象 key 中保留原菜谱图片路径；重新同步时需重新导出和导入，旧的编号型快照对象无法可靠反推出菜谱 ID。封面快照不一致的修复命令 `pnpm --filter @next-meal/api repair:recipe-cover-snapshots -- --target=TEST --manifest=<清单路径>` 只读检查 `Recipe.coverImageUrl` 对应对象并生成清单；清单绑定生成时的数据库、对象存储和静态资源公开域名指纹，执行与验证必须传入匹配的 `--target` 且 `SYSTEM_DATA_ENVIRONMENT` 一致。TEST 的 OSS 前缀必须为 `dev`；ONLINE 必须使用 OSS `prod` 前缀，写入还必须显式传 `--confirm-online-write`。复核清单后，TEST 使用 `--target=TEST --apply` 执行；ONLINE 使用 `--target=ONLINE --apply --confirm-online-write` 执行；完成后使用 `--target=<原目标> --verify` 校验当前封面快照、正文内容及对象 SHA-256，旧内容版本和源对象保留。缺失源对象、目标内容冲突或无法识别的文件名会阻止迁移执行；版本快照或菜谱图片在生成清单后发生变化时拒绝覆盖。缺失对象对应的 URL 不会自动置空，需恢复或重新上传图片后更新对应内容。删除清理时仅兼容解析历史 `uploads/admin-recipe-images/{fileName}` 与 `admin-recipe-images/{fileName}` 对象键，清理器不会为这些路径提供读取服务。
 
 `slotKey` 是草稿步骤图片的稳定槽位键。封面固定使用 `cover`；步骤图由客户端为每一步生成稳定 `slotKey`，重复替换图片时必须沿用同一个键，服务端才会把旧临时图按槽位覆盖。
 
@@ -2742,11 +2742,6 @@ interface CollectionSceneSummary {
   updatedAt: IsoDateTime | null;
 }
 
-interface CollectionListResponse {
-  items: CollectionSceneSummary[];
-  totalCount: number;
-}
-
 interface CollectedRecipeSummary {
   id: UUID;
   sourceRecipeId: UUID;
@@ -2758,21 +2753,6 @@ interface CollectedRecipeSummary {
   durationText: string | null;
   category: InspirationCategorySummary;
   contentVersionId: UUID;
-  collectedAt: IsoDateTime;
-  updatedAt: IsoDateTime;
-}
-
-interface CollectedRecipeDetail {
-  id: UUID;
-  sourceRecipeId: UUID;
-  title: string;
-  coverImageUrl: string | null;
-  difficultyText: string | null;
-  durationText: string | null;
-  category: InspirationCategorySummary;
-  contentVersionId: UUID;
-  content: RecipeContentSnapshot;
-  assistantAvailable: boolean;
   collectedAt: IsoDateTime;
   updatedAt: IsoDateTime;
 }
@@ -2863,7 +2843,7 @@ POST /recipes/reorder
   POST /users/me/recipe-history/{historyId}/delete
 ```
 
-`GET /recipes` 只返回本人已发布的个人菜谱，支持分页、关键词、个人分类、系统分类、难度和时长筛选。查询参数为 `page`、`pageSize`、`keyword`、`categoryId`、`inspirationCategoryId`、`difficulty` 和 `duration`。个人菜谱固定按个人分类顺序、更新时间返回，不提供灵感专属的推荐/最新排序。收藏灵感通过私房菜中的收藏列表读取，不混入可编辑的个人菜谱。加入计划不创建个人菜谱。新建和编辑正文统一经过草稿发布，系统分类可由用户在高级设置中选择。
+`GET /recipes` 只返回本人已发布的个人菜谱，支持分页、关键词、个人分类、系统分类、难度和时长筛选。查询参数为 `page`、`pageSize`、`keyword`、`categoryId`、`inspirationCategoryId`、`difficulty` 和 `duration`。个人菜谱固定按个人分类顺序、更新时间返回，不提供灵感专属的推荐/最新排序。添加到私房菜的灵感通过私房菜管理页的灵感列表读取，不混入可编辑的个人菜谱。加入计划不创建个人菜谱。新建和编辑正文统一经过草稿发布，系统分类可由用户在高级设置中选择。
 
 `GET /recipes/{recipeId}` 是菜谱详情的可选登录读取接口，响应使用 `RecipeDetail`。接口始终返回普通菜谱数据：标题、封面、正文固定版本、难度、时长、系统灵感分类、营养结果、做饭助手可用状态和更新时间；`personal` 只在请求带有效 `Authorization` 且当前用户是该菜谱持有人时返回，内容包括个人分类、计划关联、编辑用食材/单位引用、自荐状态、持有人快照、状态、版本和创建时间。匿名请求、失效 token 匿名重试以及非持有人请求的 `personal` 均为 `null`，服务端不得为这些请求查询上述个人关系；页面正文仍正常展示。需要登录的编辑、计划、采购和助手操作由用户点击后再触发登录，不在详情读取阶段弹出登录。`POST /recipe-drafts/{draftId}/publish` 等仍返回 `MyRecipeDetail`，其顶层个人字段只供已识别的当前用户流程使用。
 
@@ -2957,7 +2937,7 @@ slotKey: cover | step-1 | ...
 file: <binary>
 ```
 
-“合集”不再是当前产品概念。旧 `/collections/recipes/{collectionRecipeId}` 仅作为既有固定版本引用的只读兼容路径；当前用户收藏只能通过 `/recipes/saved-inspiration` 管理，不提供旧合集列表或写入接口。历史关系数据保留，避免影响已经建立的固定版本引用。
+“合集”不再是当前产品概念。旧 `/collections/recipes/{collectionRecipeId}` 兼容读取路径已移除；旧关系数据由迁移清空，不再回填或保留旧添加状态。
 
 匿名灵感读取路径冻结为：
 
@@ -2967,20 +2947,20 @@ GET /inspiration-recipes
 GET /inspiration-recipes/{recipeId}
 ```
 
-`GET /inspiration-recipes` 支持 `page`、`pageSize`、`keyword`、`categoryId`、`sort`、`difficulty` 和 `duration`。`sort` 只允许 `RECOMMENDED` 或 `LATEST`，`duration` 只允许 `WITHIN_15 / BETWEEN_15_30 / BETWEEN_30_60 / OVER_60`。匿名只返回审核通过且允许曝光的固定版本，不返回个人收藏、额度、分类或可写状态。当前灵感口径同时覆盖平台直接创建的系统菜谱，以及后台审核通过后复制进系统库的用户推荐菜谱；详情返回菜谱冻结的 `owner { uid, nickname }`，其中 nickname 只用于展示“由某某整理”，不跳用户主页，空值隐藏。公共内容用户池成员资格只在后台用户列表返回，绝不进入用户侧接口。带有效用户 token 时，摘要和详情额外返回与当前正文版本匹配的 `saveId + isSavedToPrivate`；匿名态固定返回 `null + false`。详情可选传 `versionId` 读取仍被收藏关系引用的历史公开版本，服务端仍校验来源菜谱当前公开且该版本确属来源菜谱；分享链接传固定版本 ID，不传私有 `saveId`。菜谱不提供点赞能力，推荐排序不使用点赞指标。
+`GET /inspiration-recipes` 支持 `page`、`pageSize`、`keyword`、`categoryId`、`sort`、`difficulty` 和 `duration`。`sort` 只允许 `RECOMMENDED` 或 `LATEST`，`duration` 只允许 `WITHIN_15 / BETWEEN_15_30 / BETWEEN_30_60 / OVER_60`。匿名只返回审核通过且允许曝光的固定版本，不返回个人添加状态、额度、个人分类或可写状态。当前灵感口径同时覆盖平台直接创建的系统菜谱，以及后台审核通过后复制进系统库的用户推荐菜谱；详情返回菜谱冻结的 `owner { uid, nickname }`，其中 nickname 只用于展示“由某某整理”，不跳用户主页，空值隐藏。公共内容用户池成员资格只在后台用户列表返回，绝不进入用户侧接口。带有效用户 token 时，摘要和详情额外返回与当前正文版本匹配的 `saveId + isSavedToPrivate`；匿名态固定返回 `null + false`。详情可选传 `versionId` 读取仍被私房菜关系引用的历史公开版本，服务端仍校验来源菜谱当前公开且该版本确属来源菜谱；分享链接传固定版本 ID，不传私有 `saveId`。菜谱不提供点赞能力，推荐排序不使用点赞指标。
 
 收藏私房菜的接口如下：
 
 ```text
-GET    /recipes/saved-inspiration?page=&pageSize=&keyword=
+GET    /recipes/saved-inspiration?page=&pageSize=&keyword=&categoryId=
 GET    /recipes/saved-inspiration/{saveId}
 POST   /recipes/saved-inspiration
 DELETE /recipes/saved-inspiration/{saveId}
 ```
 
-读写归当前登录用户所有。创建请求只提交 `sourceRecipeId + sourceVersionId`，删除按收藏关系 ID 进行；两个写请求均使用数字字符串 `Idempotency-Key`。服务端只允许收藏当前可公开的灵感固定版本。唯一键为 `userId + sourceRecipeId + sourceVersionId`；`collectCount` 按来源菜谱当前不同用户数维护，同一用户收藏多个版本仍只计 1；事务锁定来源菜谱，用户首次收藏加一、移除最后版本减一，不全量读取收藏者。收藏列表按收藏时间倒序，固定版本详情保留来源整理者；下架后仍可读到收藏记录并移除，但不能新增收藏。
+读写归当前登录用户所有。创建请求提交 `sourceRecipeId + sourceVersionId + categoryId`，其中 `categoryId` 必须属于当前用户；删除按私房菜关系 ID 进行。两个写请求均使用数字字符串 `Idempotency-Key`。服务端只允许添加当前可公开的灵感固定版本。唯一键为 `userId + sourceRecipeId + sourceVersionId`；`collectCount` 按来源菜谱当前已添加到私房菜的不同用户数维护，同一用户添加多个版本仍只计 1；事务锁定来源菜谱，用户首次添加加一、移除最后版本减一，不全量读取用户。私房菜灵感列表支持 `categoryId` 筛选并返回个人分类摘要，默认按添加时间倒序；固定版本详情保留来源整理者；下架后仍可读取并从私房菜移除，但不能新增。现存旧关系由前向迁移全部清除，`collectCount` 重置为 `0`，不迁移或回填分类。
 
-推荐规则固定为近 30 天不同收藏用户数及有效计划加入数，计划每用户每菜最多贡献 3 次，计划行为权重为收藏的 2 倍，分数为 `ln(1 + saveUsers30d) + 2 × ln(1 + planAdds30d)`。正常档新内容自首次公开进入灵感库起试推 7 天，每个推荐列表前 10 位最多留 1 个新内容试推位。档位顺序为 `NORMAL / DOWNRANK / STRONG_DOWNRANK`；同档按分数、首次公开时间、菜谱 ID 稳定排序。没有平台质量分、时间衰减或点赞信号。后台 `PUT /admin/recipes/{recipeId}/recommendation-rank` 仅 SUPER_ADMIN 可写，要求 `expectedVersion`、档位、非空原因和数字字符串 `Idempotency-Key`，并写现有 `AuditEvent`；客户端不读后台原因及内部得分。
+推荐规则固定为近 30 天添加到私房菜的不同用户数及有效计划加入数，计划每用户每菜最多贡献 3 次，计划行为权重为添加行为的 2 倍，分数为 `ln(1 + privateAdds30d) + 2 × ln(1 + planAdds30d)`。该添加行为直接读取上述关系；`collectCount` 是当前人数展示值，不单独作为排序分数。正常档新内容自首次公开进入灵感库起试推 7 天，每个推荐列表前 10 位最多留 1 个新内容试推位。档位顺序为 `NORMAL / DOWNRANK / STRONG_DOWNRANK`；同档按分数、首次公开时间、菜谱 ID 稳定排序。没有平台质量分、时间衰减或点赞信号。后台 `PUT /admin/recipes/{recipeId}/recommendation-rank` 仅 SUPER_ADMIN 可写，要求 `expectedVersion`、档位、非空原因和数字字符串 `Idempotency-Key`，并写现有 `AuditEvent`；客户端不读后台原因及内部得分。
 
 后台只读查询本轮新增：
 
@@ -2992,13 +2972,13 @@ GET /admin/users/{userId}/recipe-drafts
 
 `GET /admin/users/{userId}/recipe-domain` 返回用户菜谱域概览；`/recipes` 与 `/recipe-drafts` 继续返回分页摘要。当前不提供用户合集/场景管理接口。
 
-`GET /ingredient-categories` 允许匿名读取，只返回系统食材正式分类的最小摘要 `id + name`，隐藏兜底分类 `待归类` 不下发给前台录入入口。`GET /ingredients` 支持 `page`、`pageSize`、`keyword`、`categoryId` 和 `source`。`source` 只允许 `SYSTEM`、`PERSONAL` 或 `ALL`；登录态保持原有三种口径，匿名态服务端会强制按 `SYSTEM` 处理，因此不会混入任何个人食材。`SYSTEM` 和 `ALL` 都只返回当前启用中且分类可选的系统食材，`PERSONAL` 只返回本人仍可直接使用的个人食材，不返回已归并条目；当请求命中“全部食材”口径时，系统食材部分按后台全局展示顺序返回；当传了真实 `categoryId` 时，系统食材仍按该分类内顺序返回。食材摘要新增 `imageUrl`，仅系统食材在后台已补图时返回可读图片地址，个人食材固定返回 `null`；同时新增 `recommendationStatus`，当前只返回 `PENDING | REJECTED | null`，用于“我的食材”选择态最小展示 `审核中 / 拒绝后隐藏推荐入口`。`POST /ingredients` 新建一个个人食材，并在创建时拦截与现有系统食材重名的重复项，包括已下架但仍保留治理身份的系统食材；同时禁止使用隐藏兜底分类。`PUT /ingredients/{ingredientId}` 只允许编辑本人未处于审核中的个人食材，并继续禁止切到隐藏兜底分类。`POST /ingredients/{ingredientId}/recommendations` 是显式推荐入口：若系统库已存在启用中的同名食材，则服务端直接归并并生成一条“已归并”记录；否则进入待审核队列。`POST /ingredients/{ingredientId}/feedbacks` 是系统食材纠错入口，只允许对当前可用系统食材提交，请求体固定提交 `name + categoryId + note?`，并要求“名字、分类、备注”至少有一项真正发生变化；同一用户对同一系统食材同一时间只允许保留一条 `PENDING` 纠错。成功后返回 `IngredientFeedbackResult`，前台只做成功提示，不在当前页展开审核态。`GET /ingredient-recommendations` 分页返回“我的推荐”记录，用于显示 `审核中 / 已拒绝 / 已收录 / 已归并`；当状态为 `REJECTED` 时，响应额外返回 `reviewNote + reviewAdvice`，分别承载后台拒绝原因和修改建议。`GET /units` 支持 `page`、`pageSize`、`keyword`、`type` 和 `source`，并允许匿名读取系统单位；登录态保持原有口径，匿名态服务端同样强制按 `SYSTEM` 处理，因此只会返回系统单位。`POST /units` 不再创建个人单位，而是提交一条单位建议；若系统库已存在同名系统单位，则服务端直接归并并生成一条 `MERGED` 记录，否则进入待审核队列。`GET /unit-recommendations` 分页返回“我的单位建议”记录，用于显示 `审核中 / 已拒绝 / 已收录 / 已归并`；当状态为 `REJECTED` 时，同样返回 `reviewNote + reviewAdvice`。`GET /recipe-drafts` 只返回本人草稿箱，查询参数为 `page`、`pageSize` 和 `keyword`；`GET /recipes`、`GET /inspiration-recipes` 与它统一使用同一搜索语义，`keyword` 都按 `菜名 + 故事 + 食材名` 匹配。`POST /recipe-drafts` 与 `PUT /recipe-drafts/{draftId}` 只返回最小保存结果 `id + recipeId + version + updatedAt`。`GET /recipe-drafts/{draftId}` 与 `GET /recipes/{recipeId}` 额外返回当前内容实际引用到的 `ingredientRefs`、`unitRefs`，用于编辑页补齐超出首屏分页的历史食材与单位；其中 `ingredientRefs.defaultUnit` 只表示食材默认单位，不等于正文里所有真实 `unitId`，因此详情接口仍需单独返回 `unitRefs`。`GET /recipes/{recipeId}`、`GET /inspiration-recipes/{recipeId}` 与 `GET /collections/recipes/{collectionRecipeId}` 现统一补充只读 `nutrition` block，字段固定为 `status / qualityLabel / perServing / perRecipe / calculatedAt / sourceVersion`；前台只展示 `热量 / 蛋白质 / 脂肪 / 碳水` 四项结果，不上传、也不回写任何营养值。`status = COMPLETE` 表示当前固定正文的主要系统食材映射和重量换算较完整；`ESTIMATED` 表示至少一部分食材通过代表值或近似单位换算得出；`INSUFFICIENT` 表示当前仍无法稳定算出结果；`NONE` 只用于当前库里还没有可读营养源版本时的静默空态。该营养结果属于平台派生快照，不进入草稿正文，也不把原始营养库明细、映射候选、人工审校记录暴露给前台。`GET /recipes/{recipeId}` 还返回布尔字段 `canRecommend`，由服务端统一结算当前版本是否允许继续“自荐美食”，前台只按这个结论显示或隐藏入口，不再自行根据来源字段猜测。`POST /recipes/from-inspiration` 只用于用户明确选择改编灵感并创建可编辑的个人菜谱；它不是收藏入口。收藏只使用 `/recipes/saved-inspiration` 建立只读固定版本关系，不创建个人 Recipe。 加入计划通过 `POST /meal-plans` 直接引用可访问菜谱及固定正文版本，不调用此接口。`POST /recipes/{recipeId}/recommendations` 是显式“推荐到灵感”入口：只允许本人对当前已发布个人菜谱提交当前固定正文版本，请求体只提交建议系统分类 `inspirationCategoryId`；服务端创建独立推荐记录，并把 `GET /recipes/{recipeId}` 的 `recommendation` 字段更新为最新推荐摘要。审核中时，该个人菜谱不允许继续创建编辑草稿、发布编辑草稿或删除，保证后台审核的固定内容不漂移；用户可通过 `POST /recipe-recommendations/{recommendationId}/withdraw` 撤回待审推荐，撤回后恢复可编辑/可删除。若该个人菜谱最初来自灵感菜谱升级为“我的”，且当前正文与封面仍与当时来源版本完全一致，服务端直接拒绝推荐，不允许把未改动的灵感菜谱再次作为个人投稿提交；对于历史上还没有来源快照的旧个人菜谱，服务端会按“是否与现有系统菜谱的正文和封面完全一致”做同样的识别与拦截。后台审核通过后，服务端复制一份 `sourceVersionId` 指向的固定正文到系统菜谱，新建 `isInspiration = true`、挂系统分类的系统菜谱，并保留来源菜谱的 owner 与冻结昵称快照；原个人菜谱继续保留在“我的”下，不被替换或删除。
+`GET /ingredient-categories` 允许匿名读取，只返回系统食材正式分类的最小摘要 `id + name`，隐藏兜底分类 `待归类` 不下发给前台录入入口。`GET /ingredients` 支持 `page`、`pageSize`、`keyword`、`categoryId` 和 `source`。`source` 只允许 `SYSTEM`、`PERSONAL` 或 `ALL`；登录态保持原有三种口径，匿名态服务端会强制按 `SYSTEM` 处理，因此不会混入任何个人食材。`SYSTEM` 和 `ALL` 都只返回当前启用中且分类可选的系统食材，`PERSONAL` 只返回本人仍可直接使用的个人食材，不返回已归并条目；当请求命中“全部食材”口径时，系统食材部分按后台全局展示顺序返回；当传了真实 `categoryId` 时，系统食材仍按该分类内顺序返回。食材摘要新增 `imageUrl`，仅系统食材在后台已补图时返回可读图片地址，个人食材固定返回 `null`；同时新增 `recommendationStatus`，当前只返回 `PENDING | REJECTED | null`，用于“我的食材”选择态最小展示 `审核中 / 拒绝后隐藏推荐入口`。`POST /ingredients` 新建一个个人食材，并在创建时拦截与现有系统食材重名的重复项，包括已下架但仍保留治理身份的系统食材；同时禁止使用隐藏兜底分类。`PUT /ingredients/{ingredientId}` 只允许编辑本人未处于审核中的个人食材，并继续禁止切到隐藏兜底分类。`POST /ingredients/{ingredientId}/recommendations` 是显式推荐入口：若系统库已存在启用中的同名食材，则服务端直接归并并生成一条“已归并”记录；否则进入待审核队列。`POST /ingredients/{ingredientId}/feedbacks` 是系统食材纠错入口，只允许对当前可用系统食材提交，请求体固定提交 `name + categoryId + note?`，并要求“名字、分类、备注”至少有一项真正发生变化；同一用户对同一系统食材同一时间只允许保留一条 `PENDING` 纠错。成功后返回 `IngredientFeedbackResult`，前台只做成功提示，不在当前页展开审核态。`GET /ingredient-recommendations` 分页返回“我的推荐”记录，用于显示 `审核中 / 已拒绝 / 已收录 / 已归并`；当状态为 `REJECTED` 时，响应额外返回 `reviewNote + reviewAdvice`，分别承载后台拒绝原因和修改建议。`GET /units` 支持 `page`、`pageSize`、`keyword`、`type` 和 `source`，并允许匿名读取系统单位；登录态保持原有口径，匿名态服务端同样强制按 `SYSTEM` 处理，因此只会返回系统单位。`POST /units` 不再创建个人单位，而是提交一条单位建议；若系统库已存在同名系统单位，则服务端直接归并并生成一条 `MERGED` 记录，否则进入待审核队列。`GET /unit-recommendations` 分页返回“我的单位建议”记录，用于显示 `审核中 / 已拒绝 / 已收录 / 已归并`；当状态为 `REJECTED` 时，同样返回 `reviewNote + reviewAdvice`。`GET /recipe-drafts` 只返回本人草稿箱，查询参数为 `page`、`pageSize` 和 `keyword`；`GET /recipes`、`GET /inspiration-recipes` 与它统一使用同一搜索语义，`keyword` 都按 `菜名 + 故事 + 食材名` 匹配。`POST /recipe-drafts` 与 `PUT /recipe-drafts/{draftId}` 只返回最小保存结果 `id + recipeId + version + updatedAt`。`GET /recipe-drafts/{draftId}` 与 `GET /recipes/{recipeId}` 额外返回当前内容实际引用到的 `ingredientRefs`、`unitRefs`，用于编辑页补齐超出首屏分页的历史食材与单位；其中 `ingredientRefs.defaultUnit` 只表示食材默认单位，不等于正文里所有真实 `unitId`，因此详情接口仍需单独返回 `unitRefs`。`GET /recipes/{recipeId}`、`GET /inspiration-recipes/{recipeId}` 现统一补充只读 `nutrition` block，字段固定为 `status / qualityLabel / perServing / perRecipe / calculatedAt / sourceVersion`；前台只展示 `热量 / 蛋白质 / 脂肪 / 碳水` 四项结果，不上传、也不回写任何营养值。`status = COMPLETE` 表示当前固定正文的主要系统食材映射和重量换算较完整；`ESTIMATED` 表示至少一部分食材通过代表值或近似单位换算得出；`INSUFFICIENT` 表示当前仍无法稳定算出结果；`NONE` 只用于当前库里还没有可读营养源版本时的静默空态。该营养结果属于平台派生快照，不进入草稿正文，也不把原始营养库明细、映射候选、人工审校记录暴露给前台。`GET /recipes/{recipeId}` 还返回布尔字段 `canRecommend`，由服务端统一结算当前版本是否允许继续“自荐美食”，前台只按这个结论显示或隐藏入口，不再自行根据来源字段猜测。`POST /recipes/from-inspiration` 只用于用户明确选择改编灵感并创建可编辑的个人菜谱；它不是收藏入口。添加到私房菜只使用 `/recipes/saved-inspiration` 建立只读固定版本关系，不创建个人 Recipe。 加入计划通过 `POST /meal-plans` 直接引用可访问菜谱及固定正文版本，不调用此接口。`POST /recipes/{recipeId}/recommendations` 是显式“推荐到灵感”入口：只允许本人对当前已发布个人菜谱提交当前固定正文版本，请求体只提交建议系统分类 `inspirationCategoryId`；服务端创建独立推荐记录，并把 `GET /recipes/{recipeId}` 的 `recommendation` 字段更新为最新推荐摘要。审核中时，该个人菜谱不允许继续创建编辑草稿、发布编辑草稿或删除，保证后台审核的固定内容不漂移；用户可通过 `POST /recipe-recommendations/{recommendationId}/withdraw` 撤回待审推荐，撤回后恢复可编辑/可删除。若该个人菜谱最初来自灵感菜谱升级为“我的”，且当前正文与封面仍与当时来源版本完全一致，服务端直接拒绝推荐，不允许把未改动的灵感菜谱再次作为个人投稿提交；对于历史上还没有来源快照的旧个人菜谱，服务端会按“是否与现有系统菜谱的正文和封面完全一致”做同样的识别与拦截。后台审核通过后，服务端复制一份 `sourceVersionId` 指向的固定正文到系统菜谱，新建 `isInspiration = true`、挂系统分类的系统菜谱，并保留来源菜谱的 owner 与冻结昵称快照；原个人菜谱继续保留在“我的”下，不被替换或删除。
 
 详情字段边界补充：上文在菜谱接口总览中提到的 `ingredientRefs / unitRefs / canRecommend / recommendation`，对于 `GET /recipes/{recipeId}` 均归属于 `personal`，不属于匿名返回的普通数据；只有 `POST /recipe-drafts/{draftId}/publish` 等仍返回 `MyRecipeDetail` 的流程，才使用顶层个人字段。
 
 个人空间计量暂缓开放。菜谱、草稿、饭局、计划、冰箱和购物清单写入不计算空间增量、不写入空间账本，也不按个人/会员空间额度拦截。图片上传仍执行文件体积和压缩安全上限，这些限制只用于单次上传安全，不作为空间用量。
 
-个人分类最多 50 个，名称最多 8 字；菜谱名最多 120 字，故事最多 2000 字，小贴士最多 1000 字，食材名最多 64 字，单位名最多 16 字。分类 R1 不提供删除，后续删除前必须先迁移其下菜谱。
+个人分类最多 50 个，名称最多 16 字；菜谱名最多 120 字，故事最多 2000 字，小贴士最多 1000 字，食材名最多 64 字，单位名最多 16 字。分类 R1 不提供删除，后续删除前必须先迁移其下菜谱。
 
 完整 owner、主事实、事务、索引和数据库约束见 `plans/recipe-contract-review.md`。菜谱归用户本人，饭搭子关系不改变所有权。
 
