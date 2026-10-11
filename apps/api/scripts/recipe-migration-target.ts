@@ -46,8 +46,8 @@ export function assertRecipeMigrationTarget(
   }
 
   if (target === "ONLINE") {
-    if (environment.ASSET_STORAGE_DRIVER !== "oss" || normalizedPrefix(environment) !== "prod") {
-      throw new Error("ONLINE 目标必须明确配置 OSS 且 ASSET_STORAGE_PREFIX=prod");
+    if (environment.ASSET_STORAGE_DRIVER !== "oss" || normalizedPrefix(environment) !== "O") {
+      throw new Error("ONLINE 目标必须明确配置 OSS 且 ASSET_STORAGE_PREFIX=O");
     }
     if (write && !argv.includes("--confirm-online-write")) {
       throw new Error("线上写入需要显式添加 --confirm-online-write");
