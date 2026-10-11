@@ -65,7 +65,7 @@
 	            <view class="summary-card">
                 <view class="summary-card__title-row">
 	                <text id="detail-title" class="summary-card__title">{{ detailTitle }}</text>
-                  <button v-if="showStickyActions" class="summary-card__share" open-type="share">
+                  <button v-if="showStickyActions && !savedInspirationUnavailable" class="summary-card__share" open-type="share">
                     <view class="cookfont icon-share summary-card__share-icon" />
                   </button>
                 </view>
@@ -232,6 +232,9 @@
 	              <text class="tips-text">{{ detailContent.tips }}</text>
 	            </view>
 
+              <view v-if="savedInspirationUnavailable" class="saved-inspiration-unavailable">
+                这道灵感当前已不可用，你仍可从私房菜移除收藏。
+              </view>
               <text v-if="attributionText" class="detail-curated">{{ attributionText }}</text>
 
               <view v-if="primaryPlanLink" id="detail-plan-links" class="section section--plan-links">
@@ -259,19 +262,19 @@
 
 	              <view v-if="showStickyActions" class="detail-inline-actions">
                 <template v-if="isExternalDetail">
-	                  <button class="detail-inline-actions__item" @click="handleExternalEditAction">
+                  <button v-if="!savedInspirationUnavailable" class="detail-inline-actions__item" @click="handleExternalEditAction">
 	                    <view class="cookfont detail-inline-actions__icon icon-edit" />
 	                    <view class="detail-inline-actions__text">{{ externalEditActionLabel }}</view>
 	                  </button>
-	                  <button v-if="canAddToPrivate && !detailActionsVisible" class="detail-inline-actions__item" @click="openPrivateSheet">
+	                  <button v-if="!detailActionsVisible" class="detail-inline-actions__item" @click="openPrivateSheet">
 	                    <view class="cookfont detail-inline-actions__icon icon-collect" />
-	                    <view class="detail-inline-actions__text">加到私房菜</view>
+	                    <view class="detail-inline-actions__text">{{ inspirationDetail?.isSavedToPrivate ? "已收藏" : "收藏到私房菜" }}</view>
 	                  </button>
-	                  <button v-if="!detailActionsVisible" class="detail-inline-actions__item" @click="handleExternalPrimaryAction">
+                  <button v-if="!detailActionsVisible && !savedInspirationUnavailable" class="detail-inline-actions__item" @click="handleExternalPrimaryAction">
                     <view class="cookfont detail-inline-actions__icon icon-add-plan" />
                     <view class="detail-inline-actions__text">加入计划</view>
                   </button>
-                  <button v-if="canOpenRecipeAssistant && !detailActionsVisible" class="detail-inline-actions__item" @click="openRecipeAssistant">
+                  <button v-if="canOpenRecipeAssistant && !detailActionsVisible && !savedInspirationUnavailable" class="detail-inline-actions__item" @click="openRecipeAssistant">
                     <view class="cookfont detail-inline-actions__icon icon-cook-assistant" />
                     <view class="detail-inline-actions__text">炊火智厨</view>
                   </button>
@@ -326,15 +329,15 @@
       >
         <view class="detail-actions" :class="{ 'detail-actions--visible': detailActionsVisible }">
           <template v-if="isExternalDetail">
-            <button v-if="canAddToPrivate" class="detail-actions__item" @click="openPrivateSheet">
+            <button class="detail-actions__item" @click="openPrivateSheet">
               <view class="cookfont icon-collect detail-actions__icon" />
-              <view class="detail-actions__text">加到私房菜</view>
+              <view class="detail-actions__text">{{ inspirationDetail?.isSavedToPrivate ? "已收藏" : "收藏到私房菜" }}</view>
             </button>
-            <button class="detail-actions__item" @click="handleExternalPrimaryAction">
+            <button v-if="!savedInspirationUnavailable" class="detail-actions__item" @click="handleExternalPrimaryAction">
               <view class="cookfont icon-add-plan detail-actions__icon" />
               <view class="detail-actions__text">加入计划</view>
             </button>
-            <button v-if="canOpenRecipeAssistant" class="detail-actions__item" @click="openRecipeAssistant">
+            <button v-if="canOpenRecipeAssistant && !savedInspirationUnavailable" class="detail-actions__item" @click="openRecipeAssistant">
               <view class="cookfont icon-cook-assistant detail-actions__icon" />
               <view class="detail-actions__text">炊火智厨</view>
             </button>
@@ -443,6 +446,8 @@
         :visible="privateSheetVisible"
         :source-recipe-id="externalRecipeRef.sourceRecipeId"
         :source-version-id="externalRecipeRef.sourceVersionId"
+        :is-saved="inspirationDetail?.isSavedToPrivate ?? false"
+        :save-id="inspirationDetail?.saveId ?? null"
         @close="closePrivateSheet"
         @success="handlePrivateSuccess"
       />
@@ -634,6 +639,8 @@ const { navBarTotalHeight } = useSystemInfo();
 const NAV_FADE_RANGE = 132;
 const INGREDIENT_TOGGLE_MEASURE_DELAY = 300;
 const recipeId = ref<UUID | "">("");
+const savedInspirationId = ref<UUID | "">("");
+const sharedInspirationVersionId = ref<UUID | "">("");
 const kind = ref<DetailKind>("my");
 const mode = ref<DetailMode>("published");
 const detail = ref<PublishedDetail | RecipePreviewDetail | null>(null);
@@ -759,7 +766,6 @@ const detailCategoryName = computed(() => {
 const detailStory = computed(() => detailContent.value.story?.trim() || "");
 const currentRecommendation = computed(() => myPersonal.value?.recommendation ?? null);
 const externalDetail = computed(() => inspirationDetail.value);
-const linkedOwnedRecipeId = computed(() => inspirationDetail.value?.ownedRecipeId || "");
 const externalRecipeRef = computed(() => {
   if (inspirationDetail.value) {
     return {
@@ -785,6 +791,10 @@ const detailSteps = computed(() => detailContent.value.steps.filter(item => Bool
 const isOwnedDetail = computed(() => mode.value === "published" && kind.value === "my" && Boolean(myPersonal.value));
 const isReadablePrivateDetail = computed(() => mode.value === "published" && kind.value === "my" && Boolean(myDetail.value));
 const isExternalDetail = computed(() => mode.value === "published" && Boolean(externalDetail.value));
+const savedInspirationUnavailable = computed(() => Boolean(
+  savedInspirationId.value && inspirationDetail.value &&
+  "isAvailable" in inspirationDetail.value && !inspirationDetail.value.isAvailable
+));
 const canOpenRecipeAssistant = computed(() => Boolean(publishedDetail.value?.contentVersionId));
 const cookAssistantRemainingCount = computed(() => cookAssistantUsage.value?.remainingCount ?? 0);
 const cookAssistantCanUnlock = computed(() => Boolean(
@@ -795,7 +805,7 @@ const cookAssistantCanUnlock = computed(() => Boolean(
 const canRecommendRecipe = computed(() => Boolean(myPersonal.value?.canRecommend));
 const planRecipeId = computed<UUID | "">(() => {
   if (kind.value === "my" && myDetail.value) return recipeId.value;
-  return linkedOwnedRecipeId.value || "";
+  return "";
 });
 const planSheetItems = computed(() => {
   const recipeId = planRecipeId.value || (kind.value === "inspiration" ? externalRecipeRef.value?.sourceRecipeId : "") || "";
@@ -805,8 +815,8 @@ const planSheetItems = computed(() => {
     : undefined;
   return [{ recipeId, ...(recipeVersionId ? { recipeVersionId } : {}) }];
 });
-const canAddToPrivate = computed(() => isExternalDetail.value && !linkedOwnedRecipeId.value);
-const showReportEntry = computed(() => isExternalDetail.value && sessionStore.isLoggedIn);
+const canAddToPrivate = computed(() => isExternalDetail.value);
+const showReportEntry = computed(() => isExternalDetail.value && !savedInspirationUnavailable.value && sessionStore.isLoggedIn);
 const selectedReportReasonLabel = computed(
   () => reportReasonOptions.find(item => item.value === selectedReportReason.value)?.label || ""
 );
@@ -823,7 +833,7 @@ const isRecommendReadonly = computed(() => {
   const status = currentRecommendation.value?.status;
   return status === "PENDING" || status === "ADOPTED";
 });
-const externalEditActionLabel = computed(() => (linkedOwnedRecipeId.value && kind.value === "inspiration" ? "编辑" : "改编"));
+const externalEditActionLabel = computed(() => "改编");
 const showRecommendEntry = computed(() => isOwnedDetail.value && (canRecommendRecipe.value || Boolean(currentRecommendation.value)));
 const showStickyActions = computed(
   () => mode.value === "published" && (isExternalDetail.value || isReadablePrivateDetail.value)
@@ -991,6 +1001,8 @@ onLoad((query) => {
   const rawKind = Array.isArray(query?.kind) ? query.kind[0] : query?.kind;
   const rawMode = Array.isArray(query?.mode) ? query.mode[0] : query?.mode;
   recipeId.value = parseQueryId(query?.recipeId);
+  savedInspirationId.value = parseQueryId(query?.savedId);
+	sharedInspirationVersionId.value = parseQueryId(query?.versionId);
 	kind.value = rawKind === "my" ? "my" : "inspiration";
   mode.value = rawMode === "preview" ? "preview" : "published";
 
@@ -1037,7 +1049,9 @@ onUnload(() => {
 onShareAppMessage(() => ({
   title: detailTitle.value || "菜谱分享",
   path: recipeId.value
-    ? `/pages_recipe/detail/index?recipeId=${encodeURIComponent(String(recipeId.value))}&kind=${kind.value}&mode=${mode.value}`
+    ? kind.value === "inspiration" && inspirationDetail.value?.contentVersionId
+      ? `/pages_recipe/detail/index?recipeId=${encodeURIComponent(String(recipeId.value))}&kind=inspiration&versionId=${encodeURIComponent(String(inspirationDetail.value.contentVersionId))}`
+      : `/pages_recipe/detail/index?recipeId=${encodeURIComponent(String(recipeId.value))}&kind=${kind.value}&mode=${mode.value}`
     : "/pages/recipe/index",
   imageUrl: coverImageUrl.value || undefined
 }));
@@ -1048,7 +1062,9 @@ async function loadDetail(initialLoading = false) {
   errorText.value = "";
 		try {
 			detail.value = kind.value === "inspiration"
-				? await recipeApi.getInspirationRecipe(recipeId.value)
+				? savedInspirationId.value
+					? await recipeApi.getSavedInspiration(savedInspirationId.value)
+					: await recipeApi.getInspirationRecipe(recipeId.value, sharedInspirationVersionId.value || undefined)
 				: await recipeApi.getRecipeDetail(recipeId.value);
 			if (sessionStore.isLoggedIn && (kind.value === "inspiration" || Boolean(myPersonal.value))) {
 				void recipeApi.recordRecipeView(recipeId.value, createOperationId()).catch(() => undefined);
@@ -1271,6 +1287,7 @@ async function handleRecommendAction() {
 }
 
 function openPlanSheet() {
+  if (savedInspirationUnavailable.value) return;
   if (!planRecipeId.value && !(kind.value === "inspiration" && externalRecipeRef.value)) return;
   if (!sessionStore.isLoggedIn) {
     openLogin(() => {
@@ -1326,11 +1343,12 @@ function closePlanLinksSheet() {
   planLinksSheetVisible.value = false;
 }
 
-function handlePrivateSuccess(recipeId: UUID) {
+function handlePrivateSuccess(result: import("@/apis/recipe").SavedInspirationMutationResult) {
   if (!inspirationDetail.value) return;
-  inspirationDetail.value.ownedRecipeId = recipeId;
+  inspirationDetail.value.saveId = result.isSavedToPrivate ? result.saveId : null;
+  inspirationDetail.value.isSavedToPrivate = result.isSavedToPrivate;
+  inspirationDetail.value.collectCount = result.collectCount;
   markRecipeHomeDirty(["my"]);
-  markRecipeManageDirty(["recipes"]);
 }
 
 function closePlanSheet() {
@@ -1441,7 +1459,7 @@ function buildDraftSeedContent() {
 }
 
 async function handleAdaptRecipe() {
-  if (!showStickyActions.value || !isExternalDetail.value) return;
+  if (!showStickyActions.value || !isExternalDetail.value || savedInspirationUnavailable.value) return;
   if (!sessionStore.isLoggedIn) {
     openLogin(() => {
       void handleAdaptRecipe();
@@ -1455,15 +1473,11 @@ async function handleAdaptRecipe() {
 }
 
 function handleExternalEditAction() {
-  if (linkedOwnedRecipeId.value && kind.value === "inspiration") {
-    void uniPlatform.navigation.navigateTo(`/pages_recipe/edit/index?recipeId=${encodeURIComponent(String(linkedOwnedRecipeId.value))}`);
-    return;
-  }
   void handleAdaptRecipe();
 }
 
 function openCookMode() {
-  if (!showStickyActions.value || !recipeId.value || mode.value !== "published") return;
+  if (!showStickyActions.value || !recipeId.value || mode.value !== "published" || savedInspirationUnavailable.value) return;
   if (!sessionStore.isLoggedIn) {
     openLogin(() => {
       openCookMode();
@@ -3063,6 +3077,16 @@ defineExpose({
   font-size: 30rpx;
   font-weight: var(--font-weight-regular);
   line-height: 1;
+}
+
+.saved-inspiration-unavailable {
+  margin-top: 20rpx;
+  padding: 20rpx 24rpx;
+  border-radius: var(--radius-sm);
+  background: var(--material-card-bg);
+  color: var(--color-text-secondary);
+  font-size: 24rpx;
+  line-height: 1.5;
 }
 
 .detail-inline-actions__text {

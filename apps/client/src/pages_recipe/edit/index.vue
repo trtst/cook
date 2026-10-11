@@ -201,6 +201,7 @@
                 <ImageField
                   class="step-card__image"
                   variant="card"
+                  preview-mode="natural"
                   :image-src="getStepImageSrc(row)"
                   title="步骤图"
                   description="清晰的步骤会让菜谱更受欢迎"
@@ -768,7 +769,6 @@ interface RecipeEditCacheFormSnapshot {
   story: string;
   categoryId: NullableResourceId;
   inspirationCategoryId: NullableResourceId;
-  sceneIds: ResourceId[];
   coverUploadId: NullableResourceId;
   coverImageUrl: string;
   coverLocalImagePath: string;
@@ -950,7 +950,6 @@ const form = reactive({
   story: "",
   categoryId: null as NullableResourceId,
   inspirationCategoryId: null as NullableResourceId,
-  sceneIds: [] as ResourceId[],
   baseServingsText: "",
   difficulty: null as RecipeDifficulty | null,
   duration: null as RecipeDuration | null,
@@ -960,7 +959,6 @@ const form = reactive({
 const advancedForm = reactive({
   categoryId: null as NullableResourceId,
   inspirationCategoryId: null as NullableResourceId,
-  sceneIds: [] as ResourceId[],
   baseServingsText: "",
   difficulty: null as RecipeDifficulty | null,
   duration: null as RecipeDuration | null,
@@ -1204,7 +1202,6 @@ watch(
 	    () => form.story,
 	    () => form.categoryId,
 	    () => form.inspirationCategoryId,
-	    () => [...form.sceneIds],
     () => coverUploadId.value,
     () => coverImageUrl.value,
     () => coverLocalImagePath.value,
@@ -1588,7 +1585,6 @@ function fillFromRecipe(recipe: MyRecipeDetail) {
     story: recipe.content.story,
     categoryId: recipe.category?.id ?? null,
     inspirationCategoryId: recipe.inspirationCategory?.id ?? null,
-    sceneIds: recipe.scenes.map(item => item.id),
     coverUploadId: null,
     coverImageUrl: recipe.coverImageUrl || null,
     baseServings: recipe.content.baseServings,
@@ -1621,7 +1617,6 @@ function fillForm(content: RecipeDraftContentInput) {
   form.story = content.story || "";
   form.categoryId = content.categoryId;
   form.inspirationCategoryId = content.inspirationCategoryId ?? null;
-  form.sceneIds = [...content.sceneIds];
   originVersionId.value = content.originVersionId ?? null;
   originCoverImageUrl.value = content.originCoverImageUrl || "";
   coverUploadId.value = content.coverUploadId ?? null;
@@ -2049,7 +2044,6 @@ async function recommendIngredient(item: IngredientSummary) {
 function fillAdvancedDraft() {
   advancedForm.categoryId = form.categoryId;
   advancedForm.inspirationCategoryId = form.inspirationCategoryId;
-  advancedForm.sceneIds = [...form.sceneIds];
   advancedForm.baseServingsText = form.baseServingsText;
   advancedForm.difficulty = form.difficulty;
   advancedForm.duration = form.duration;
@@ -2060,7 +2054,6 @@ function fillAdvancedDraft() {
 function resetAdvancedDraft() {
   advancedForm.categoryId = form.categoryId;
   advancedForm.inspirationCategoryId = form.inspirationCategoryId;
-  advancedForm.sceneIds = [...form.sceneIds];
   advancedForm.baseServingsText = form.baseServingsText;
   advancedForm.difficulty = form.difficulty;
   advancedForm.duration = form.duration;
@@ -2164,7 +2157,6 @@ function applyAdvancedForm() {
   advancedForm.baseServingsText = normalizeBaseServingsText(advancedForm.baseServingsText);
   form.categoryId = advancedForm.categoryId;
   form.inspirationCategoryId = advancedForm.inspirationCategoryId;
-  form.sceneIds = [...advancedForm.sceneIds];
   form.baseServingsText = advancedForm.baseServingsText;
   form.difficulty = advancedForm.difficulty;
   form.duration = advancedForm.duration;
@@ -2345,7 +2337,6 @@ function buildRecipeEditCachePayload(): Omit<RecipeEditCacheEntry, "savedAt"> {
 	      story: form.story,
 	      categoryId: form.categoryId,
 	      inspirationCategoryId: form.inspirationCategoryId,
-	      sceneIds: [...form.sceneIds],
       coverUploadId: coverUploadId.value,
       coverImageUrl: coverImageUrl.value,
       coverLocalImagePath: coverLocalImagePath.value,
@@ -2438,7 +2429,6 @@ function applyRecipeEditCacheEntry(entry: RecipeEditCacheEntry) {
 	  form.story = entry.form.story;
 	  form.categoryId = entry.form.categoryId;
 	  form.inspirationCategoryId = entry.form.inspirationCategoryId;
-	  form.sceneIds = [...entry.form.sceneIds];
   coverUploadId.value = entry.form.coverUploadId;
   coverImageUrl.value = entry.form.coverImageUrl;
   coverLocalImagePath.value = entry.form.coverLocalImagePath;
@@ -3011,7 +3001,6 @@ async function buildDraftContent(): Promise<RecipeDraftContentInput> {
     story: form.story.trim() || null,
     categoryId: form.categoryId || null,
     inspirationCategoryId: form.inspirationCategoryId || null,
-    sceneIds: [...form.sceneIds],
     originVersionId: originVersionId.value,
     originCoverImageUrl: originCoverImageUrl.value || null,
     coverUploadId: coverUploadId.value,
@@ -3040,7 +3029,6 @@ async function buildSaveContent(): Promise<RecipeDraftContentInput> {
     story: form.story.trim() || null,
     categoryId: form.categoryId || null,
     inspirationCategoryId: form.inspirationCategoryId || null,
-    sceneIds: [...form.sceneIds],
     originVersionId: originVersionId.value,
     originCoverImageUrl: originCoverImageUrl.value || null,
     coverUploadId: coverUploadId.value,

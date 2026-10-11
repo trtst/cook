@@ -1135,34 +1135,17 @@ expectSelectorExcludes(addToPlanSheetSource, ".panel-note", ["border: 1rpx solid
 expectSelectorExcludes(addToPlanSheetSource, ".sheet-actions__button--cancel", ["border: 1rpx solid var(--button-secondary-border);"]);
 expectSelectorExcludes(addToPlanSheetSource, ".sheet-actions__button--confirm", ["border: 1rpx solid var(--button-primary-border);"]);
 
+expectIncludes(addToPrivateSheetSource, "<view class=\"save-note\">");
 expectIncludes(addToPrivateSheetSource, "background: var(--material-card-bg);");
-expectIncludes(addToPrivateSheetSource, "box-shadow: var(--material-card-shadow);");
-expectIncludes(addToPrivateSheetSource, "backdrop-filter: var(--material-card-filter);");
-expectIncludes(addToPrivateSheetSource, "border: 1rpx solid var(--material-input-border);");
-expectIncludes(addToPrivateSheetSource, "background: var(--material-input-bg);");
-expectIncludes(addToPrivateSheetSource, "box-shadow: var(--material-input-shadow);");
-expectIncludes(addToPrivateSheetSource, "backdrop-filter: var(--material-input-filter);");
-expectIncludes(addToPrivateSheetSource, ".chip {");
-expectIncludes(addToPrivateSheetSource, "min-height: 70rpx;");
-expectIncludes(addToPrivateSheetSource, "padding: 0 24rpx;");
-expectIncludes(addToPrivateSheetSource, "border-radius: var(--radius-pill);");
-expectIncludes(addToPrivateSheetSource, "backdrop-filter: var(--button-primary-filter);");
+expectIncludes(addToPrivateSheetSource, "border-radius: var(--radius-sm);");
+expectIncludes(addToPrivateSheetSource, "background: var(--button-secondary-bg);");
+expectIncludes(addToPrivateSheetSource, "background: var(--button-primary-bg);");
+expectIncludes(addToPrivateSheetSource, "opacity: 0.55;");
 expectExcludes(addToPrivateSheetSource, LEGACY_SECONDARY_OUTLINE);
-expectSelectorExcludes(addToPrivateSheetSource, ".chip", ["border: 1rpx solid var(--material-card-border);"]);
-expectSelectorExcludes(addToPrivateSheetSource, ".panel-note", ["border: 1rpx solid var(--material-card-border);"]);
-expectSelectorExcludes(addToPrivateSheetSource, ".sheet-actions__button--cancel", ["border: 1rpx solid var(--button-secondary-border);"]);
-expectSelectorExcludes(addToPrivateSheetSource, ".sheet-actions__button--confirm", ["border: 1rpx solid var(--button-primary-border);"]);
-expectSelectorIncludes(addToPrivateSheetSource, ".chip--active", [
-  "background: var(--color-tag-primary-bg);",
-  "box-shadow: inset 0 0 0 1rpx var(--color-border-active);",
-  "color: var(--color-tag-primary-text);"
-]);
-expectSelectorExcludes(addToPrivateSheetSource, ".chip--active", ["background: var(--color-primary-soft);"]);
-expectSelectorIncludes(addToPrivateSheetSource, ".sheet-creator__button", [
-  "background: var(--color-tag-primary-bg);",
-  "color: var(--color-tag-primary-text);"
-]);
-expectSelectorExcludes(addToPrivateSheetSource, ".sheet-creator__button", ["background: var(--color-primary-soft);"]);
+expectExcludes(addToPrivateSheetSource, "var(--material-card-shadow)");
+expectExcludes(addToPrivateSheetSource, "var(--material-input");
+expectExcludes(addToPrivateSheetSource, ".chip {");
+expectExcludes(addToPrivateSheetSource, ".sheet-creator__button");
 
 expectSelectorIncludes(sharePillButtonSource, ".share-pill", [
   "background: var(--color-tag-primary-bg);",

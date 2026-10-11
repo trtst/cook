@@ -4,11 +4,17 @@
     :class="[
       `image-field--${variant}`,
       imageSrc ? 'image-field--filled' : 'image-field--empty',
+      `image-field--preview-${previewMode}`,
       { 'image-field--tap': selectOnTap }
     ]"
     @click="handleFieldClick"
   >
-    <ImageLoader v-if="imageSrc" class="image-field__preview" :src="imageSrc" />
+    <ImageLoader
+      v-if="imageSrc"
+      class="image-field__preview"
+      :src="imageSrc"
+      :mode="previewMode === 'natural' ? 'widthFix' : 'aspectFill'"
+    />
 
     <template v-if="imageSrc">
       <button class="image-field__action" @click.stop="emitSelect">{{ buttonText }}</button>
@@ -33,10 +39,12 @@ import ImageEmpty from "@/components/ImageEmpty.vue";
 import ImageLoader from "@/components/ImageLoader.vue";
 
 type ImageFieldVariant = "cover" | "card";
+type ImagePreviewMode = "fill" | "natural";
 
 const props = withDefaults(defineProps<{
   imageSrc?: string;
   variant?: ImageFieldVariant;
+  previewMode?: ImagePreviewMode;
   title: string;
   description?: string;
   buttonText: string;
@@ -45,6 +53,7 @@ const props = withDefaults(defineProps<{
 }>(), {
   imageSrc: "",
   variant: "card",
+  previewMode: "fill",
   description: "",
   clearText: "删除",
   clearable: true
@@ -187,6 +196,20 @@ function handleFieldClick() {
   align-content: flex-end;
   padding: 22rpx;
   text-align: left;
+}
+
+.image-field--card.image-field--filled.image-field--preview-natural {
+  min-height: 0;
+  padding: 0;
+  align-items: stretch;
+  justify-content: flex-start;
+  align-content: stretch;
+}
+
+.image-field--preview-natural .image-field__preview {
+  position: relative;
+  inset: auto;
+  height: auto;
 }
 
 .image-field--card .image-field__plus {

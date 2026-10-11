@@ -1,5 +1,5 @@
 import { cfg } from "@/config";
-import { downloadFile, get, post, put, uploadFile, type IsoDateTime, type PageResult, type OperationId, type UUID } from "./http";
+import { del, downloadFile, get, post, put, uploadFile, type IsoDateTime, type PageQuery, type PageResult, type OperationId, type UUID } from "./http";
 import { normalizeRecipeKeywords } from "./recipe-keywords";
 
 export type RecipeDifficulty = "BEGINNER" | "EASY" | "SKILLED" | "CHALLENGING";
@@ -34,12 +34,6 @@ export type RecipeAmountSnapshot =
 	  };
 
 export interface RecipeCategorySummary {
-	id: UUID;
-	name: string;
-	version: number;
-}
-
-export interface RecipeSceneSummary {
 	id: UUID;
 	name: string;
 	version: number;
@@ -179,7 +173,6 @@ export interface RecipeDraftContentInput {
 	story: string | null;
 	categoryId: UUID | null;
 	inspirationCategoryId?: UUID | null;
-	sceneIds: UUID[];
 	originVersionId?: UUID | null;
 	originCoverImageUrl?: string | null;
 	coverUploadId: UUID | null;
@@ -229,7 +222,6 @@ export interface RecipeDraftDetail {
 	ingredientRefs: IngredientSummary[];
 	unitRefs: UnitSummary[];
 	category: RecipeCategorySummary | null;
-	scenes: RecipeSceneSummary[];
 	createdAt: IsoDateTime;
 	updatedAt: IsoDateTime;
 }
@@ -265,7 +257,6 @@ export interface MyRecipeDetail {
 	durationText: string | null;
 	category: RecipeCategorySummary | null;
 	inspirationCategory: InspirationCategorySummary | null;
-	scenes: RecipeSceneSummary[];
 	contentVersionId: UUID;
 	content: RecipeContentSnapshot;
 	nutrition: RecipeNutritionSummary;
@@ -284,7 +275,6 @@ export interface MyRecipeDetail {
 
 export interface RecipeDetailPersonal {
 	category: RecipeCategorySummary | null;
-	scenes: RecipeSceneSummary[];
 	planLinks: RecipePlanLinkSummary[];
 	ingredientRefs: IngredientSummary[];
 	unitRefs: UnitSummary[];
@@ -343,35 +333,6 @@ export interface RecipeOwnerSummary {
 	nickname: string | null;
 }
 
-export interface CollectionSceneSummary {
-	id: UUID;
-	name: string;
-	version: number;
-	recipeCount: number;
-	updatedAt: IsoDateTime | null;
-}
-
-export interface CollectionListResponse {
-	items: CollectionSceneSummary[];
-	totalCount: number;
-}
-
-export interface CollectedRecipeSummary {
-	id: UUID;
-	sourceRecipeId: UUID;
-	title: string;
-	coverImageUrl: string | null;
-	difficulty: RecipeDifficulty | null;
-	duration: RecipeDuration | null;
-	difficultyText: string | null;
-	durationText: string | null;
-	category: InspirationCategorySummary;
-	scenes: RecipeSceneSummary[];
-	contentVersionId: UUID;
-	collectedAt: IsoDateTime;
-	updatedAt: IsoDateTime;
-}
-
 export interface CollectedRecipeDetail {
 	id: UUID;
 	sourceRecipeId: UUID;
@@ -380,7 +341,6 @@ export interface CollectedRecipeDetail {
 	difficultyText: string | null;
 	durationText: string | null;
 	category: InspirationCategorySummary;
-	scenes: RecipeSceneSummary[];
 	contentVersionId: UUID;
 	content: RecipeContentSnapshot;
 	nutrition: RecipeNutritionSummary;
@@ -400,7 +360,10 @@ export interface InspirationRecipeSummary {
 	keywords: string[];
 	estimatedCalories: number | null;
 	category: InspirationCategorySummary;
+	contentVersionId: UUID;
 	collectCount: number;
+	saveId: UUID | null;
+	isSavedToPrivate: boolean;
 	updatedAt: IsoDateTime;
 }
 
@@ -417,9 +380,44 @@ export interface InspirationRecipeDetail {
 	assistantAvailable: boolean;
 	planLinks: RecipePlanLinkSummary[];
 	collectCount: number;
-	ownedRecipeId: UUID | null;
+	saveId: UUID | null;
+	isSavedToPrivate: boolean;
 	owner: RecipeOwnerSummary;
 	updatedAt: IsoDateTime;
+}
+
+export interface SavedInspirationSummary {
+	saveId: UUID;
+	sourceRecipeId: UUID;
+	sourceVersionId: UUID;
+	title: string;
+	coverImageUrl: string | null;
+	difficulty: RecipeDifficulty | null;
+	duration: RecipeDuration | null;
+	difficultyText: string | null;
+	durationText: string | null;
+	category: InspirationCategorySummary | null;
+	owner: RecipeOwnerSummary;
+	savedAt: IsoDateTime;
+	isAvailable: boolean;
+}
+
+export interface SavedInspirationDetail extends InspirationRecipeDetail {
+	saveId: UUID;
+	savedAt: IsoDateTime;
+	isAvailable: boolean;
+}
+
+export interface SavedInspirationMutationResult {
+	saveId: UUID;
+	sourceRecipeId: UUID;
+	sourceVersionId: UUID;
+	isSavedToPrivate: boolean;
+	collectCount: number;
+}
+
+export interface SavedInspirationQuery extends PageQuery {
+	keyword?: string;
 }
 
 function toMyRecipeDetail(detail: RecipeDetail): MyRecipeDetail {
@@ -434,7 +432,6 @@ function toMyRecipeDetail(detail: RecipeDetail): MyRecipeDetail {
 		durationText: detail.durationText,
 		category: detail.personal.category,
 		inspirationCategory: detail.inspirationCategory,
-		scenes: detail.personal.scenes,
 		contentVersionId: detail.contentVersionId,
 		content: detail.content,
 		nutrition: detail.nutrition,
@@ -539,13 +536,6 @@ export interface InspirationRecipeQuery {
 	sort?: InspirationSort;
 	difficulty?: RecipeDifficulty;
 	duration?: RecipeDuration;
-}
-
-export interface CollectionRecipeQuery {
-	page?: number;
-	pageSize?: number;
-	keyword?: string;
-	sceneId?: UUID;
 }
 
 export interface CreateRecipeDraftRequest {
@@ -672,13 +662,6 @@ export interface WithdrawRecipeRecommendationRequest {
 	expectedVersion: number;
 }
 
-export interface SaveCollectionRecipeRequest {
-	operationId: OperationId;
-	sourceRecipeId: UUID;
-	sourceVersionId: UUID;
-	sceneIds: UUID[];
-}
-
 export interface CreateMyRecipeFromInspirationRequest {
 	operationId: OperationId;
 	sourceRecipeId: UUID;
@@ -715,10 +698,6 @@ export interface RequestRecipeCookAssistantResponse extends RecipeCookAssistantR
 		remainingCount: number;
 		resetsAt: IsoDateTime | null;
 	};
-}
-
-export interface SaveCollectionRecipeResponse {
-	recipe: CollectedRecipeDetail;
 }
 
 function assertSaveRecipeDraftResponse(result: SaveRecipeDraftResponse) {
@@ -778,22 +757,6 @@ export const recipeApi = {
 	},
 	reorderCategories(operationId: OperationId, items: ReorderItem[]) {
 		return post<RecipeCategorySummary[]>(`${cfg.domain}/api/recipe-categories/reorder`, { items }, { idempotencyKey: operationId });
-	},
-	listScenes() {
-		return get<RecipeSceneSummary[]>(`${cfg.domain}/api/recipe-scenes`);
-	},
-	createScene(body: CreateTagRequest) {
-		return post<RecipeSceneSummary>(`${cfg.domain}/api/recipe-scenes`, { name: body.name }, { idempotencyKey: body.operationId });
-	},
-	updateScene(sceneId: UUID, body: RenameTagRequest) {
-		return put<RecipeSceneSummary>(
-			`${cfg.domain}/api/recipe-scenes/${encodeURIComponent(String(sceneId))}`,
-			{ expectedVersion: body.expectedVersion, name: body.name },
-			{ idempotencyKey: body.operationId }
-		);
-	},
-	reorderScenes(operationId: OperationId, items: ReorderItem[]) {
-		return post<RecipeSceneSummary[]>(`${cfg.domain}/api/recipe-scenes/reorder`, { items }, { idempotencyKey: operationId });
 	},
 	listIngredientCategories() {
 		return get<IngredientCategorySummary[]>(`${cfg.domain}/api/ingredient-categories`);
@@ -964,18 +927,8 @@ export const recipeApi = {
 			{ idempotencyKey: body.operationId }
 		);
 	},
-	listCollections() {
-		return get<CollectionListResponse>(`${cfg.domain}/api/collections`);
-	},
-	listCollectionRecipes(query: CollectionRecipeQuery) {
-		return get<PageResult<CollectedRecipeSummary>>(`${cfg.domain}/api/collections/recipes`, { ...query });
-	},
 	getCollectionRecipe(collectionRecipeId: UUID) {
 		return get<CollectedRecipeDetail>(`${cfg.domain}/api/collections/recipes/${encodeURIComponent(String(collectionRecipeId))}`);
-	},
-	collectRecipe(body: SaveCollectionRecipeRequest) {
-		const { operationId, ...payload } = body;
-		return post<SaveCollectionRecipeResponse>(`${cfg.domain}/api/collections/recipes`, payload, { idempotencyKey: operationId });
 	},
 	reorderRecipes(operationId: OperationId, categoryId: UUID, items: ReorderItem[]) {
 		return post<MyRecipeSummary[]>(`${cfg.domain}/api/recipes/reorder`, { categoryId, items }, { idempotencyKey: operationId });
@@ -993,15 +946,32 @@ export const recipeApi = {
 		});
 	},
 	listInspirationRecipes(query: InspirationRecipeQuery) {
-		return get<PageResult<InspirationRecipeSummary>>(`${cfg.domain}/api/inspiration-recipes`, { ...query }, { auth: false }).then(result => ({
+		return get<PageResult<InspirationRecipeSummary>>(`${cfg.domain}/api/inspiration-recipes`, { ...query }, { auth: "optional" }).then(result => ({
 			...result,
 			items: result.items.map(item => ({ ...item, keywords: normalizeRecipeKeywords(item.keywords) }))
 		}));
 	},
-	getInspirationRecipe(recipeId: UUID) {
-		return get<InspirationRecipeDetail>(`${cfg.domain}/api/inspiration-recipes/${encodeURIComponent(String(recipeId))}`, undefined, {
+	getInspirationRecipe(recipeId: UUID, versionId?: UUID) {
+		return get<InspirationRecipeDetail>(`${cfg.domain}/api/inspiration-recipes/${encodeURIComponent(String(recipeId))}`, versionId ? { versionId } : undefined, {
 			auth: "optional"
 		});
+	},
+	listSavedInspirations(query: SavedInspirationQuery) {
+		return get<PageResult<SavedInspirationSummary>>(`${cfg.domain}/api/recipes/saved-inspiration`, { ...query });
+	},
+	getSavedInspiration(saveId: UUID) {
+		return get<SavedInspirationDetail>(`${cfg.domain}/api/recipes/saved-inspiration/${encodeURIComponent(String(saveId))}`);
+	},
+	saveInspirationToPrivate(body: { operationId: OperationId; sourceRecipeId: UUID; sourceVersionId: UUID }) {
+		const { operationId, ...payload } = body;
+		return post<SavedInspirationMutationResult>(`${cfg.domain}/api/recipes/saved-inspiration`, payload, { idempotencyKey: operationId });
+	},
+	removeSavedInspiration(saveId: UUID, operationId: OperationId) {
+		return del<SavedInspirationMutationResult>(
+			`${cfg.domain}/api/recipes/saved-inspiration/${encodeURIComponent(String(saveId))}`,
+			undefined,
+			{ idempotencyKey: operationId }
+		);
 	},
 	reportRecipe(recipeId: UUID, operationId: OperationId, reason: string) {
 		return post<RecipeReportResult>(

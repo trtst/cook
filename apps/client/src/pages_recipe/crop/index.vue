@@ -178,7 +178,7 @@ const CROP_NAV_COLOR = "#ffffff";
 const ratioOptions = [
   { key: "3:4", label: "3:4", ratio: 3 / 4 },
   { key: "1:1", label: "1:1", ratio: 1 },
-  { key: "16:9", label: "16:9", ratio: 16 / 9 },
+  { key: "9:16", label: "9:16", ratio: 9 / 16 },
   { key: "reset", label: "原尺寸", ratio: null }
 ] as const;
 

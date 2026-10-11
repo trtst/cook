@@ -15,8 +15,9 @@ assert.equal(
   null,
   "Expected the add-to-private sheet not to use the old save wording."
 );
-assert.ok(detailSource.includes("加到私房菜"), "Expected recipe detail actions to say 加到私房菜.");
-assert.ok(privateSheetSource.includes("加到私房菜"), "Expected the add-to-private sheet to say 加到私房菜.");
-assert.ok(privateSheetSource.includes("已加到私房菜"), "Expected the success toast to say 已加到私房菜.");
+assert.ok(detailSource.includes("收藏到私房菜"), "Expected recipe detail actions to say 收藏到私房菜.");
+assert.ok(privateSheetSource.includes("收藏到私房菜"), "Expected the save sheet to say 收藏到私房菜.");
+assert.ok(privateSheetSource.includes("已收藏到私房菜"), "Expected the success toast to say 已收藏到私房菜.");
+assert.ok(privateSheetSource.includes("移除收藏"), "Expected the save sheet to support removing a saved inspiration.");
 
 console.log("private recipe copy tests passed");

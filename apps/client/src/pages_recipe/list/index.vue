@@ -5,9 +5,10 @@
       <view class="list-nav">
         <view class="tabs">
           <view class="tab" :class="{ 'tab--active': mode === 'recipes' }" @click="switchMode('recipes')">我的菜谱</view>
+          <view class="tab" :class="{ 'tab--active': mode === 'saved' }" @click="switchMode('saved')">收藏的灵感</view>
           <view class="tab" :class="{ 'tab--active': mode === 'drafts' }" @click="switchMode('drafts')">草稿箱</view>
         </view>
-		<view class="list-nav__action" @click="createRecipe">新建菜谱</view>
+		<view v-if="mode === 'recipes'" class="list-nav__action" @click="createRecipe">新建菜谱</view>
       </view>
     </template>
 
@@ -50,8 +51,8 @@
           <Empty
             v-if="!sessionStore.isLoggedIn"
             :art="emptyStateIllustration"
-            :title="mode === 'recipes' ? '登录后查看我的菜谱' : '登录后查看草稿箱'"
-            :description="mode === 'recipes' ? '顶部页签和搜索会继续保留；登录后再管理你的已发布菜谱。' : '顶部页签和搜索会继续保留；登录后再继续整理草稿。'"
+            :title="mode === 'recipes' ? '登录后查看我的菜谱' : mode === 'saved' ? '登录后查看收藏的灵感' : '登录后查看草稿箱'"
+            :description="mode === 'recipes' ? '登录后管理你的已发布菜谱。' : mode === 'saved' ? '收藏的灵感会保留原整理者和固定版本。' : '登录后继续整理草稿。'"
             clickable
             @click="openLogin"
           />
@@ -62,8 +63,8 @@
           <Empty
             v-else-if="!items.length"
             :art="emptyStateIllustration"
-            :title="mode === 'recipes' ? '还没有我的菜谱' : '草稿箱还是空的'"
-            :description="mode === 'recipes' ? '先新建一份属于你的菜谱，常做的家常菜和灵感改编都可以记在这里。' : '编辑页存下的草稿会先出现在这里，整理好后再继续发布。'"
+            :title="mode === 'recipes' ? '还没有我的菜谱' : mode === 'saved' ? '还没有收藏的灵感' : '草稿箱还是空的'"
+            :description="mode === 'recipes' ? '先新建一份属于你的菜谱，常做的家常菜和灵感改编都可以记在这里。' : mode === 'saved' ? '在灵感页收藏喜欢的菜谱，它们会出现在这里。' : '编辑页存下的草稿会先出现在这里，整理好后再继续发布。'"
           />
 
           <view v-else class="list-shell">
@@ -83,18 +84,18 @@
                       <text
                         class="card__delete"
                         :class="{
-                          'card__delete--disabled': mode === 'drafts' ? deletingDraftId === item.id : deletingRecipeId === item.id
+                          'card__delete--disabled': mode === 'drafts' ? deletingDraftId === item.id : mode === 'saved' ? removingSaveId === item.id : deletingRecipeId === item.id
                         }"
-                        @click.stop="mode === 'drafts' ? removeDraft(item) : removeRecipe(item)"
+                        @click.stop="mode === 'drafts' ? removeDraft(item) : mode === 'saved' ? removeSaved(item) : removeRecipe(item)"
                       >
                         {{
                           mode === "drafts"
                             ? deletingDraftId === item.id
                               ? "删除中..."
                               : "删除草稿"
-                            : deletingRecipeId === item.id
-                              ? "删除中..."
-                              : "删除"
+                            : mode === "saved"
+                              ? removingSaveId === item.id ? "移除中..." : "移除收藏"
+                              : deletingRecipeId === item.id ? "删除中..." : "删除"
                         }}
                       </text>
                     </view>
@@ -121,7 +122,7 @@ import { onLoad, onShow } from "@dcloudio/uni-app";
 import { computed, ref, watch } from "vue";
 import emptyStateIllustration from "@/assets/empty.png";
 import type { UUID } from "@/apis/http";
-import { recipeApi, type MyRecipeSummary, type RecipeDraftSummary } from "@/apis/recipe";
+import { recipeApi, type MyRecipeSummary, type RecipeDraftSummary, type SavedInspirationSummary } from "@/apis/recipe";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import LoadMore from "@/components/LoadMore.vue";
@@ -139,7 +140,7 @@ import { useSessionStore } from "@/stores/session";
 import { formatDateTimeSecond } from "../utils/date";
 import { createOperationId } from "@/utils/operation-id";
 
-type ListMode = "recipes" | "drafts";
+type ListMode = "recipes" | "saved" | "drafts";
 type LoadSource = "idle" | "initial" | "search" | "refresh" | "switch" | "retry";
 
 interface DisplayItem {
@@ -149,7 +150,7 @@ interface DisplayItem {
 	meta: string;
 	updatedAt: string;
 	updatedAtText: string;
-	raw: MyRecipeSummary | RecipeDraftSummary;
+	raw: MyRecipeSummary | RecipeDraftSummary | SavedInspirationSummary;
 }
 
 function isSeedCoverUrl(value: string) {
@@ -185,31 +186,38 @@ const loadingMore = ref(false);
 const errorText = ref("");
 const cachedItems = ref<Record<ListMode, DisplayItem[]>>({
 	recipes: [],
+	saved: [],
 	drafts: []
 });
 const loadedVersions = ref<Record<ListMode, number | null>>({
 	recipes: null,
+	saved: null,
 	drafts: null
 });
 const loadedKeywords = ref<Record<ListMode, string>>({
 	recipes: "",
+	saved: "",
 	drafts: ""
 });
 const loadedPages = ref<Record<ListMode, number>>({
 	recipes: 0,
+	saved: 0,
 	drafts: 0
 });
 const hasNextMap = ref<Record<ListMode, boolean>>({
 	recipes: false,
+	saved: false,
 	drafts: false
 });
 const hasLoadedMoreMap = ref<Record<ListMode, boolean>>({
 	recipes: false,
+	saved: false,
 	drafts: false
 });
 const loadSource = ref<LoadSource>("idle");
 const deletingDraftId = ref<UUID | "">("");
 const deletingRecipeId = ref<UUID | "">("");
+const removingSaveId = ref<UUID | "">("");
 const keywordText = computed(() => keyword.value.trim());
 const items = computed(() => cachedItems.value[mode.value]);
 const currentHasNext = computed(() => hasNextMap.value[mode.value]);
@@ -242,7 +250,7 @@ const {
 
 onLoad((query) => {
 	const rawMode = Array.isArray(query?.mode) ? query.mode[0] : query?.mode;
-	mode.value = rawMode === "drafts" ? "drafts" : "recipes";
+	mode.value = rawMode === "drafts" ? "drafts" : rawMode === "saved" ? "saved" : "recipes";
 });
 
 onShow(() => {
@@ -277,7 +285,9 @@ function retryLoadList() {
 }
 
 function getManageScope(currentMode: ListMode) {
-	return currentMode === "recipes" ? "manage-recipes" as const : "manage-drafts" as const;
+	if (currentMode === "recipes") return "manage-recipes" as const;
+	if (currentMode === "drafts") return "manage-drafts" as const;
+	return "manage-saved" as const;
 }
 
 function syncModeLoadState(currentMode: ListMode) {
@@ -312,6 +322,12 @@ async function loadList(options: { force?: boolean; source?: LoadSource } = {}) 
 			loadedPages.value[currentMode] = result.page;
 			hasNextMap.value[currentMode] = result.hasNext;
 			hasLoadedMoreMap.value[currentMode] = false;
+		} else if (currentMode === "saved") {
+			const result = await recipeApi.listSavedInspirations({ page: 1, pageSize: 20, keyword: keywordText.value || undefined });
+			cachedItems.value.saved = result.items.map(toSavedItem);
+			loadedPages.value.saved = result.page;
+			hasNextMap.value.saved = result.hasNext;
+			hasLoadedMoreMap.value.saved = false;
 		} else {
 			const result = await recipeApi.listDrafts({
 				page: 1,
@@ -354,6 +370,16 @@ async function loadMore() {
 			if (result.items.length > 0) {
 				hasLoadedMoreMap.value[currentMode] = true;
 			}
+		} else if (currentMode === "saved") {
+			const result = await recipeApi.listSavedInspirations({
+				page: loadedPages.value.saved + 1,
+				pageSize: 20,
+				keyword: keywordText.value || undefined
+			});
+			cachedItems.value.saved = [...cachedItems.value.saved, ...result.items.map(toSavedItem)];
+			loadedPages.value.saved = result.page;
+			hasNextMap.value.saved = result.hasNext;
+			if (result.items.length) hasLoadedMoreMap.value.saved = true;
 		} else {
 			const result = await recipeApi.listDrafts({
 				page: loadedPages.value[currentMode] + 1,
@@ -402,7 +428,38 @@ function openItem(item: DisplayItem) {
 		void uniPlatform.navigation.navigateTo(`/pages_recipe/detail/index?recipeId=${encodeURIComponent(String(item.id))}&kind=my`);
 		return;
 	}
+	if (mode.value === "saved") {
+		const saved = item.raw as SavedInspirationSummary;
+		void uniPlatform.navigation.navigateTo(`/pages_recipe/detail/index?recipeId=${encodeURIComponent(String(saved.sourceRecipeId))}&kind=inspiration&savedId=${encodeURIComponent(String(saved.saveId))}`);
+		return;
+	}
 	void uniPlatform.navigation.navigateTo(`/pages_recipe/edit/index?draftId=${encodeURIComponent(String(item.id))}`);
+}
+
+async function removeSaved(item: DisplayItem) {
+	if (mode.value !== "saved" || removingSaveId.value) return;
+	const saved = item.raw as SavedInspirationSummary;
+	const confirmed = await uniPlatform.feedback.confirm({
+		title: "移除收藏",
+		content: `确定从私房菜移除“${item.title}”吗？`,
+		confirmText: "移除",
+		cancelText: "取消",
+		maskClosable: true
+	});
+	if (!confirmed) return;
+	removingSaveId.value = item.id;
+	try {
+		await recipeApi.removeSavedInspiration(saved.saveId, createOperationId());
+		cachedItems.value.saved = cachedItems.value.saved.filter(current => current.id !== item.id);
+		markRecipeHomeDirty(["saved"]);
+		markRecipeManageDirty(["saved"]);
+		syncModeLoadState("saved");
+		await uniPlatform.feedback.toast({ title: "已从私房菜移除", icon: "success" });
+	} catch (error) {
+		await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "移除失败", icon: "none" });
+	} finally {
+		removingSaveId.value = "";
+	}
 }
 
 async function removeRecipe(item: DisplayItem) {
@@ -483,6 +540,18 @@ function toDraftItem(item: RecipeDraftSummary): DisplayItem {
 		meta: `${item.category?.name ?? "未选分类"} · 草稿版本 ${item.version}`,
 		updatedAt: item.updatedAt,
 		updatedAtText: formatDateTimeSecond(item.updatedAt),
+		raw: item
+	};
+}
+
+function toSavedItem(item: SavedInspirationSummary): DisplayItem {
+	return {
+		id: item.saveId,
+		title: item.title,
+		coverImageUrl: resolveCoverImageUrl(item.coverImageUrl),
+		meta: `${item.owner.nickname ? `由${item.owner.nickname}整理` : "灵感菜谱"} · ${item.difficultyText || "未设置难度"} · ${item.durationText || "未设置时长"}`,
+		updatedAt: item.savedAt,
+		updatedAtText: `收藏于 ${formatDateTimeSecond(item.savedAt)}`,
 		raw: item
 	};
 }

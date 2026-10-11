@@ -1,5 +1,5 @@
 <template>
-  <view class="image-loader">
+  <view class="image-loader" :class="{ 'image-loader--width-fix': mode === 'widthFix' }">
     <ImageEmpty v-if="stage === 'empty'" class="image-loader__empty" ratio="fill" />
 
     <template v-else>
@@ -25,7 +25,7 @@ import { imageStage } from "./image-stage";
 
 const props = withDefaults(defineProps<{
   src?: string | null;
-  mode?: "aspectFill" | "aspectFit";
+  mode?: "aspectFill" | "aspectFit" | "widthFix";
 }>(), {
   src: "",
   mode: "aspectFill"
@@ -82,6 +82,19 @@ function markLoaded() {
 .image-loader__image {
   opacity: 0;
   transition: opacity 180ms ease;
+}
+
+.image-loader--width-fix {
+  height: auto;
+}
+
+.image-loader--width-fix .image-loader__loading {
+  position: relative;
+  min-height: 300rpx;
+}
+
+.image-loader--width-fix .image-loader__image {
+  height: auto;
 }
 
 .image-loader__image--loaded {

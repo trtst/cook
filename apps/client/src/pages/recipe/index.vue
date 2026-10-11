@@ -185,94 +185,113 @@
           :loading-text="inlineLoadingText"
         />
 
-        <scroll-view
-          scroll-y
-          :scroll-top="recipeScrollCommand"
-          scroll-with-animation
-          class="recipe-scroll"
-          refresher-enabled
-          refresher-default-style="none"
-          :show-scrollbar="false"
-          :refresher-threshold="refresherThreshold"
-          :refresher-triggered="refresherTriggered"
-          :lower-threshold="120"
-          @scroll="handleRecipeScroll"
-          @scrolltolower="loadMoreActiveTab"
-          @refresherpulling="onRefresherPulling"
-          @refresherrefresh="handleRefresherRefresh"
-          @refresherrestore="onRefresherRestore"
-          @refresherabort="onRefresherRestore"
+        <swiper
+          class="recipe-swiper"
+          :current="recipeTabIndex"
+          :duration="240"
+          @change="handleRecipeSwiperChange"
         >
-          <Empty
-            v-if="errorText"
-            title="菜谱加载失败"
-            description="请点击重试，或稍后再试。"
-            clickable
-            @click="retryLoadActiveTab"
-          />
-          <view v-else-if="loading && !cards.length" class="recipe-list-skeleton">
-            <view v-for="index in 4" :key="index" class="recipe-card recipe-card--skeleton">
-              <view class="recipe-card__cover recipe-card__cover--skeleton">
-                <Skeleton width="100%" height="100%" radius="0" />
-              </view>
-              <view class="recipe-card__body">
-                <Skeleton width="72%" height="30rpx" radius="8rpx" />
-                <view class="recipe-card__skeleton-meta">
-                  <Skeleton width="72rpx" height="26rpx" radius="var(--radius-xs)" />
-                  <Skeleton width="96rpx" height="26rpx" radius="var(--radius-xs)" />
-                </view>
-              </view>
-            </view>
-          </view>
-
-          <Empty
-            v-else-if="showRecipeEmpty"
-            :art="emptyStateArt"
-            :title="emptyStateTitle"
-            :description="emptyStateDescription"
-            :clickable="emptyStateClickable"
-            @click="handleEmptyClick"
-          />
-
-          <view v-else class="list-shell">
-            <view class="list">
+          <swiper-item v-for="tab in recipeTabValues" :key="tab" class="recipe-swiper-item">
+            <scroll-view
+              scroll-y
+              :scroll-top="scrollCommandByTab[tab]"
+              scroll-with-animation
+              class="recipe-scroll"
+              refresher-enabled
+              refresher-default-style="none"
+              :show-scrollbar="false"
+              :refresher-threshold="refresherThreshold"
+              :refresher-triggered="tab === activeTab && refresherTriggered"
+              :lower-threshold="120"
+              @scroll="handleRecipeScroll(tab, $event)"
+              @scrolltolower="loadMoreActiveTab(tab)"
+              @refresherpulling="onRefresherPulling"
+              @refresherrefresh="handleRefresherRefresh(tab)"
+              @refresherrestore="onRefresherRestore"
+              @refresherabort="onRefresherRestore"
+            >
+              <Empty
+                v-if="tab === activeTab && errorText"
+                title="菜谱加载失败"
+                description="请点击重试，或稍后再试。"
+                clickable
+                @click="retryLoadActiveTab"
+              />
               <view
-                v-for="item in cards"
-                :key="item.id"
-                class="recipe-card"
-                hover-class="recipe-card--hover"
-                hover-stay-time="100"
-                @click="openCard(item)"
+                v-else-if="!tabLoadedOnce[tab] || (tab === activeTab && loading && !tabCards[tab].length)"
+                class="recipe-list-skeleton"
               >
-                <view class="recipe-card__cover">
-                  <ImageLoader class="recipe-card__cover-image" :src="item.coverImageUrl" />
-                </view>
-
-                <view class="recipe-card__body">
-                  <text class="recipe-card__title">{{ item.title }}</text>
-                  <view v-if="item.keywords.length || item.caloriesText" class="recipe-card__info">
-                    <view v-if="item.keywords.length" class="recipe-card__meta">
-                      <text
-                        v-for="keyword in item.keywords.slice(0, 3)"
-                        :key="keyword"
-                        class="recipe-card__meta-tag"
-                      >{{ keyword }}</text>
-                    </view>
-                    <text v-if="item.caloriesText" class="recipe-card__calories">{{ item.caloriesText }}</text>
+                <view v-for="index in 4" :key="index" class="recipe-card recipe-card--skeleton">
+                  <view class="recipe-card__cover recipe-card__cover--skeleton">
+                    <Skeleton width="100%" height="100%" radius="0" />
                   </view>
-                  <text v-if="item.subline" class="recipe-card__sub">{{ item.subline }}</text>
+                  <view class="recipe-card__body">
+                    <Skeleton width="72%" height="30rpx" radius="8rpx" />
+                    <view class="recipe-card__skeleton-meta">
+                      <Skeleton width="72rpx" height="26rpx" radius="var(--radius-xs)" />
+                      <Skeleton width="96rpx" height="26rpx" radius="var(--radius-xs)" />
+                    </view>
+                  </view>
                 </view>
               </view>
-            </view>
 
-            <LoadMore
-              v-if="showFooter"
-              :loading="loadingMore"
-              :has-next="currentHasNext"
-              :show-done="loadedMoreOnceMap[activeTab] && !currentHasNext"
-            />
-          </view>
-        </scroll-view>
+              <Empty
+                v-else-if="!tabCards[tab].length"
+                :art="emptyStateArt"
+                :title="emptyStateTitle(tab)"
+                :description="emptyStateDescription(tab)"
+                :clickable="tab !== 'inspiration'"
+                @click="handleEmptyClick"
+              />
+
+              <view v-else class="list-shell">
+                <view class="list">
+                  <view
+                    v-for="item in tabCards[tab]"
+                    :key="item.id"
+                    class="recipe-card"
+                    hover-class="recipe-card--hover"
+                    hover-stay-time="100"
+                    @click="openCard(item)"
+                  >
+                    <view class="recipe-card__cover">
+                      <ImageLoader class="recipe-card__cover-image" :src="item.coverImageUrl" />
+                    </view>
+
+                    <view class="recipe-card__body">
+                      <text class="recipe-card__title">{{ item.title }}</text>
+                      <view v-if="item.keywords.length || item.caloriesText" class="recipe-card__info">
+                        <view v-if="item.keywords.length" class="recipe-card__meta">
+                          <text
+                            v-for="keyword in item.keywords.slice(0, 3)"
+                            :key="keyword"
+                            class="recipe-card__meta-tag"
+                          >{{ keyword }}</text>
+                        </view>
+                        <text v-if="item.caloriesText" class="recipe-card__calories">{{ item.caloriesText }}</text>
+                      </view>
+                      <text v-if="item.subline" class="recipe-card__sub">{{ item.subline }}</text>
+                      <button
+                        v-if="item.kind === 'inspiration'"
+                        class="recipe-card__save"
+                        :class="{ 'recipe-card__save--active': item.isSavedToPrivate }"
+                        :disabled="savingRecipeId === item.id"
+                        @click.stop="togglePrivateSave(item)"
+                      >{{ savingRecipeId === item.id ? '处理中…' : item.isSavedToPrivate ? '已收藏' : '收藏到私房菜' }}</button>
+                    </view>
+                  </view>
+                </view>
+
+                <LoadMore
+                  v-if="tabCards[tab].length > 0 && !(tab === activeTab && errorText)"
+                  :loading="loadingMore && loadingMoreTab === tab"
+                  :has-next="tabHasNext[tab]"
+                  :show-done="loadedMoreOnceMap[tab] && !tabHasNext[tab]"
+                />
+              </view>
+            </scroll-view>
+          </swiper-item>
+        </swiper>
       </view>
 
       <view
@@ -362,7 +381,7 @@ import { usePageScrollLock } from "@/composables/usePageScrollLock";
 import { buildThemePageStyle } from "@/composables/theme-page-style";
 import { useTheme } from "@/composables/useTheme";
 import { uniPlatform } from "@/platform/uni";
-import { getRecipeViewVersion } from "@/pages/recipe/utils/recipe-view-sync";
+import { getRecipeViewVersion, markRecipeHomeDirty } from "@/pages/recipe/utils/recipe-view-sync";
 import { useLoginModalStore } from "@/stores/login-modal";
 import { useSessionStore } from "@/stores/session";
 import { useRecipeTabIntentStore } from "@/stores/recipe-tab-intent";
@@ -371,6 +390,7 @@ import { formatThemeText } from "@/themes";
 import { difficultyOptions, durationOptions } from "@/utils/recipe-meta";
 import { defaultRecipeTab } from "@/utils/recipe-access";
 import { APP_NAME } from "@/config/app";
+import { createOperationId } from "@/utils/operation-id";
 
 type RecipeTab = "my" | "inspiration";
 type SheetMode = "" | "my";
@@ -385,11 +405,14 @@ interface CardItem {
 	id: UUID;
 	title: string;
 	coverImageUrl: string | null;
+	contentVersionId: UUID | null;
 	keywords: string[];
 	estimatedCalories: number | null;
 	caloriesText: string;
 	subline: string;
 	kind: "my" | "inspiration";
+	saveId: UUID | null;
+	isSavedToPrivate: boolean;
 }
 
 function isSeedCoverUrl(value: string) {
@@ -439,6 +462,7 @@ const tabs = [
 	{ value: "my" as const, label: "私房菜" },
 	{ value: "inspiration" as const, label: "灵感" }
 ];
+const recipeTabValues: RecipeTab[] = ["my", "inspiration"];
 const sortItems = [
 	{ value: "RECOMMENDED" as const, label: "推荐" },
 	{ value: "LATEST" as const, label: "最新" }
@@ -447,16 +471,23 @@ const difficultyItems = [{ value: "" as const, label: "全部" }, ...difficultyO
 const durationItems = [{ value: "" as const, label: "全部" }, ...durationOptions];
 
 const activeTab = ref<RecipeTab>(defaultRecipeTab(sessionStore.isLoggedIn));
+const recipeTabIndex = computed(() => recipeTabValues.indexOf(activeTab.value));
 const keyword = ref("");
 const showFilters = ref(false);
-const recipeScrollTop = ref(0);
-const recipeScrollCommand = ref(0);
-const isRecipeScrolling = ref(false);
+const scrollTopByTab = ref<Record<RecipeTab, number>>({ my: 0, inspiration: 0 });
+const scrollCommandByTab = ref<Record<RecipeTab, number>>({ my: 0, inspiration: 0 });
+const scrollingByTab = ref<Record<RecipeTab, boolean>>({ my: false, inspiration: false });
+const activeScrollTop = computed(() => scrollTopByTab.value[activeTab.value]);
+const isRecipeScrolling = computed(() => scrollingByTab.value[activeTab.value]);
 const backToTopThreshold = 320;
-let recipeScrollStopTimer: ReturnType<typeof setTimeout> | undefined;
+const recipeScrollStopTimers: Partial<Record<RecipeTab, ReturnType<typeof setTimeout>>> = {};
 const loading = ref(false);
+const loadingTab = ref<RecipeTab | null>(null);
 const loadingMore = ref(false);
+const loadingMoreTab = ref<RecipeTab | null>(null);
 const errorText = ref("");
+const tabLoadedOnce = ref<Record<RecipeTab, boolean>>({ my: false, inspiration: false });
+let pendingTabLoad: { tab: RecipeTab; options: { force?: boolean; source?: LoadSource } } | null = null;
 const myCategories = ref<RecipeCategorySummary[]>([]);
 const inspirationCategories = ref<InspirationCategorySummary[]>([]);
 const myCategoryId = ref<UUID | "">("");
@@ -473,6 +504,7 @@ const filterDuration = ref<RecipeDuration | "">("");
 const filterInspirationCategoryId = ref<UUID | "">("");
 const myRecipes = ref<MyRecipeSummary[]>([]);
 const inspirationRecipes = ref<InspirationRecipeSummary[]>([]);
+const savingRecipeId = ref<UUID | null>(null);
 const loginIntentTab = ref<RecipeTab | null>(null);
 const sheetMode = ref<SheetMode>("");
 const sheetVisible = ref(false);
@@ -528,10 +560,11 @@ const currentCategoryId = computed(() => {
 	if (activeTab.value === "my") return myCategoryId.value;
 	return inspirationCategoryId.value;
 });
-const cards = computed<CardItem[]>(() => {
-	if (activeTab.value === "my") return myRecipes.value.map(toMyCard);
-	return inspirationRecipes.value.map(toInspirationCard);
-});
+const tabCards = computed<Record<RecipeTab, CardItem[]>>(() => ({
+	my: myRecipes.value.map(toMyCard),
+	inspiration: inspirationRecipes.value.map(toInspirationCard)
+}));
+const cards = computed<CardItem[]>(() => tabCards.value[activeTab.value]);
 const showCategoryBar = computed(() => {
 	if (activeTab.value === "inspiration") return true;
 	return sessionStore.isLoggedIn;
@@ -555,38 +588,33 @@ watch(
 	},
 	{ immediate: true }
 );
-const showRecipeEmpty = computed(
-	() =>
-		(activeTab.value === "my" && !cards.value.length) ||
-		(activeTab.value === "inspiration" && !cards.value.length)
-);
-const emptyStateClickable = computed(() => activeTab.value !== "inspiration");
-const emptyStateTitle = computed(() => {
-	if (activeTab.value === "my") return "先记下第一道拿手菜";
-	return "暂时没找到合适的菜谱";
-});
-const emptyStateDescription = computed(() =>
-	activeTab.value === "my"
-		? "把常做的家常菜和灵感改编记下来，慢慢建起自己的菜谱集。"
-			: "换个分类、关键词或筛选条件试试。"
-);
 const emptyStateArt = computed(() => emptyStateIllustration);
-const currentHasNext = computed(() => tabHasNext.value[activeTab.value]);
 const canShowBackToTop = computed(
-	() => recipeScrollTop.value > backToTopThreshold && !showFilters.value && !sheetVisible.value
+	() => activeScrollTop.value > backToTopThreshold && !showFilters.value && !sheetVisible.value
 );
 const loadedMoreOnceMap = ref<Record<RecipeTab, boolean>>({
 	my: false,
 	inspiration: false
 });
-const showFooter = computed(() => cards.value.length > 0 && !errorText.value);
-const inlineLoading = computed(() => loading.value && cards.value.length > 0 && loadSource.value !== "refresh");
+const inlineLoading = computed(
+	() => loading.value && loadingTab.value === activeTab.value && cards.value.length > 0 && loadSource.value !== "refresh"
+);
 const inlineLoadingText = computed(() => {
 	if (loadSource.value === "search") {
 		return ["搜一搜这口想吃的", "帮你翻找菜谱和食材", "锅里翻找中，马上出结果"];
 	}
 	return loadingTips;
 });
+
+function emptyStateTitle(tab: RecipeTab) {
+	return tab === "my" ? "先记下第一道拿手菜" : "暂时没找到合适的菜谱";
+}
+
+function emptyStateDescription(tab: RecipeTab) {
+	return tab === "my"
+		? "把常做的家常菜和灵感改编记下来，慢慢建起自己的菜谱集。"
+		: "换个分类、关键词或筛选条件试试。";
+}
 onShareAppMessage(() => ({
   title: APP_NAME,
   path: "/pages/recipe/index"
@@ -598,32 +626,43 @@ onShow(() => {
 });
 
 onHide(() => {
-	if (recipeScrollStopTimer) {
-		clearTimeout(recipeScrollStopTimer);
-		recipeScrollStopTimer = undefined;
+	for (const tab of recipeTabValues) {
+		const timer = recipeScrollStopTimers[tab];
+		if (timer) clearTimeout(timer);
+		recipeScrollStopTimers[tab] = undefined;
 	}
-	isRecipeScrolling.value = false;
+	scrollingByTab.value = { my: false, inspiration: false };
 	showFilters.value = false;
 	closeSheet(true);
 });
 
-function handleRecipeScroll(event: { detail?: { scrollTop?: number } }) {
-	recipeScrollTop.value = Math.max(0, event.detail?.scrollTop ?? 0);
-	isRecipeScrolling.value = true;
-	if (recipeScrollStopTimer) clearTimeout(recipeScrollStopTimer);
-	recipeScrollStopTimer = setTimeout(() => {
-		isRecipeScrolling.value = false;
-		recipeScrollStopTimer = undefined;
+function handleRecipeScroll(tab: RecipeTab, event: { detail?: { scrollTop?: number } }) {
+	scrollTopByTab.value = {
+		...scrollTopByTab.value,
+		[tab]: Math.max(0, event.detail?.scrollTop ?? 0)
+	};
+	scrollingByTab.value = { ...scrollingByTab.value, [tab]: true };
+	const timer = recipeScrollStopTimers[tab];
+	if (timer) clearTimeout(timer);
+	recipeScrollStopTimers[tab] = setTimeout(() => {
+		scrollingByTab.value = { ...scrollingByTab.value, [tab]: false };
+		recipeScrollStopTimers[tab] = undefined;
 	}, 300);
 }
 
 // 仅在滚动到阈值后显示返回顶部按钮，避免遮挡菜谱首屏内容。
 function scrollRecipeToTop() {
-	isRecipeScrolling.value = true;
-	recipeScrollCommand.value = recipeScrollTop.value;
+	const tab = activeTab.value;
+	scrollingByTab.value = { ...scrollingByTab.value, [tab]: true };
+	scrollCommandByTab.value = { ...scrollCommandByTab.value, [tab]: scrollTopByTab.value[tab] };
 	void nextTick(() => {
-		recipeScrollCommand.value = 0;
+		scrollCommandByTab.value = { ...scrollCommandByTab.value, [tab]: 0 };
 	});
+}
+
+function handleRecipeSwiperChange(event: { detail?: { current?: number } }) {
+	const tab = recipeTabValues[event.detail?.current ?? -1];
+	if (tab && tab !== activeTab.value) switchTab(tab);
 }
 
 watch(
@@ -814,9 +853,9 @@ function getHomeScope(tab: RecipeTab) {
 	return "home-inspiration" as const;
 }
 
-function syncTabLoadState(tab: RecipeTab) {
+function syncTabLoadState(tab: RecipeTab, keywordValue = keywordText.value) {
 	loadedVersions.value[tab] = getRecipeViewVersion(getHomeScope(tab));
-	loadedKeywords.value[tab] = keywordText.value;
+	loadedKeywords.value[tab] = keywordValue;
 }
 
 function shouldLoadTab(tab: RecipeTab, force = false) {
@@ -830,9 +869,15 @@ function shouldLoadTab(tab: RecipeTab, force = false) {
 async function loadActiveTab(options: { force?: boolean; source?: LoadSource } = {}) {
 	const source = options.source ?? "initial";
 	const currentTab = activeTab.value;
-	if (loading.value || loadingMore.value || !shouldLoadTab(currentTab, options.force)) return false;
+	if (loading.value || loadingMore.value) {
+		pendingTabLoad = { tab: currentTab, options };
+		return false;
+	}
+	if (!shouldLoadTab(currentTab, options.force)) return false;
 	errorText.value = "";
 	loadSource.value = source;
+	loadingTab.value = currentTab;
+	const requestKeyword = keywordText.value;
 	let success = false;
 
 	loading.value = true;
@@ -843,7 +888,8 @@ async function loadActiveTab(options: { force?: boolean; source?: LoadSource } =
 				myRecipes.value = [];
 				tabPage.value.my = 0;
 				tabHasNext.value.my = false;
-				syncTabLoadState(currentTab);
+				tabLoadedOnce.value.my = true;
+				syncTabLoadState(currentTab, requestKeyword);
 				success = true;
 				return success;
 			}
@@ -859,7 +905,7 @@ async function loadActiveTab(options: { force?: boolean; source?: LoadSource } =
 			const result = await recipeApi.listMyRecipes({
 				page: 1,
 				pageSize: pageSizeMap.my,
-				keyword: keywordText.value || undefined,
+				keyword: requestKeyword || undefined,
 				categoryId: myCategoryId.value || undefined,
 				inspirationCategoryId: myInspirationCategoryId.value || undefined,
 				difficulty: myDifficulty.value || undefined,
@@ -869,7 +915,8 @@ async function loadActiveTab(options: { force?: boolean; source?: LoadSource } =
 			tabPage.value.my = result.page;
 			tabHasNext.value.my = result.hasNext;
 			loadedMoreOnceMap.value.my = false;
-			syncTabLoadState(currentTab);
+			tabLoadedOnce.value.my = true;
+			syncTabLoadState(currentTab, requestKeyword);
 			success = true;
 			return success;
 		}
@@ -880,7 +927,7 @@ async function loadActiveTab(options: { force?: boolean; source?: LoadSource } =
 		const result = await recipeApi.listInspirationRecipes({
 			page: 1,
 			pageSize: pageSizeMap.inspiration,
-			keyword: keywordText.value || undefined,
+			keyword: requestKeyword || undefined,
 			categoryId: inspirationCategoryId.value || undefined,
 			sort: inspirationSort.value,
 			difficulty: inspirationDifficulty.value || undefined,
@@ -890,35 +937,52 @@ async function loadActiveTab(options: { force?: boolean; source?: LoadSource } =
 		tabPage.value.inspiration = result.page;
 		tabHasNext.value.inspiration = result.hasNext;
 		loadedMoreOnceMap.value.inspiration = false;
-		syncTabLoadState(currentTab);
+		tabLoadedOnce.value.inspiration = true;
+		syncTabLoadState(currentTab, requestKeyword);
 		success = true;
 	} catch (error) {
 		if (error instanceof UnauthorizedError) {
-			activeTab.value = "inspiration";
-			loginModalStore.open(null, () => {
-				void loadActiveTab({ force: true, source: "retry" });
-			});
-			errorText.value = "";
+			if (activeTab.value === currentTab) {
+				activeTab.value = "inspiration";
+				loginModalStore.open(null, () => {
+					void loadActiveTab({ force: true, source: "retry" });
+				});
+				errorText.value = "";
+			}
 		} else {
-			errorText.value = "菜谱加载失败";
-			await uniPlatform.feedback.toast({
-				title: error instanceof Error && error.message ? error.message : "菜谱加载失败",
-				icon: "none"
-			});
+			if (activeTab.value === currentTab) {
+				errorText.value = "菜谱加载失败";
+				await uniPlatform.feedback.toast({
+					title: error instanceof Error && error.message ? error.message : "菜谱加载失败",
+					icon: "none"
+				});
+			}
 		}
 	} finally {
 		loading.value = false;
+		loadingTab.value = null;
 		loadSource.value = "idle";
+		loadPendingTab();
 	}
 	return success;
 }
 
-async function loadMoreActiveTab() {
-	const currentTab = activeTab.value;
+function loadPendingTab() {
+	if (loading.value || loadingMore.value || !pendingTabLoad) return;
+	const pending = pendingTabLoad;
+	pendingTabLoad = null;
+	if (pending.tab === activeTab.value) void loadActiveTab(pending.options);
+}
+
+async function loadMoreActiveTab(tab: RecipeTab) {
+	const currentTab = tab;
+	if (currentTab !== activeTab.value) return;
 	if (loading.value || loadingMore.value || !tabHasNext.value[currentTab]) return;
 
 	loadingMore.value = true;
+	loadingMoreTab.value = currentTab;
 	errorText.value = "";
+	const requestKeyword = keywordText.value;
 
 	try {
 		if (currentTab === "my") {
@@ -926,7 +990,7 @@ async function loadMoreActiveTab() {
 			const result = await recipeApi.listMyRecipes({
 					page: tabPage.value.my + 1,
 					pageSize: pageSizeMap.my,
-					keyword: keywordText.value || undefined,
+					keyword: requestKeyword || undefined,
 					categoryId: myCategoryId.value || undefined,
 					inspirationCategoryId: myInspirationCategoryId.value || undefined,
 					difficulty: myDifficulty.value || undefined,
@@ -938,14 +1002,14 @@ async function loadMoreActiveTab() {
 			if (result.items.length > 0) {
 				loadedMoreOnceMap.value.my = true;
 			}
-			syncTabLoadState(currentTab);
+			syncTabLoadState(currentTab, requestKeyword);
 			return;
 		}
 
 			const result = await recipeApi.listInspirationRecipes({
 			page: tabPage.value.inspiration + 1,
 			pageSize: pageSizeMap.inspiration,
-			keyword: keywordText.value || undefined,
+			keyword: requestKeyword || undefined,
 			categoryId: inspirationCategoryId.value || undefined,
 			sort: inspirationSort.value,
 			difficulty: inspirationDifficulty.value || undefined,
@@ -957,27 +1021,37 @@ async function loadMoreActiveTab() {
 		if (result.items.length > 0) {
 			loadedMoreOnceMap.value.inspiration = true;
 		}
-		syncTabLoadState(currentTab);
+		syncTabLoadState(currentTab, requestKeyword);
 	} catch (error) {
 		if (error instanceof UnauthorizedError) {
-			activeTab.value = "inspiration";
-			loginModalStore.open(null, () => {
-				void loadActiveTab({ force: true, source: "retry" });
-			});
-			errorText.value = "";
+			if (activeTab.value === currentTab) {
+				activeTab.value = "inspiration";
+				loginModalStore.open(null, () => {
+					void loadActiveTab({ force: true, source: "retry" });
+				});
+				errorText.value = "";
+			}
 		} else {
-			errorText.value = "加载更多失败";
-			await uniPlatform.feedback.toast({
-				title: error instanceof Error && error.message ? error.message : "加载更多失败",
-				icon: "none"
-			});
+			if (activeTab.value === currentTab) {
+				errorText.value = "加载更多失败";
+				await uniPlatform.feedback.toast({
+					title: error instanceof Error && error.message ? error.message : "加载更多失败",
+					icon: "none"
+				});
+			}
 		}
 	} finally {
 		loadingMore.value = false;
+		loadingMoreTab.value = null;
+		loadPendingTab();
 	}
 }
 
-async function handleRefresherRefresh() {
+async function handleRefresherRefresh(tab: RecipeTab) {
+	if (tab !== activeTab.value) {
+		onRefresherRestore();
+		return;
+	}
 	const shouldRefresh = onRefresherRefresh();
 	if (!shouldRefresh) {
 		onRefresherRestore();
@@ -1069,11 +1143,14 @@ function toMyCard(item: MyRecipeSummary): CardItem {
 		id: item.id,
 		title: item.title,
 		coverImageUrl: resolveCoverImageUrl(item.coverImageUrl),
+		contentVersionId: null,
 		keywords: item.keywords,
 		estimatedCalories: item.estimatedCalories,
 		caloriesText: formatCardCalories(item.estimatedCalories),
 		subline: "",
-		kind: "my"
+		kind: "my",
+		saveId: null,
+		isSavedToPrivate: false
 	};
 }
 
@@ -1082,12 +1159,46 @@ function toInspirationCard(item: InspirationRecipeSummary): CardItem {
 		id: item.id,
 		title: item.title,
 		coverImageUrl: resolveCoverImageUrl(item.coverImageUrl),
+		contentVersionId: item.contentVersionId,
 		keywords: item.keywords,
 		estimatedCalories: item.estimatedCalories,
 		caloriesText: formatCardCalories(item.estimatedCalories),
 		subline: "",
-		kind: "inspiration"
+		kind: "inspiration",
+		saveId: item.saveId,
+		isSavedToPrivate: item.isSavedToPrivate
 	};
+}
+
+async function togglePrivateSave(item: CardItem) {
+	if (item.kind !== "inspiration" || savingRecipeId.value || !item.contentVersionId) return;
+	if (!sessionStore.isLoggedIn) {
+		loginModalStore.open(null, () => void togglePrivateSave(item));
+		return;
+	}
+	savingRecipeId.value = item.id;
+	try {
+		const result = item.isSavedToPrivate && item.saveId
+			? await recipeApi.removeSavedInspiration(item.saveId, createOperationId())
+			: await recipeApi.saveInspirationToPrivate({
+				operationId: createOperationId(),
+				sourceRecipeId: item.id,
+				sourceVersionId: item.contentVersionId
+			});
+		inspirationRecipes.value = inspirationRecipes.value.map(recipe => recipe.id === item.id
+			? { ...recipe, saveId: result.isSavedToPrivate ? result.saveId : null, isSavedToPrivate: result.isSavedToPrivate, collectCount: result.collectCount }
+			: recipe);
+		markRecipeHomeDirty(["my"]);
+		await uniPlatform.feedback.toast({ title: result.isSavedToPrivate ? "已收藏到私房菜" : "已从私房菜移除", icon: "success" });
+	} catch (error) {
+		if (error instanceof UnauthorizedError) {
+			loginModalStore.open(null, () => void togglePrivateSave(item));
+		} else {
+			await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "收藏操作失败", icon: "none" });
+		}
+	} finally {
+		savingRecipeId.value = null;
+	}
 }
 
 async function automatorApplySession(snapshot: { token: string; uid?: number; expiresAt: string; refreshCheckedAt?: number }) {
@@ -1205,8 +1316,10 @@ defineExpose({
 }
 
 .recipe-scroll {
-  flex: 1;
-  min-height: 0;
+	display: block;
+	width: 100%;
+	height: 100%;
+	min-height: 0;
 }
 
 .recipe-scroll-wrap {
@@ -1216,6 +1329,18 @@ defineExpose({
   min-height: 0;
   overflow: hidden;
   padding: 0 var(--space-page);
+}
+
+.recipe-swiper {
+	flex: 1;
+	width: 100%;
+	height: 100%;
+	min-height: 0;
+}
+
+.recipe-swiper-item {
+	height: 100%;
+	min-height: 0;
 }
 
 .recipe-back-top {
@@ -1553,6 +1678,27 @@ defineExpose({
   flex-direction: column;
   gap: 12rpx;
   padding: 22rpx 20rpx 24rpx;
+}
+
+.recipe-card__save {
+	align-self: flex-start;
+	margin: 14rpx 0 0;
+	padding: 8rpx 16rpx;
+	border: 1rpx solid var(--color-border);
+	border-radius: 999rpx;
+	background: transparent;
+	color: var(--color-text-secondary);
+	font-size: 22rpx;
+	line-height: 1.4;
+}
+
+.recipe-card__save::after {
+	border: 0;
+}
+
+.recipe-card__save--active {
+	border-color: var(--color-border-active);
+	color: var(--color-support-action);
 }
 
 .recipe-card__info {

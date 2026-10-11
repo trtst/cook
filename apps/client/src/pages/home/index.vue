@@ -933,13 +933,7 @@ function openFridgeRecipe(item: HomeFridgeRecipeItem) {
 }
 
 function fridgeRecipeMeta(item: HomeFridgeRecipeItem) {
-  const segments = [];
-  if (item.missingIngredientCount > 0) {
-    segments.push(`还差${item.missingIngredientCount}样`);
-  } else {
-    segments.push(`已配上${item.matchedIngredientCount}样`);
-  }
-  return segments.join(" · ");
+  return `已匹配${item.matchedIngredientCount}样`;
 }
 
 function openRecentArrangementPrimaryAction(item: HomeRecentArrangement) {
