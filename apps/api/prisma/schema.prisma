@@ -98,6 +98,12 @@ enum RecipeStatus {
   DELETED
 }
 
+enum RecipeRecommendationRank {
+  NORMAL
+  DOWNRANK
+  STRONG_DOWNRANK
+}
+
 enum RecipeDifficulty {
   BEGINNER
   EASY
@@ -1823,6 +1829,9 @@ model Recipe {
   id                    Int          @id @default(autoincrement())
   ownerId               Int          @map("owner_id")
   isInspiration         Boolean      @default(false) @map("is_inspiration")
+  inspirationPublishedAt DateTime?   @map("inspiration_published_at") @db.Timestamptz(3)
+  recommendationRank   RecipeRecommendationRank @default(NORMAL) @map("recommendation_rank")
+  recommendationRankReason String?    @map("recommendation_rank_reason") @db.VarChar(255)
   categoryId            Int?         @map("category_id")
   inspirationCategoryId Int?         @map("inspiration_category_id")
   currentVersionId      Int          @map("current_version_id")
@@ -1865,6 +1874,7 @@ model Recipe {
 
   @@index([ownerId, status, categoryId, sortOrder, id])
   @@index([inspirationCategoryId, status, updatedAt, id])
+  @@index([inspirationCategoryId, status, inspirationPublishedAt(sort: Desc), id(sort: Desc)], map: "recipes_inspiration_publication_idx")
   @@index([ownerId, status, updatedAt])
   @@index([ownerId, originVersionId])
   @@index([currentVersionId])
@@ -1942,6 +1952,7 @@ model RecipeCollection {
   @@unique([userId, sourceRecipeId, sourceVersionId])
   @@index([userId, updatedAt, id])
   @@index([sourceRecipeId, userId, id])
+  @@index([sourceRecipeId, createdAt, userId], map: "recipe_collections_source_created_user_idx")
   @@map("recipe_collections")
 }
 
@@ -2128,6 +2139,7 @@ model MealPlanDish {
 
   @@index([planItemId, sortOrder])
   @@index([recipeId])
+  @@index([recipeId, createdAt, id], map: "meal_plan_dishes_recipe_created_idx")
   @@index([recipeVersionId])
   @@map("meal_plan_dishes")
 }

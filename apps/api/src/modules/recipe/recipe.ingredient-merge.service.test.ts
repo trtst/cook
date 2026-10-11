@@ -8,7 +8,6 @@ function draftContent(ingredientId: number, coverUploadId: number | null = null)
     name: "家常茄子",
     story: null,
     categoryId: null,
-    sceneIds: [],
     coverUploadId,
     baseServings: 2,
     difficulty: "EASY",

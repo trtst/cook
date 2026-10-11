@@ -1271,7 +1271,7 @@ export class AdminService {
     await this.requireSuperAdmin(adminId);
     return this.prisma.$transaction(async tx => {
       const user = await this.requireUser(tx, userId);
-      const [publishedCount, draftCount, collectionCount, sceneCount, latestRecipe, latestDraft, latestCollection] = await Promise.all([
+      const [publishedCount, draftCount, savedInspirationCount, latestRecipe, latestDraft, latestSavedInspiration] = await Promise.all([
         tx.recipe.count({
           where: {
             ownerId: userId,
@@ -1284,11 +1284,6 @@ export class AdminService {
           }
         }),
         tx.recipeCollection.count({
-          where: {
-            userId
-          }
-        }),
-        tx.recipeScene.count({
           where: {
             userId
           }
@@ -1325,11 +1320,10 @@ export class AdminService {
         },
         publishedCount,
         draftCount,
-        collectionCount,
-        sceneCount,
+        savedInspirationCount,
         latestPublishedAt: latestRecipe ? toIsoDate(latestRecipe.updatedAt) : null,
         latestDraftAt: latestDraft ? toIsoDate(latestDraft.updatedAt) : null,
-        latestCollectionAt: latestCollection ? toIsoDate(latestCollection.updatedAt) : null
+        latestSavedInspirationAt: latestSavedInspiration ? toIsoDate(latestSavedInspiration.updatedAt) : null
       };
     });
   }
@@ -4236,6 +4230,7 @@ export class AdminService {
             ownerId: recommendation.recipe.ownerId,
             ownerNicknameSnapshot: recommendation.recipe.ownerNicknameSnapshot,
             isInspiration: true,
+            inspirationPublishedAt: now,
             categoryId: null,
             inspirationCategoryId: inspirationCategory.id,
             currentVersionId: nextVersion.id,
@@ -4990,6 +4985,7 @@ export class AdminService {
             ownerId: inspirationOwnerId,
             ownerNicknameSnapshot: toOwnerNicknameSnapshot(inspirationOwner.nickname),
             isInspiration: true,
+            inspirationPublishedAt: new Date(),
             categoryId: null,
             inspirationCategoryId: inspirationCategory.id,
             currentVersionId: nextVersion.id,
@@ -5245,6 +5241,65 @@ export class AdminService {
       total,
       hasNext: skip + items.length < total
     };
+  }
+
+  async setRecipeRecommendationRank(
+    recipeId: UUID,
+    adminId: UUID,
+    body: { operationId: OperationId; expectedVersion: number; rank: "NORMAL" | "DOWNRANK" | "STRONG_DOWNRANK"; reason: string }
+  ): Promise<AdminRecipeSummary> {
+    await this.requireSuperAdmin(adminId);
+    const reason = body.reason.trim();
+    if (!reason) throw new BadRequestException("调整原因不能为空");
+    const requestHash = `${recipeId}:${body.expectedVersion}:${body.rank}:${reason}`;
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getAdminIdempotentResult<AdminRecipeSummary>(
+        tx,
+        body.operationId,
+        "admin-recipe:recommendation-rank",
+        adminId,
+        requestHash
+      );
+      if (repeated) return repeated;
+      await startAdminIdempotentOperation(tx, body.operationId, "admin-recipe:recommendation-rank", adminId, requestHash);
+
+      const current = await tx.recipe.findFirst({
+        where: { id: recipeId, isInspiration: true, inspirationCategoryId: { not: null } },
+        select: { id: true, version: true, recommendationRank: true }
+      });
+      if (!current) throw new NotFoundException("系统灵感菜谱不存在");
+      if (current.version !== body.expectedVersion) throw new ConflictException("菜谱已被更新，请刷新后重试");
+      const changed = await tx.recipe.updateMany({
+        where: { id: recipeId, isInspiration: true, inspirationCategoryId: { not: null }, version: body.expectedVersion },
+        data: {
+          recommendationRank: body.rank,
+          recommendationRankReason: body.rank === "NORMAL" ? null : reason,
+          version: { increment: 1 }
+        }
+      });
+      if (changed.count !== 1) throw new ConflictException("菜谱已被更新，请刷新后重试");
+      const recipe = await tx.recipe.findUniqueOrThrow({
+        where: { id: recipeId },
+        include: { owner: { select: { uid: true } }, inspirationCategory: true }
+      });
+      const result = this.toAdminRecipeSummary(recipe);
+      await tx.auditEvent.create({
+        data: {
+          actorType: "ADMIN",
+          actorAdminId: adminId,
+          action: "RECIPE_RECOMMENDATION_RANK_UPDATED",
+          objectType: "RECIPE",
+          objectId: recipeId,
+          payload: {
+            previousRank: current.recommendationRank,
+            rank: body.rank,
+            reason
+          }
+        }
+      });
+      await completeAdminIdempotentOperation(tx, body.operationId, "admin-recipe:recommendation-rank", adminId, requestHash, result);
+      return result;
+    });
   }
 
   async syncRecipeContentFromImports(
@@ -6870,6 +6925,7 @@ export class AdminService {
             ownerId: inspirationOwnerId,
             ownerNicknameSnapshot: toOwnerNicknameSnapshot(inspirationOwner.nickname),
             isInspiration: true,
+            inspirationPublishedAt: new Date(),
             categoryId: null,
             inspirationCategoryId: inspirationCategory.id,
             currentVersionId: nextVersion.id,
@@ -7367,6 +7423,7 @@ export class AdminService {
             title: content.name,
             searchText: buildRecipeSearchText(content),
             inspirationCategoryId: inspirationCategory.id,
+            inspirationPublishedAt: recipe.inspirationPublishedAt ?? new Date(),
             coverImageUrl: imageState.coverImageUrl,
             version: { increment: 1 }
           },
@@ -7755,6 +7812,8 @@ export class AdminService {
     inspirationCategoryId: UUID | null;
     inspirationCategory?: { id: UUID; name: string } | null;
     updatedAt: Date;
+    recommendationRank?: "NORMAL" | "DOWNRANK" | "STRONG_DOWNRANK";
+    recommendationRankReason?: string | null;
     owner?: { uid: number } | null;
   }): AdminRecipeSummary {
     if (!recipe.inspirationCategoryId || !recipe.inspirationCategory) {
@@ -7770,7 +7829,9 @@ export class AdminService {
       inspirationCategoryName: recipe.inspirationCategory.name,
       updatedAt: toIsoDate(recipe.updatedAt),
       ownerUid: recipe.owner?.uid ?? null,
-      hasWikiCandidate: false
+      hasWikiCandidate: false,
+      recommendationRank: recipe.recommendationRank ?? "NORMAL",
+      recommendationRankReason: recipe.recommendationRankReason ?? null
     };
   }
 
@@ -7825,6 +7886,8 @@ export class AdminService {
       reportCount: recipe.reportCount,
       blockedReason: recipe.blockedReason,
       collectCount: recipe.collectCount,
+      recommendationRank: recipe.recommendationRank,
+      recommendationRankReason: recipe.recommendationRankReason,
       canEdit: isAdminEditableInspiration(recipe),
       createdAt: toIsoDate(recipe.createdAt),
       updatedAt: toIsoDate(recipe.updatedAt)
@@ -8811,7 +8874,6 @@ export class AdminService {
       difficultyText: recipeDifficultyText(content.difficulty),
       durationText: recipeDurationText(content.duration),
       category: toInspirationCategorySummary(collection.sourceRecipe.inspirationCategory!),
-      scenes: collection.sceneLinks.map(link => toRecipeSceneSummary(link.scene)),
       contentVersionId: collection.sourceVersionId,
       collectedAt: toIsoDate(collection.createdAt),
       updatedAt: toIsoDate(collection.updatedAt)

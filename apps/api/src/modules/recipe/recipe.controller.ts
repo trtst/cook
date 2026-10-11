@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Headers, Inject, Param, ParseIntPipe, Post, Put, Query, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Headers, Inject, Param, ParseIntPipe, Post, Put, Query, Req, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { ok } from "../../common/api-response";
 import type { RequestWithUser } from "../../common/auth-context";
@@ -12,14 +12,15 @@ import {
   CreateIngredientFeedbackDto,
   IngredientRecommendationListQueryDto,
   UnitRecommendationListQueryDto,
-  CreateCollectionRecipeDto,
+  CreateSavedInspirationDto,
   CreateRecipeDraftDto,
   CreateUnitDto,
-  CollectionRecipeListQueryDto,
+  SavedInspirationListQueryDto,
   DeleteRecipeDraftDto,
   DeleteRecipeDto,
     IngredientListQueryDto,
     InspirationRecipeListQueryDto,
+    InspirationRecipeDetailQueryDto,
     OperationDto,
     PageQueryDto,
     PublishRecipeDraftDto,
@@ -28,16 +29,13 @@ import {
     RecipeCategoryNameDto,
     RecipeDraftListQueryDto,
     RecipeListQueryDto,
-    RecipeSceneNameDto,
     ReorderRecipeCategoriesDto,
     ReorderRecipesDto,
-    ReorderRecipeScenesDto,
     ReportRecipeDto,
     UnitListQueryDto,
     UpdateRecipeCategoryDto,
     UpdateIngredientDto,
     UpdateRecipeDraftDto,
-    UpdateRecipeSceneDto,
     WithdrawRecipeRecommendationDto
   } from "../../contracts/dtos";
 import {
@@ -45,9 +43,7 @@ import {
   ApiOkModel,
   ApiOkNull,
   ApiOkPage,
-  CollectionListModel,
   CollectedRecipeDetailModel,
-  CollectedRecipeSummaryModel,
   DeleteRecipeDraftResultModel,
   DeleteRecipeResultModel,
   IngredientCategoryModel,
@@ -67,11 +63,12 @@ import {
   RecipeDraftDetailModel,
   RecipeDraftSummaryModel,
   RecipeReportModel,
-    RecipeSceneModel,
     RecipeViewHistoryItemModel,
   RequestRecipeCookAssistantResponseModel,
   SaveRecipeDraftResultModel,
-  SaveCollectionRecipeResultModel,
+  SavedInspirationDetailModel,
+  SavedInspirationMutationResultModel,
+  SavedInspirationSummaryModel,
   UnlockRecipeCookAssistantResponseModel,
   UnitModel,
   UnitRecommendationModel
@@ -99,7 +96,6 @@ function toDraftContentInput(content: CreateRecipeDraftDto["content"] | UpdateRe
     story: content.story,
     categoryId: content.categoryId,
     inspirationCategoryId: content.inspirationCategoryId ?? null,
-    sceneIds: content.sceneIds,
     originVersionId: content.originVersionId ?? null,
     originCoverImageUrl: content.originCoverImageUrl ?? null,
     coverUploadId: content.coverUploadId,
@@ -140,7 +136,10 @@ export class RecipeController {
 
   @Get("inspiration-recipes")
   @ApiOkPage(InspirationRecipeSummaryModel, "匿名分页读取灵感菜谱摘要")
-  listInspirationRecipes(@Query() query: InspirationRecipeListQueryDto) {
+  listInspirationRecipes(
+    @Query() query: InspirationRecipeListQueryDto,
+    @Headers("authorization") authorization?: string
+  ) {
     return this.recipeService
       .listInspirationRecipes(
         query.page,
@@ -149,7 +148,8 @@ export class RecipeController {
         query.categoryId,
         query.sort as "RECOMMENDED" | "LATEST" | undefined,
         query.difficulty as "BEGINNER" | "EASY" | "SKILLED" | "CHALLENGING" | undefined,
-        query.duration as "WITHIN_15" | "BETWEEN_15_30" | "BETWEEN_30_60" | "OVER_60" | undefined
+        query.duration as "WITHIN_15" | "BETWEEN_15_30" | "BETWEEN_30_60" | "OVER_60" | undefined,
+        { headers: { authorization } }
       )
       .then(result => ok(result));
   }
@@ -158,6 +158,7 @@ export class RecipeController {
   @ApiOkModel(InspirationRecipeDetailModel, "匿名读取一个可曝光灵感菜谱详情")
   getInspirationRecipe(
     @Param("recipeId", ParseIntPipe) recipeId: number,
+    @Query() query: InspirationRecipeDetailQueryDto,
     @Headers("authorization") authorization?: string
   ) {
     return this.recipeService
@@ -165,8 +166,54 @@ export class RecipeController {
         headers: {
           authorization
         }
-      })
+      }, query.versionId)
       .then(result => ok(result));
+  }
+
+  @Get("recipes/saved-inspiration")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiOkPage(SavedInspirationSummaryModel, "分页读取我的私房菜收藏灵感")
+  listSavedInspirations(@Req() request: RequestWithUser, @Query() query: SavedInspirationListQueryDto) {
+    return this.recipeService
+      .listSavedInspirations(request.user.userId, query.page, query.pageSize, query.keyword)
+      .then(result => ok(result));
+  }
+
+  @Get("recipes/saved-inspiration/:saveId")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiOkModel(SavedInspirationDetailModel, "读取一条私房菜收藏的固定灵感版本")
+  getSavedInspiration(@Req() request: RequestWithUser, @Param("saveId", ParseIntPipe) saveId: number) {
+    return this.recipeService.getSavedInspiration(request.user.userId, saveId).then(result => ok(result));
+  }
+
+  @Post("recipes/saved-inspiration")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(SavedInspirationMutationResultModel, "收藏一条灵感固定版本到私房菜")
+  saveInspirationToPrivate(
+    @Req() request: RequestWithUser,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: CreateSavedInspirationDto
+  ) {
+    return this.recipeService
+      .saveInspirationToPrivate(request.user.userId, operationId, body.sourceRecipeId, body.sourceVersionId)
+      .then(result => ok(result));
+  }
+
+  @Delete("recipes/saved-inspiration/:saveId")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(SavedInspirationMutationResultModel, "从私房菜移除一条灵感收藏")
+  removeSavedInspiration(
+    @Req() request: RequestWithUser,
+    @Param("saveId", ParseIntPipe) saveId: number,
+    @ReadIdempotencyKey() operationId: string
+  ) {
+    return this.recipeService.removeSavedInspiration(request.user.userId, saveId, operationId).then(result => ok(result));
   }
 
   @Get("recipe-categories")
@@ -217,56 +264,6 @@ export class RecipeController {
     @Body() body: ReorderRecipeCategoriesDto
   ) {
     return this.recipeService.reorderRecipeCategories(request.user.userId, operationId, body.items).then(result => ok(result));
-  }
-
-  @Get("recipe-scenes")
-  @UseGuards(UserAuthGuard)
-  @ApiBearerAuth("UserBearerAuth")
-  @ApiOkArray(RecipeSceneModel, "读取我的个人场景")
-  listRecipeScenes(@Req() request: RequestWithUser) {
-    return this.recipeService.listRecipeScenes(request.user.userId).then(result => ok(result));
-  }
-
-  @Post("recipe-scenes")
-  @UseGuards(UserAuthGuard)
-  @ApiBearerAuth("UserBearerAuth")
-  @ApiIdempotencyKey()
-  @ApiOkModel(RecipeSceneModel, "新建个人场景")
-  createRecipeScene(
-    @Req() request: RequestWithUser,
-    @ReadIdempotencyKey() operationId: string,
-    @Body() body: RecipeSceneNameDto
-  ) {
-    return this.recipeService.createRecipeScene(request.user.userId, operationId, body.name).then(result => ok(result));
-  }
-
-  @Put("recipe-scenes/:sceneId")
-  @UseGuards(UserAuthGuard)
-  @ApiBearerAuth("UserBearerAuth")
-  @ApiIdempotencyKey()
-  @ApiOkModel(RecipeSceneModel, "改名一个个人场景")
-  updateRecipeScene(
-    @Req() request: RequestWithUser,
-    @Param("sceneId", ParseIntPipe) sceneId: number,
-    @ReadIdempotencyKey() operationId: string,
-    @Body() body: UpdateRecipeSceneDto
-  ) {
-    return this.recipeService
-      .updateRecipeScene(request.user.userId, sceneId, operationId, body.expectedVersion, body.name)
-      .then(result => ok(result));
-  }
-
-  @Post("recipe-scenes/reorder")
-  @UseGuards(UserAuthGuard)
-  @ApiBearerAuth("UserBearerAuth")
-  @ApiIdempotencyKey()
-  @ApiOkArray(RecipeSceneModel, "重排我的个人场景")
-  reorderRecipeScenes(
-    @Req() request: RequestWithUser,
-    @ReadIdempotencyKey() operationId: string,
-    @Body() body: ReorderRecipeScenesDto
-  ) {
-    return this.recipeService.reorderRecipeScenes(request.user.userId, operationId, body.items).then(result => ok(result));
   }
 
   @Get("ingredient-categories")
@@ -658,48 +655,15 @@ export class RecipeController {
     return this.recipeService.deleteRecipe(request.user.userId, recipeId, operationId, body.expectedVersion).then(result => ok(result));
   }
 
-  @Get("collections")
-  @UseGuards(UserAuthGuard)
-  @ApiBearerAuth("UserBearerAuth")
-  @ApiOkModel(CollectionListModel, "读取我的合集列表和总收藏数")
-  listCollections(@Req() request: RequestWithUser) {
-    return this.recipeService.listCollections(request.user.userId).then(result => ok(result));
-  }
-
-  @Get("collections/recipes")
-  @UseGuards(UserAuthGuard)
-  @ApiBearerAuth("UserBearerAuth")
-  @ApiOkPage(CollectedRecipeSummaryModel, "分页读取我的合集内容")
-  listCollectionRecipes(@Req() request: RequestWithUser, @Query() query: CollectionRecipeListQueryDto) {
-    return this.recipeService
-      .listCollectionRecipes(request.user.userId, query.page, query.pageSize, query.keyword, query.sceneId)
-      .then(result => ok(result));
-  }
-
   @Get("collections/recipes/:collectionRecipeId")
   @UseGuards(UserAuthGuard)
   @ApiBearerAuth("UserBearerAuth")
-  @ApiOkModel(CollectedRecipeDetailModel, "读取我的一个收藏快照详情")
+  @ApiOkModel(CollectedRecipeDetailModel, "兼容读取本人历史固定版本收藏详情")
   getCollectionRecipe(
     @Req() request: RequestWithUser,
     @Param("collectionRecipeId", ParseIntPipe) collectionRecipeId: number
   ) {
     return this.recipeService.getCollectionRecipe(request.user.userId, collectionRecipeId).then(result => ok(result));
-  }
-
-  @Post("collections/recipes")
-  @UseGuards(UserAuthGuard)
-  @ApiBearerAuth("UserBearerAuth")
-  @ApiIdempotencyKey()
-  @ApiOkModel(SaveCollectionRecipeResultModel, "收藏一个灵感固定版本到我的合集")
-  collectRecipe(
-    @Req() request: RequestWithUser,
-    @ReadIdempotencyKey() operationId: string,
-    @Body() body: CreateCollectionRecipeDto
-  ) {
-    return this.recipeService
-      .collectRecipe(request.user.userId, operationId, body.sourceRecipeId, body.sourceVersionId, body.sceneIds)
-      .then(result => ok(result));
   }
 
   @Post("recipes/:recipeId/report")

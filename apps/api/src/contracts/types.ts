@@ -1265,6 +1265,7 @@ export type MealPlanDishPurchaseState = "READY" | "PENDING";
 export type UnitType = "WEIGHT" | "VOLUME" | "COMMON" | "PACKAGE";
 export type IngredientSource = "SYSTEM" | "PERSONAL";
 export type InspirationSort = "RECOMMENDED" | "LATEST";
+export type RecipeRecommendationRank = "NORMAL" | "DOWNRANK" | "STRONG_DOWNRANK";
 export type IngredientRecommendationStatus = "PENDING" | "REJECTED" | "ADOPTED" | "MERGED";
 export type UnitRecommendationStatus = "PENDING" | "REJECTED" | "ADOPTED" | "MERGED";
 export type UploadAssetScene = "RECIPE_COVER" | "RECIPE_STEP";
@@ -1300,6 +1301,7 @@ export interface RecipeCategorySummary {
   version: number;
 }
 
+/** Internal shape retained for non-routed legacy service code. */
 export interface RecipeSceneSummary {
   id: UUID;
   name: string;
@@ -1577,7 +1579,6 @@ export interface RecipeDraftContentInput {
   story: string | null;
   categoryId: UUID | null;
   inspirationCategoryId?: UUID | null;
-  sceneIds: UUID[];
   originVersionId?: UUID | null;
   originCoverImageUrl?: string | null;
   coverUploadId: UUID | null;
@@ -1627,7 +1628,6 @@ export interface RecipeDraftDetail {
   ingredientRefs: IngredientSummary[];
   unitRefs: UnitSummary[];
   category: RecipeCategorySummary | null;
-  scenes: RecipeSceneSummary[];
   createdAt: IsoDateTime;
   updatedAt: IsoDateTime;
 }
@@ -1668,7 +1668,6 @@ export interface MyRecipeDetail {
   durationText: string | null;
   category: RecipeCategorySummary | null;
   inspirationCategory: InspirationCategorySummary | null;
-  scenes: RecipeSceneSummary[];
   contentVersionId: UUID;
   content: RecipeContentSnapshot;
   nutrition: RecipeNutritionSummary;
@@ -1687,7 +1686,6 @@ export interface MyRecipeDetail {
 
 export interface RecipeDetailPersonal {
   category: RecipeCategorySummary | null;
-  scenes: RecipeSceneSummary[];
   planLinks: RecipePlanLinkSummary[];
   ingredientRefs: IngredientSummary[];
   unitRefs: UnitSummary[];
@@ -1746,6 +1744,7 @@ export interface RecipeOwnerSummary {
   nickname: string | null;
 }
 
+/** Internal shape retained for non-routed legacy service code. */
 export interface CollectionSceneSummary {
   id: UUID;
   name: string;
@@ -1769,7 +1768,6 @@ export interface CollectedRecipeSummary {
   difficultyText: string | null;
   durationText: string | null;
   category: InspirationCategorySummary;
-  scenes: RecipeSceneSummary[];
   contentVersionId: UUID;
   collectedAt: IsoDateTime;
   updatedAt: IsoDateTime;
@@ -1783,7 +1781,6 @@ export interface CollectedRecipeDetail {
   difficultyText: string | null;
   durationText: string | null;
   category: InspirationCategorySummary;
-  scenes: RecipeSceneSummary[];
   contentVersionId: UUID;
   content: RecipeContentSnapshot;
   nutrition: RecipeNutritionSummary;
@@ -1792,15 +1789,20 @@ export interface CollectedRecipeDetail {
   updatedAt: IsoDateTime;
 }
 
-export interface SaveCollectionRecipeRequest {
-  operationId: OperationId;
+export interface SavedInspirationSaveResponse {
+  saveId: UUID;
   sourceRecipeId: UUID;
   sourceVersionId: UUID;
-  sceneIds: UUID[];
+  isSavedToPrivate: true;
+  collectCount: number;
 }
 
-export interface SaveCollectionRecipeResponse {
-  recipe: CollectedRecipeDetail;
+export interface SavedInspirationRemoveResponse {
+  saveId: UUID;
+  sourceRecipeId: UUID;
+  sourceVersionId: UUID;
+  isSavedToPrivate: false;
+  collectCount: number;
 }
 
 export interface PublishRecipeDraftResponse {
@@ -1825,7 +1827,10 @@ export interface InspirationRecipeSummary {
   keywords: string[];
   estimatedCalories: number | null;
   category: InspirationCategorySummary;
+  contentVersionId: UUID;
   collectCount: number;
+  saveId: UUID | null;
+  isSavedToPrivate: boolean;
   updatedAt: IsoDateTime;
 }
 
@@ -1842,9 +1847,32 @@ export interface InspirationRecipeDetail {
   assistantAvailable: boolean;
   planLinks: RecipePlanLinkSummary[];
   collectCount: number;
-  ownedRecipeId: UUID | null;
+  saveId: UUID | null;
+  isSavedToPrivate: boolean;
   owner: RecipeOwnerSummary;
   updatedAt: IsoDateTime;
+}
+
+export interface SavedInspirationSummary {
+  saveId: UUID;
+  sourceRecipeId: UUID;
+  sourceVersionId: UUID;
+  title: string;
+  coverImageUrl: string | null;
+  difficulty: RecipeDifficulty | null;
+  duration: RecipeDuration | null;
+  difficultyText: string | null;
+  durationText: string | null;
+  category: InspirationCategorySummary | null;
+  owner: RecipeOwnerSummary;
+  savedAt: IsoDateTime;
+  isAvailable: boolean;
+}
+
+export interface SavedInspirationDetail extends InspirationRecipeDetail {
+  saveId: UUID;
+  savedAt: IsoDateTime;
+  isAvailable: boolean;
 }
 
 export type RecipeViewSourceType = "MY" | "INSPIRATION";
@@ -1879,6 +1907,8 @@ export interface AdminRecipeSummary {
   updatedAt: IsoDateTime;
   ownerUid: number | null;
   hasWikiCandidate: boolean;
+  recommendationRank: RecipeRecommendationRank;
+  recommendationRankReason: string | null;
 }
 
 export interface ConfirmAdminRecipeWikiCandidatesRequest {
@@ -2115,6 +2145,8 @@ export interface AdminRecipeDetail {
   reportCount: number;
   blockedReason: string | null;
   collectCount: number;
+  recommendationRank: RecipeRecommendationRank;
+  recommendationRankReason: string | null;
   canEdit: boolean;
   createdAt: IsoDateTime;
   updatedAt: IsoDateTime;
@@ -2813,11 +2845,10 @@ export interface AdminUserRecipeDomainOverview {
   user: Pick<UserProfile, "id" | "uid" | "nickname">;
   publishedCount: number;
   draftCount: number;
-  collectionCount: number;
-  sceneCount: number;
+  savedInspirationCount: number;
   latestPublishedAt: IsoDateTime | null;
   latestDraftAt: IsoDateTime | null;
-  latestCollectionAt: IsoDateTime | null;
+  latestSavedInspirationAt: IsoDateTime | null;
 }
 
 export interface MealPlanSummary {

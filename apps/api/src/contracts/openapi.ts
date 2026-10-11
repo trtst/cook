@@ -812,12 +812,6 @@ export class RecipeCategoryModel {
   @ApiProperty({ type: Number, minimum: 1 }) version!: number;
 }
 
-export class RecipeSceneModel {
-  @ApiProperty(uuid) id!: string;
-  @ApiProperty({ type: String }) name!: string;
-  @ApiProperty({ type: Number, minimum: 1 }) version!: number;
-}
-
 export class InspirationCategoryModel {
   @ApiProperty(uuid) id!: string;
   @ApiProperty({ type: String }) name!: string;
@@ -1156,7 +1150,6 @@ export class RecipeDraftContentModel {
   @ApiProperty(nullableString) story!: string | null;
   @ApiProperty({ ...uuid, nullable: true }) categoryId!: string | null;
   @ApiProperty({ ...uuid, nullable: true }) inspirationCategoryId!: string | null;
-  @ApiProperty({ type: [Number] }) sceneIds!: string[];
   @ApiProperty({ ...uuid, nullable: true }) originVersionId!: string | null;
   @ApiProperty(nullableString) originCoverImageUrl!: string | null;
   @ApiProperty({ ...uuid, nullable: true }) coverUploadId!: string | null;
@@ -1219,7 +1212,6 @@ export class RecipeDraftDetailModel {
   @ApiProperty({ type: [IngredientModel] }) ingredientRefs!: IngredientModel[];
   @ApiProperty({ type: [UnitModel] }) unitRefs!: UnitModel[];
   @ApiProperty({ type: RecipeCategoryModel, nullable: true }) category!: RecipeCategoryModel | null;
-  @ApiProperty({ type: [RecipeSceneModel] }) scenes!: RecipeSceneModel[];
   @ApiProperty(dateTime) createdAt!: string;
   @ApiProperty(dateTime) updatedAt!: string;
 }
@@ -1269,7 +1261,6 @@ export class MyRecipeDetailModel {
   @ApiProperty(nullableString) durationText!: string | null;
   @ApiProperty({ type: RecipeCategoryModel, nullable: true }) category!: RecipeCategoryModel | null;
   @ApiProperty({ type: InspirationCategoryModel, nullable: true }) inspirationCategory!: InspirationCategoryModel | null;
-  @ApiProperty({ type: [RecipeSceneModel] }) scenes!: RecipeSceneModel[];
   @ApiProperty(uuid) contentVersionId!: string;
   @ApiProperty({ type: RecipeContentModel }) content!: RecipeContentModel;
   @ApiProperty({ type: RecipeNutritionModel }) nutrition!: RecipeNutritionModel;
@@ -1288,7 +1279,6 @@ export class MyRecipeDetailModel {
 
 export class RecipeDetailPersonalModel {
   @ApiProperty({ type: RecipeCategoryModel, nullable: true }) category!: RecipeCategoryModel | null;
-  @ApiProperty({ type: [RecipeSceneModel] }) scenes!: RecipeSceneModel[];
   @ApiProperty({ type: [RecipePlanLinkModel] }) planLinks!: RecipePlanLinkModel[];
   @ApiProperty({ type: [IngredientModel] }) ingredientRefs!: IngredientModel[];
   @ApiProperty({ type: [UnitModel] }) unitRefs!: UnitModel[];
@@ -1338,7 +1328,6 @@ export class CollectedRecipeSummaryModel {
   @ApiProperty(nullableString) difficultyText!: string | null;
   @ApiProperty(nullableString) durationText!: string | null;
   @ApiProperty({ type: InspirationCategoryModel }) category!: InspirationCategoryModel;
-  @ApiProperty({ type: [RecipeSceneModel] }) scenes!: RecipeSceneModel[];
   @ApiProperty(uuid) contentVersionId!: string;
   @ApiProperty(dateTime) collectedAt!: string;
   @ApiProperty(dateTime) updatedAt!: string;
@@ -1352,7 +1341,6 @@ export class CollectedRecipeDetailModel {
   @ApiProperty(nullableString) difficultyText!: string | null;
   @ApiProperty(nullableString) durationText!: string | null;
   @ApiProperty({ type: InspirationCategoryModel }) category!: InspirationCategoryModel;
-  @ApiProperty({ type: [RecipeSceneModel] }) scenes!: RecipeSceneModel[];
   @ApiProperty(uuid) contentVersionId!: string;
   @ApiProperty({ type: RecipeContentModel }) content!: RecipeContentModel;
   @ApiProperty({ type: RecipeNutritionModel }) nutrition!: RecipeNutritionModel;
@@ -1363,6 +1351,30 @@ export class CollectedRecipeDetailModel {
 
 export class SaveCollectionRecipeResultModel {
   @ApiProperty({ type: CollectedRecipeDetailModel }) recipe!: CollectedRecipeDetailModel;
+}
+
+export class SavedInspirationMutationResultModel {
+  @ApiProperty(uuid) saveId!: string;
+  @ApiProperty(uuid) sourceRecipeId!: string;
+  @ApiProperty(uuid) sourceVersionId!: string;
+  @ApiProperty({ type: Boolean }) isSavedToPrivate!: boolean;
+  @ApiProperty({ type: Number, minimum: 0 }) collectCount!: number;
+}
+
+export class SavedInspirationSummaryModel {
+  @ApiProperty(uuid) saveId!: string;
+  @ApiProperty(uuid) sourceRecipeId!: string;
+  @ApiProperty(uuid) sourceVersionId!: string;
+  @ApiProperty({ type: String }) title!: string;
+  @ApiProperty(nullableString) coverImageUrl!: string | null;
+  @ApiProperty({ type: String, nullable: true, enum: ["BEGINNER", "EASY", "SKILLED", "CHALLENGING"] }) difficulty!: string | null;
+  @ApiProperty({ type: String, nullable: true, enum: ["WITHIN_15", "BETWEEN_15_30", "BETWEEN_30_60", "OVER_60"] }) duration!: string | null;
+  @ApiProperty(nullableString) difficultyText!: string | null;
+  @ApiProperty(nullableString) durationText!: string | null;
+  @ApiProperty({ type: InspirationCategoryModel, nullable: true }) category!: InspirationCategoryModel | null;
+  @ApiProperty({ type: RecipeOwnerModel }) owner!: RecipeOwnerModel;
+  @ApiProperty(dateTime) savedAt!: string;
+  @ApiProperty({ type: Boolean }) isAvailable!: boolean;
 }
 
 export class PublishRecipeDraftResultModel {
@@ -1392,7 +1404,10 @@ export class InspirationRecipeSummaryModel {
   @ApiProperty({ type: [String] }) keywords!: string[];
   @ApiProperty({ type: Number, nullable: true, minimum: 0 }) estimatedCalories!: number | null;
   @ApiProperty({ type: InspirationCategoryModel }) category!: InspirationCategoryModel;
+  @ApiProperty(uuid) contentVersionId!: string;
   @ApiProperty({ type: Number, minimum: 0 }) collectCount!: number;
+  @ApiProperty({ ...uuid, nullable: true }) saveId!: string | null;
+  @ApiProperty({ type: Boolean }) isSavedToPrivate!: boolean;
   @ApiProperty(dateTime) updatedAt!: string;
 }
 
@@ -1409,9 +1424,16 @@ export class InspirationRecipeDetailModel {
   @ApiProperty({ type: Boolean }) assistantAvailable!: boolean;
   @ApiProperty({ type: [RecipePlanLinkModel] }) planLinks!: RecipePlanLinkModel[];
   @ApiProperty({ type: Number, minimum: 0 }) collectCount!: number;
-  @ApiProperty({ ...uuid, nullable: true }) ownedRecipeId!: string | null;
+  @ApiProperty({ ...uuid, nullable: true }) saveId!: string | null;
+  @ApiProperty({ type: Boolean }) isSavedToPrivate!: boolean;
   @ApiProperty({ type: RecipeOwnerModel }) owner!: RecipeOwnerModel;
   @ApiProperty(dateTime) updatedAt!: string;
+}
+
+export class SavedInspirationDetailModel extends InspirationRecipeDetailModel {
+  @ApiProperty(uuid) declare saveId: string;
+  @ApiProperty(dateTime) savedAt!: string;
+  @ApiProperty({ type: Boolean }) isAvailable!: boolean;
 }
 
 export class RecipeViewHistoryItemModel {
@@ -1460,6 +1482,8 @@ export class AdminRecipeModel {
   @ApiProperty(dateTime) updatedAt!: string;
   @ApiProperty({ type: Number, nullable: true }) ownerUid!: number | null;
   @ApiProperty({ type: Boolean }) hasWikiCandidate!: boolean;
+  @ApiProperty({ type: String, enum: ["NORMAL", "DOWNRANK", "STRONG_DOWNRANK"] }) recommendationRank!: string;
+  @ApiProperty(nullableString) recommendationRankReason!: string | null;
 }
 
 export class AdminRecipeWikiConfirmCandidatesResultModel {
@@ -1749,6 +1773,8 @@ export class AdminRecipeDetailModel {
   @ApiProperty({ type: Number, minimum: 0 }) reportCount!: number;
   @ApiProperty(nullableString) blockedReason!: string | null;
   @ApiProperty({ type: Number, minimum: 0 }) collectCount!: number;
+  @ApiProperty({ type: String, enum: ["NORMAL", "DOWNRANK", "STRONG_DOWNRANK"] }) recommendationRank!: string;
+  @ApiProperty(nullableString) recommendationRankReason!: string | null;
   @ApiProperty({ type: Boolean }) canEdit!: boolean;
   @ApiProperty(dateTime) createdAt!: string;
   @ApiProperty(dateTime) updatedAt!: string;
@@ -2250,11 +2276,10 @@ export class AdminUserRecipeDomainOverviewModel {
   @ApiProperty({ type: AdminUserRecipeDomainUserModel }) user!: AdminUserRecipeDomainUserModel;
   @ApiProperty({ type: Number, minimum: 0 }) publishedCount!: number;
   @ApiProperty({ type: Number, minimum: 0 }) draftCount!: number;
-  @ApiProperty({ type: Number, minimum: 0 }) collectionCount!: number;
-  @ApiProperty({ type: Number, minimum: 0 }) sceneCount!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) savedInspirationCount!: number;
   @ApiProperty({ ...dateTime, nullable: true }) latestPublishedAt!: string | null;
   @ApiProperty({ ...dateTime, nullable: true }) latestDraftAt!: string | null;
-  @ApiProperty({ ...dateTime, nullable: true }) latestCollectionAt!: string | null;
+  @ApiProperty({ ...dateTime, nullable: true }) latestSavedInspirationAt!: string | null;
 }
 
 export class MealPlanMenuItemModel {

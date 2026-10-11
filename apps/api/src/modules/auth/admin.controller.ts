@@ -75,6 +75,7 @@ import {
   UpdateAdminInspirationCategoryDto,
   UpdateAdminMedalTemplateDto,
   UpdateAdminRecipeDto,
+  SetAdminRecipeRecommendationRankDto,
   UpdateAdminUnitDto,
   UpdateAdminIngredientCategoryDto,
   UpdateAdminIngredientImageDto,
@@ -141,8 +142,6 @@ import {
   ApiOkArray,
   ApiOkModel,
   ApiOkPage,
-  CollectionListModel,
-  CollectedRecipeSummaryModel,
   MyRecipeSummaryModel,
   RecipeReportModel,
   RecipeDraftSummaryModel,
@@ -475,32 +474,6 @@ export class AdminController {
       .then(result => ok(result));
   }
 
-  @Get("users/:userId/collections")
-  @UseGuards(AdminAuthGuard)
-  @ApiBearerAuth("AdminBearerAuth")
-  @ApiOkModel(CollectionListModel, "后台按用户读取合集列表")
-  listUserCollections(
-    @Req() request: RequestWithAdmin,
-    @Param("userId", ParseIntPipe) userId: number
-  ) {
-    return this.adminService.listUserCollections(userId, request.admin.adminId).then(result => ok(result));
-  }
-
-  @Get("users/:userId/collections/:sceneId/recipes")
-  @UseGuards(AdminAuthGuard)
-  @ApiBearerAuth("AdminBearerAuth")
-  @ApiOkPage(CollectedRecipeSummaryModel, "后台按用户读取某合集内容")
-  listUserCollectionRecipes(
-    @Req() request: RequestWithAdmin,
-    @Param("userId", ParseIntPipe) userId: number,
-    @Param("sceneId", ParseIntPipe) sceneId: number,
-    @Query() query: PageQueryDto
-  ) {
-    return this.adminService
-      .listUserCollectionRecipes(userId, sceneId, request.admin.adminId, query.page, query.pageSize)
-      .then(result => ok(result));
-  }
-
   @Put("users/:userId")
   @UseGuards(AdminAuthGuard)
   @ApiBearerAuth("AdminBearerAuth")
@@ -569,6 +542,22 @@ export class AdminController {
   listRecipes(@Req() request: RequestWithAdmin, @Query() query: AdminRecipeQueryDto) {
     return this.adminService
       .listRecipes(query.page, query.pageSize, query.keyword, query.status, query.categoryId, request.admin.adminId)
+      .then(result => ok(result));
+  }
+
+  @Put("recipes/:recipeId/recommendation-rank")
+  @UseGuards(AdminAuthGuard, SuperAdminGuard)
+  @ApiBearerAuth("AdminBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(AdminRecipeModel, "后台调整系统灵感菜谱推荐档位")
+  setRecipeRecommendationRank(
+    @Req() request: RequestWithAdmin,
+    @Param("recipeId", ParseIntPipe) recipeId: number,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: SetAdminRecipeRecommendationRankDto
+  ) {
+    return this.adminService
+      .setRecipeRecommendationRank(recipeId, request.admin.adminId, { ...body, operationId })
       .then(result => ok(result));
   }
 

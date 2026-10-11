@@ -10,17 +10,14 @@ import { Prisma, RecipeStatus, type UploadAsset } from "@prisma/client";
 import { recipeDifficultyText, recipeDurationText } from "../../common/display-text";
 import { PrismaService } from "../../common/prisma.service";
 import type { RecipeImagePosition } from "../../common/recipe-image-name";
-import { publicInspirationRecipeWhere } from "./public-content-user-pool";
+import { isPublicInspirationRecipe, publicInspirationRecipeWhere } from "./public-content-user-pool";
 import { indexRecipeVersionIngredients } from "./recipe-version-ingredients";
 import { toOwnerNicknameSnapshot } from "./recipe-owner-snapshot";
 import { UserTokenService } from "../../common/security/user-token.service";
 import { completeIdempotentOperation, getIdempotentResult, startIdempotentOperation } from "../../common/idempotency";
 import { removeStorageLedger, upsertStorageLedger } from "../../common/storage-ledger";
 import type {
-  CollectionListResponse,
-  CollectionSceneSummary,
   CollectedRecipeDetail,
-  CollectedRecipeSummary,
   DeleteRecipeDraftResponse,
   DeleteRecipeResponse,
   IngredientCategorySummary,
@@ -50,10 +47,11 @@ import type {
   RecipeDetailPersonal,
   RecipeIngredientInput,
   RecipeReportSummary,
-  RecipeSceneSummary,
   RecipeViewHistoryItem,
   ReorderItem,
-  SaveCollectionRecipeResponse,
+  SavedInspirationRemoveResponse,
+  SavedInspirationSaveResponse,
+  SavedInspirationSummary,
   SaveRecipeDraftResponse,
   UnlockRecipeCookAssistantResponse,
   OperationId,
@@ -110,11 +108,6 @@ type ReadableRecipeRow = Prisma.RecipeGetPayload<{
 type DraftRow = Prisma.RecipeDraftGetPayload<{
   include: {
     category: true;
-    scenes: {
-      include: {
-        scene: true;
-      };
-    };
   };
 }>;
 
@@ -134,8 +127,19 @@ type CollectionRow = Prisma.RecipeCollectionGetPayload<{
   };
 }>;
 
+type SavedInspirationRow = Prisma.RecipeCollectionGetPayload<{
+  include: {
+    sourceVersion: true;
+    sourceRecipe: {
+      include: {
+        owner: { select: { uid: true; nickname: true } };
+        inspirationCategory: true;
+      };
+    };
+  };
+}>;
+
 type RecipeCategoryRow = Prisma.RecipeCategoryGetPayload<Record<string, never>>;
-type RecipeSceneRow = Prisma.RecipeSceneGetPayload<Record<string, never>>;
 type IngredientCategoryRow = Prisma.IngredientCategoryGetPayload<Record<string, never>>;
 type UnitRow = Prisma.UnitGetPayload<Record<string, never>>;
 type IngredientRow = Prisma.IngredientGetPayload<{
@@ -215,6 +219,7 @@ type RequestLike = {
 };
 
 type VersionImageState = {
+  coverImageUrl: string | null;
   coverUploadId: UUID | null;
   stepUploads: Array<{ slotKey: string; uploadId: UUID | null }>;
 };
@@ -298,24 +303,6 @@ function toRecipeCategorySummary(category: RecipeCategoryRow): RecipeCategorySum
     id: category.id,
     name: category.name,
     version: category.version
-  };
-}
-
-function toRecipeSceneSummary(scene: RecipeSceneRow): RecipeSceneSummary {
-  return {
-    id: scene.id,
-    name: scene.name,
-    version: scene.version
-  };
-}
-
-function toCollectionSceneSummary(scene: RecipeSceneRow, recipeCount: number, updatedAt: Date | null): CollectionSceneSummary {
-  return {
-    id: scene.id,
-    name: scene.name,
-    version: scene.version,
-    recipeCount,
-    updatedAt: updatedAt ? toIsoDate(updatedAt) : null
   };
 }
 
@@ -568,87 +555,6 @@ export class RecipeService {
       await this.writeSortOrder(tx, "recipeCategory", items.map(item => item.id), "userId", userId);
       const result = await this.listRecipeCategories(userId);
       await completeIdempotentOperation(tx, operationId, "recipe-category:reorder", userId, null, requestHash, result);
-      return result;
-    });
-  }
-
-  async listRecipeScenes(userId: UUID) {
-    const items = await this.prisma.recipeScene.findMany({
-      where: { userId },
-      orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }]
-    });
-    return items.map(toRecipeSceneSummary);
-  }
-
-  async createRecipeScene(userId: UUID, operationId: OperationId, name: string) {
-    const normalizedName = name.trim();
-    const searchKey = buildSearchKey(normalizedName);
-    const requestHash = searchKey;
-    return this.prisma.$transaction(async tx => {
-      const repeated = await getIdempotentResult<RecipeSceneSummary>(tx, operationId, "recipe-scene:create", userId, null, requestHash);
-      if (repeated) return repeated;
-      await startIdempotentOperation(tx, operationId, "recipe-scene:create", userId, null, requestHash);
-      await this.assertCategoryLimit(tx, userId, "SCENE");
-      await this.assertSceneNameAvailable(tx, userId, searchKey, null);
-      const last = await tx.recipeScene.findFirst({
-        where: { userId },
-        orderBy: { sortOrder: "desc" },
-        select: { sortOrder: true }
-      });
-      const scene = await tx.recipeScene.create({
-        data: {
-          userId,
-          name: normalizedName,
-          searchKey,
-          sortOrder: (last?.sortOrder ?? -1) + 1
-        }
-      });
-      const result = toRecipeSceneSummary(scene);
-      await completeIdempotentOperation(tx, operationId, "recipe-scene:create", userId, null, requestHash, result);
-      return result;
-    });
-  }
-
-  async updateRecipeScene(userId: UUID, sceneId: UUID, operationId: OperationId, expectedVersion: number, name: string) {
-    const normalizedName = name.trim();
-    const searchKey = buildSearchKey(normalizedName);
-    const requestHash = `${sceneId}:${expectedVersion}:${searchKey}`;
-    return this.prisma.$transaction(async tx => {
-      await tx.$queryRaw`SELECT "id" FROM "recipe_scenes" WHERE "id" = ${sceneId} FOR UPDATE`;
-      const scene = await this.requireOwnedScene(tx, userId, sceneId);
-      const repeated = await getIdempotentResult<RecipeSceneSummary>(tx, operationId, "recipe-scene:update", userId, null, requestHash);
-      if (repeated) return repeated;
-      if (scene.version !== expectedVersion) throw new ConflictException("场景已被更新，请刷新后重试");
-      await startIdempotentOperation(tx, operationId, "recipe-scene:update", userId, null, requestHash);
-      await this.assertSceneNameAvailable(tx, userId, searchKey, sceneId);
-      const next = await tx.recipeScene.update({
-        where: { id: sceneId },
-        data: {
-          name: normalizedName,
-          searchKey,
-          version: { increment: 1 }
-        }
-      });
-      const result = toRecipeSceneSummary(next);
-      await completeIdempotentOperation(tx, operationId, "recipe-scene:update", userId, null, requestHash, result);
-      return result;
-    });
-  }
-
-  async reorderRecipeScenes(userId: UUID, operationId: OperationId, items: ReorderItem[]) {
-    const requestHash = JSON.stringify(items);
-    return this.prisma.$transaction(async tx => {
-      const repeated = await getIdempotentResult<RecipeSceneSummary[]>(tx, operationId, "recipe-scene:reorder", userId, null, requestHash);
-      if (repeated) return repeated;
-      await startIdempotentOperation(tx, operationId, "recipe-scene:reorder", userId, null, requestHash);
-      const all = await tx.recipeScene.findMany({
-        where: { userId },
-        orderBy: { sortOrder: "asc" }
-      });
-      this.assertReorderScope(all, items, "场景");
-      await this.writeSortOrder(tx, "recipeScene", items.map(item => item.id), "userId", userId);
-      const result = await this.listRecipeScenes(userId);
-      await completeIdempotentOperation(tx, operationId, "recipe-scene:reorder", userId, null, requestHash, result);
       return result;
     });
   }
@@ -1117,11 +1023,6 @@ export class RecipeService {
         where,
         include: {
           category: true,
-          scenes: {
-            include: {
-              scene: true
-            }
-          }
         },
         orderBy: { updatedAt: "desc" },
         skip,
@@ -1152,8 +1053,7 @@ export class RecipeService {
         const existing = await tx.recipeDraft.findUnique({
           where: { recipeId },
           include: {
-            category: true,
-            scenes: { include: { scene: true } }
+          category: true
           }
         });
         if (existing) {
@@ -1192,18 +1092,9 @@ export class RecipeService {
         },
         include: {
           category: true,
-          scenes: { include: { scene: true } }
         }
       });
 
-      if (draftRelations.sceneIds.length > 0) {
-        await tx.recipeDraftScene.createMany({
-          data: draftRelations.sceneIds.map(sceneId => ({
-            draftId: draft.id,
-            sceneId
-          }))
-        });
-      }
       await upsertStorageLedger(tx, userId, "RECIPE", draftRecordKey(draft.id), usedBytes);
       const result = toSaveRecipeDraftResponse(draft);
       await completeIdempotentOperation(tx, operationId, "recipe-draft:create", userId, null, requestHash, result);
@@ -1254,15 +1145,6 @@ export class RecipeService {
         ? await this.calculateEditDraftBytes(tx, recipe, normalized)
         : draftSizeBytes(normalized);
 
-      await tx.recipeDraftScene.deleteMany({ where: { draftId } });
-      if (draftRelations.sceneIds.length > 0) {
-        await tx.recipeDraftScene.createMany({
-          data: draftRelations.sceneIds.map(sceneId => ({
-            draftId,
-            sceneId
-          }))
-        });
-      }
 
       const next = await tx.recipeDraft.update({
         where: { id: draftId },
@@ -1276,7 +1158,6 @@ export class RecipeService {
         },
         include: {
           category: true,
-          scenes: { include: { scene: true } }
         }
       });
       const staleStorageKeys = await this.uploadService.removeUnusedDraftUploads(tx, draftId, keepUploadIds);
@@ -1483,15 +1364,6 @@ export class RecipeService {
         });
         await replaceAutoRecipeVersionTags(tx, version.id, recipeContent);
         await this.uploadService.bindDraftUploads(tx, draftId, version.id, Array.from(uploadIds));
-        await tx.recipeSceneLink.deleteMany({ where: { recipeId: currentRecipe.id } });
-        if (content.sceneIds.length > 0) {
-          await tx.recipeSceneLink.createMany({
-            data: content.sceneIds.map(sceneId => ({
-              recipeId: currentRecipe.id,
-              sceneId
-            }))
-          });
-        }
         await tx.recipe.update({
           where: { id: currentRecipe.id },
           data: {
@@ -1538,14 +1410,6 @@ export class RecipeService {
             sortOrder
           }
         });
-        if (content.sceneIds.length > 0) {
-          await tx.recipeSceneLink.createMany({
-            data: content.sceneIds.map(sceneId => ({
-              recipeId: created.id,
-              sceneId
-            }))
-          });
-        }
         await upsertStorageLedger(tx, userId, "RECIPE", recipeRecordKey(created.id), 0);
         recipe = await this.loadOwnedRecipe(tx, userId, created.id);
       }
@@ -2094,281 +1958,200 @@ export class RecipeService {
     });
   }
 
-  async listCollections(userId: UUID): Promise<CollectionListResponse> {
-    const [scenes, collections] = await this.prisma.$transaction([
-      this.prisma.recipeScene.findMany({
-        where: { userId },
-        orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }]
-      }),
-      this.prisma.recipeCollection.findMany({
-        where: { userId },
-        select: {
-          updatedAt: true,
-          sceneLinks: {
-            select: {
-              sceneId: true
-            }
-          }
-        }
-      })
-    ]);
-
-    const stats = new Map<UUID, { recipeCount: number; updatedAt: Date | null }>();
-    for (const scene of scenes) {
-      stats.set(scene.id, { recipeCount: 0, updatedAt: null });
-    }
-    for (const collection of collections) {
-      for (const link of collection.sceneLinks) {
-        const current = stats.get(link.sceneId);
-        if (!current) continue;
-        current.recipeCount += 1;
-        current.updatedAt =
-          !current.updatedAt || collection.updatedAt > current.updatedAt ? collection.updatedAt : current.updatedAt;
-      }
-    }
-
-    return {
-      items: scenes.map(scene => {
-        const current = stats.get(scene.id) ?? { recipeCount: 0, updatedAt: null };
-        return toCollectionSceneSummary(scene, current.recipeCount, current.updatedAt);
-      }),
-      totalCount: collections.length
-    };
-  }
-
-  async listCollectionRecipes(
-    userId: UUID,
-    page: number,
-    pageSize: number,
-    keyword?: string,
-    sceneId?: UUID
-  ): Promise<PageResult<CollectedRecipeSummary>> {
-    if (sceneId) {
-      await this.requireOwnedScene(this.prisma, userId, sceneId);
-    }
-    const normalizedPage = toPositiveInt(page, 1);
-    const normalizedPageSize = toPositiveInt(pageSize, 20);
-    const skip = (normalizedPage - 1) * normalizedPageSize;
-    const where: Prisma.RecipeCollectionWhereInput = {
-      userId,
-      ...(keyword ? { sourceVersion: { searchText: { contains: buildSearchKey(keyword) } } } : {}),
-      ...(sceneId ? { sceneLinks: { some: { sceneId } } } : {})
-    };
-    const [items, total] = await this.prisma.$transaction([
-      this.prisma.recipeCollection.findMany({
-        where,
-        include: {
-          sourceRecipe: {
-            include: {
-              inspirationCategory: true
-            }
-          },
-          sourceVersion: true,
-          sceneLinks: {
-            include: {
-              scene: true
-            }
-          }
-        },
-        orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
-        skip,
-        take: normalizedPageSize
-      }),
-      this.prisma.recipeCollection.count({ where })
-    ]);
-
-    return {
-      items: items.map(item => this.toCollectedRecipeSummary(item)),
-      page: normalizedPage,
-      pageSize: normalizedPageSize,
-      total,
-      hasNext: skip + items.length < total
-    };
-  }
-
   async getCollectionRecipe(userId: UUID, collectionRecipeId: UUID): Promise<CollectedRecipeDetail> {
     const collection = await this.loadCollection(this.prisma, userId, collectionRecipeId);
     return this.toCollectedRecipeDetail(this.prisma, collection);
   }
 
-  async collectRecipe(
+  async listSavedInspirations(userId: UUID, page: number, pageSize: number, keyword?: string) {
+    const normalizedPage = toPositiveInt(page, 1);
+    const normalizedPageSize = toPositiveInt(pageSize, 20);
+    const skip = (normalizedPage - 1) * normalizedPageSize;
+    const searchText = keyword ? buildSearchKey(keyword) : null;
+    const where: Prisma.RecipeCollectionWhereInput = {
+      userId,
+      ...(searchText ? { sourceVersion: { searchText: { contains: searchText } } } : {})
+    };
+    const [saves, total] = await this.prisma.$transaction([
+      this.prisma.recipeCollection.findMany({
+        where,
+        include: {
+          sourceVersion: true,
+          sourceRecipe: {
+            include: {
+              owner: { select: { uid: true, nickname: true } },
+              inspirationCategory: true
+            }
+          }
+        },
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        skip,
+        take: normalizedPageSize
+      }),
+      this.prisma.recipeCollection.count({ where })
+    ]);
+    return {
+      items: saves.map(save => this.toSavedInspirationSummary(save)),
+      page: normalizedPage,
+      pageSize: normalizedPageSize,
+      total,
+      hasNext: skip + saves.length < total
+    };
+  }
+
+  async getSavedInspiration(userId: UUID, saveId: UUID) {
+    const save = await this.prisma.recipeCollection.findFirst({
+      where: { id: saveId, userId },
+      include: {
+        sourceVersion: true,
+        sourceRecipe: {
+          include: {
+            owner: { select: { uid: true, nickname: true } },
+            category: true,
+            inspirationCategory: true,
+            currentVersion: true,
+            sceneLinks: { include: { scene: true } }
+          }
+        }
+      }
+    });
+    if (!save?.sourceRecipe.inspirationCategory) throw new NotFoundException("私房菜收藏不存在");
+    const recipe = {
+      ...save.sourceRecipe,
+      currentVersionId: save.sourceVersionId,
+      currentVersion: save.sourceVersion
+    } as RecipeRow;
+    return {
+      ...(await this.toInspirationRecipeDetail(this.prisma, recipe, userId, save.id)),
+      saveId: save.id,
+      savedAt: toIsoDate(save.createdAt),
+      isAvailable: isPublicInspirationRecipe(save.sourceRecipe)
+    };
+  }
+
+  async saveInspirationToPrivate(
     userId: UUID,
     operationId: OperationId,
     sourceRecipeId: UUID,
-    sourceVersionId: UUID,
-    sceneIds: UUID[]
-  ): Promise<SaveCollectionRecipeResponse> {
-    const normalizedSceneIds = Array.from(new Set(sceneIds)).sort();
-    if (!normalizedSceneIds.length) {
-      throw new BadRequestException("至少选择一个合集");
-    }
-    const requestHash = JSON.stringify({ sourceRecipeId, sourceVersionId, sceneIds: normalizedSceneIds });
-
+    sourceVersionId: UUID
+  ) {
+    const requestHash = JSON.stringify({ sourceRecipeId, sourceVersionId });
     return this.prisma.$transaction(async tx => {
-      const repeated = await getIdempotentResult<SaveCollectionRecipeResponse>(
+      const repeated = await getIdempotentResult<SavedInspirationSaveResponse>(
         tx,
         operationId,
-        "collection-recipe:create",
+        "saved-inspiration:create",
         userId,
         null,
         requestHash
       );
       if (repeated) return repeated;
 
-      if (normalizedSceneIds.length > 0) {
-        const scenes = await tx.recipeScene.findMany({
-          where: {
-            userId,
-            id: { in: normalizedSceneIds }
-          },
-          select: { id: true }
-        });
-        if (scenes.length !== normalizedSceneIds.length) {
-          throw new NotFoundException("场景不存在");
-        }
-      }
-
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`RECIPE:${sourceRecipeId}:SAVED_INSPIRATION`}, 0))::text`;
       await tx.$queryRaw`SELECT "id" FROM "recipes" WHERE "id" = ${sourceRecipeId} FOR UPDATE`;
       const sourceRecipe = await tx.recipe.findFirst({
         where: {
           id: sourceRecipeId,
           ...publicInspirationRecipeWhere("ACTIVE")
         },
-        include: {
-          inspirationCategory: true,
-          currentVersion: true
-        }
+        include: { currentVersion: true }
       });
-      if (!sourceRecipe || !sourceRecipe.inspirationCategory) {
+      if (!sourceRecipe || !sourceRecipe.inspirationCategoryId) {
         throw new NotFoundException("灵感菜谱不存在");
       }
       if (sourceRecipe.currentVersionId !== sourceVersionId) {
         throw new ConflictException("灵感版本已更新，请刷新后重试");
       }
 
-      let existing = await tx.recipeCollection.findFirst({
-        where: {
-          userId,
-          sourceRecipeId,
-          sourceVersionId
-        },
-        include: {
-          sourceRecipe: {
-            include: {
-              inspirationCategory: true
-            }
-          },
-          sourceVersion: true,
-          sceneLinks: {
-            include: {
-              scene: true
-            }
-          }
-        }
+      const existing = await tx.recipeCollection.findFirst({
+        where: { userId, sourceRecipeId, sourceVersionId }
       });
-      const holderBeforeCreate = existing
-        ? true
-        : Boolean(
-            await tx.recipeCollection.findFirst({
-              where: {
-                userId,
-                sourceRecipeId
-              },
-              select: { id: true }
-            })
-          );
-      let createdNow = false;
+      await startIdempotentOperation(tx, operationId, "saved-inspiration:create", userId, null, requestHash);
 
-      await startIdempotentOperation(tx, operationId, "collection-recipe:create", userId, null, requestHash);
-
-      if (!existing) {
+      let save = existing;
+      let collectCount = sourceRecipe.collectCount;
+      if (!save) {
         await this.assertRecipeQuota(tx, userId, 1);
+        const alreadyCollected = await tx.recipeCollection.findFirst({
+          where: { userId, sourceRecipeId },
+          select: { id: true }
+        });
         try {
-          existing = await tx.recipeCollection.create({
-            data: {
-              userId,
-              sourceRecipeId,
-              sourceVersionId
-            },
-            include: {
-              sourceRecipe: {
-                include: {
-                  inspirationCategory: true
-                }
-              },
-              sourceVersion: true,
-              sceneLinks: {
-                include: {
-                  scene: true
-                }
-              }
-            }
+          save = await tx.recipeCollection.create({
+            data: { userId, sourceRecipeId, sourceVersionId }
           });
-          createdNow = true;
-          await upsertStorageLedger(tx, userId, "RECIPE", collectionRecordKey(existing.id), sourceRecipe.currentVersion.contentSizeBytes);
-          if (!holderBeforeCreate) {
-            await this.bumpRecipeCollectCount(tx, sourceRecipeId, 1);
+          await upsertStorageLedger(tx, userId, "RECIPE", collectionRecordKey(save.id), sourceRecipe.currentVersion.contentSizeBytes);
+          if (!alreadyCollected) {
+            const updatedRecipe = await tx.recipe.update({
+              where: { id: sourceRecipeId },
+              data: { collectCount: { increment: 1 } },
+              select: { collectCount: true }
+            });
+            collectCount = updatedRecipe.collectCount;
           }
         } catch (error) {
-          if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002") {
-            throw error;
-          }
-          existing = await tx.recipeCollection.findFirst({
-            where: {
-              userId,
-              sourceRecipeId,
-              sourceVersionId
-            },
-            include: {
-              sourceRecipe: {
-                include: {
-                  inspirationCategory: true
-                }
-              },
-              sourceVersion: true,
-              sceneLinks: {
-                include: {
-                  scene: true
-                }
-              }
-            }
+          if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002") throw error;
+          save = await tx.recipeCollection.findFirst({
+            where: { userId, sourceRecipeId, sourceVersionId }
           });
         }
       }
+      if (!save) throw new ConflictException("收藏状态未能保存，请刷新后重试");
+      const result: SavedInspirationSaveResponse = {
+        saveId: save.id,
+        sourceRecipeId,
+        sourceVersionId,
+        isSavedToPrivate: true,
+        collectCount
+      };
+      await completeIdempotentOperation(tx, operationId, "saved-inspiration:create", userId, null, requestHash, result);
+      return result;
+    });
+  }
 
-      if (!existing) {
-        throw new ConflictException("收藏已存在，请刷新后重试");
-      }
+  async removeSavedInspiration(userId: UUID, saveId: UUID, operationId: OperationId) {
+    const requestHash = JSON.stringify({ saveId });
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getIdempotentResult<SavedInspirationRemoveResponse>(
+        tx,
+        operationId,
+        "saved-inspiration:remove",
+        userId,
+        null,
+        requestHash
+      );
+      if (repeated) return repeated;
 
-      const currentSceneIds = new Set(existing.sceneLinks.map(link => link.sceneId));
-      const missingSceneIds = normalizedSceneIds.filter(sceneId => !currentSceneIds.has(sceneId));
-      if (!createdNow && missingSceneIds.length === 0) {
-        throw new ConflictException("该灵感版本已收藏");
-      }
-
-      if (missingSceneIds.length > 0) {
-        await tx.recipeCollectionScene.createMany({
-          data: missingSceneIds.map(sceneId => ({
-            collectionId: existing!.id,
-            sceneId
-          })),
-          skipDuplicates: true
-        });
-      }
-      if (!createdNow && missingSceneIds.length > 0) {
-        await tx.recipeCollection.update({
-          where: { id: existing.id },
-          data: {
-            version: { increment: 1 }
-          }
-        });
-      }
-
-      const next = await this.loadCollection(tx, userId, existing.id);
-      const result = {
-        recipe: await this.toCollectedRecipeDetail(tx, next)
-      } satisfies SaveCollectionRecipeResponse;
-      await completeIdempotentOperation(tx, operationId, "collection-recipe:create", userId, null, requestHash, result);
+      const save = await tx.recipeCollection.findFirst({ where: { id: saveId, userId } });
+      if (!save) throw new NotFoundException("私房菜收藏不存在");
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`RECIPE:${save.sourceRecipeId}:SAVED_INSPIRATION`}, 0))::text`;
+      await tx.$queryRaw`SELECT "id" FROM "recipes" WHERE "id" = ${save.sourceRecipeId} FOR UPDATE`;
+      const currentSave = await tx.recipeCollection.findFirst({ where: { id: saveId, userId } });
+      if (!currentSave) throw new NotFoundException("私房菜收藏不存在");
+      await startIdempotentOperation(tx, operationId, "saved-inspiration:remove", userId, null, requestHash);
+      await tx.recipeCollection.delete({ where: { id: currentSave.id } });
+      await removeStorageLedger(tx, userId, "RECIPE", collectionRecordKey(currentSave.id));
+      const anotherVersion = await tx.recipeCollection.findFirst({
+        where: { userId, sourceRecipeId: currentSave.sourceRecipeId },
+        select: { id: true }
+      });
+      const sourceRecipe = anotherVersion
+        ? await tx.recipe.findUnique({ where: { id: currentSave.sourceRecipeId }, select: { collectCount: true } })
+        : await tx.recipe.update({
+            where: { id: currentSave.sourceRecipeId },
+            data: { collectCount: { decrement: 1 } },
+            select: { collectCount: true }
+          });
+      if (!sourceRecipe) throw new NotFoundException("灵感菜谱不存在");
+      const collectCount = sourceRecipe.collectCount;
+      const result: SavedInspirationRemoveResponse = {
+        saveId: currentSave.id,
+        sourceRecipeId: currentSave.sourceRecipeId,
+        sourceVersionId: currentSave.sourceVersionId,
+        isSavedToPrivate: false,
+        collectCount
+      };
+      await completeIdempotentOperation(tx, operationId, "saved-inspiration:remove", userId, null, requestHash, result);
       return result;
     });
   }
@@ -2387,7 +2170,8 @@ export class RecipeService {
     categoryId?: UUID,
     sort?: InspirationRecipeSummary["updatedAt"] extends string ? "RECOMMENDED" | "LATEST" : never,
     difficulty?: RecipeContentSnapshot["difficulty"],
-    duration?: RecipeContentSnapshot["duration"]
+    duration?: RecipeContentSnapshot["duration"],
+    request?: RequestLike
   ): Promise<PageResult<InspirationRecipeSummary>> {
     const normalizedPage = toPositiveInt(page, 1);
     const normalizedPageSize = toPositiveInt(pageSize, 20);
@@ -2405,30 +2189,145 @@ export class RecipeService {
           }
         : {})
     };
-    const orderBy =
-      sort === "LATEST"
-        ? [{ updatedAt: "desc" as const }, { id: "desc" as const }]
-        : [{ collectCount: "desc" as const }, { updatedAt: "desc" as const }, { id: "desc" as const }];
+    const sqlFilters: Prisma.Sql[] = [
+      Prisma.sql`r.is_inspiration = TRUE`,
+      Prisma.sql`r.status = 'ACTIVE'`,
+      Prisma.sql`r.inspiration_category_id IS NOT NULL`
+    ];
+    if (categoryId) sqlFilters.push(Prisma.sql`r.inspiration_category_id = ${categoryId}`);
+    if (keyword) sqlFilters.push(Prisma.sql`STRPOS(r.search_text, ${buildSearchKey(keyword)}) > 0`);
+    if (difficulty) sqlFilters.push(Prisma.sql`cv.difficulty::text = ${difficulty}`);
+    if (duration) sqlFilters.push(Prisma.sql`cv.duration::text = ${duration}`);
+    const sqlWhere = Prisma.join(sqlFilters, " AND ");
 
-    const [items, total] = await this.prisma.$transaction([
-      this.prisma.recipe.findMany({
-        where,
-        include: {
-          owner: { select: { uid: true, nickname: true } },
-          category: true,
-          inspirationCategory: true,
-          currentVersion: true,
-          sceneLinks: { include: { scene: true } }
-        },
-        orderBy,
-        skip,
-        take: normalizedPageSize
-      }),
-      this.prisma.recipe.count({ where })
-    ]);
+    const [ranked, total] = await this.prisma.$transaction(async tx => {
+      const ranked = sort === "LATEST"
+        ? await tx.$queryRaw<Array<{ id: number }>>(Prisma.sql`
+            SELECT r.id
+            FROM recipes r
+            INNER JOIN recipe_content_versions cv ON cv.id = r.current_version_id
+            WHERE ${sqlWhere}
+            ORDER BY COALESCE(r.inspiration_published_at, r.created_at) DESC, r.id DESC
+            OFFSET ${skip} LIMIT ${normalizedPageSize}
+          `)
+        : await tx.$queryRaw<Array<{ id: number }>>(Prisma.sql`
+            WITH candidate AS (
+              SELECT r.id, r.recommendation_rank,
+                COALESCE(r.inspiration_published_at, r.created_at) AS published_at
+              FROM recipes r
+              INNER JOIN recipe_content_versions cv ON cv.id = r.current_version_id
+              WHERE ${sqlWhere}
+            ),
+            save_counts AS (
+              SELECT c.source_recipe_id AS id, COUNT(DISTINCT c.user_id)::int AS save_users
+              FROM recipe_collections c
+              INNER JOIN candidate r ON r.id = c.source_recipe_id
+              WHERE c.created_at >= NOW() - INTERVAL '30 days'
+              GROUP BY c.source_recipe_id
+            ),
+            plan_user_counts AS (
+              SELECT d.recipe_id AS id, p.user_id, LEAST(COUNT(*), 3)::int AS capped_adds
+              FROM meal_plan_dishes d
+              INNER JOIN meal_plan_items p ON p.id = d.plan_item_id
+              INNER JOIN candidate r ON r.id = d.recipe_id
+              WHERE d.created_at >= NOW() - INTERVAL '30 days'
+                AND p.status <> 'CANCELLED'
+              GROUP BY d.recipe_id, p.user_id
+            ),
+            plan_counts AS (
+              SELECT id, SUM(capped_adds)::int AS plan_adds
+              FROM plan_user_counts
+              GROUP BY id
+            ),
+            scored AS (
+              SELECT candidate.id, candidate.recommendation_rank, candidate.published_at,
+                LN(1.0 + COALESCE(saves.save_users, 0))
+                  + 2.0 * LN(1.0 + COALESCE(plans.plan_adds, 0)) AS behavior_score,
+                (recommendation_rank = 'NORMAL' AND published_at >= NOW() - INTERVAL '7 days') AS is_trial
+              FROM candidate
+              LEFT JOIN save_counts saves ON saves.id = candidate.id
+              LEFT JOIN plan_counts plans ON plans.id = candidate.id
+            ),
+            selected_trial AS (
+              SELECT id FROM scored
+              WHERE is_trial
+              ORDER BY behavior_score DESC, published_at DESC, id DESC
+              LIMIT 1
+            ),
+            ordered AS (
+              SELECT s.id,
+                ROW_NUMBER() OVER (
+                  ORDER BY
+                    CASE s.recommendation_rank
+                      WHEN 'NORMAL' THEN 0
+                      WHEN 'DOWNRANK' THEN 1
+                      WHEN 'STRONG_DOWNRANK' THEN 2
+                    END,
+                    s.behavior_score DESC,
+                    s.published_at DESC,
+                    s.id DESC
+                ) AS position
+              FROM scored s
+              WHERE s.id <> COALESCE((SELECT id FROM selected_trial), -1)
+            ),
+            trial_slot AS (
+              SELECT id, LEAST(10, (SELECT COUNT(*) FROM ordered) + 1) AS position
+              FROM selected_trial
+            ),
+            final_order AS (
+              SELECT o.id, o.position
+              FROM ordered o
+              WHERE o.position < COALESCE((SELECT position FROM trial_slot), 2147483647)
+              UNION ALL
+              SELECT id, position FROM trial_slot
+              UNION ALL
+              SELECT o.id, o.position + 1
+              FROM ordered o
+              WHERE o.position >= COALESCE((SELECT position FROM trial_slot), 2147483647)
+            )
+            SELECT id
+            FROM final_order
+            ORDER BY position
+            OFFSET ${skip} LIMIT ${normalizedPageSize}
+          `);
+      const total = await tx.recipe.count({ where });
+      return [ranked, total] as const;
+    });
+
+    const rankedIds = ranked.map(item => item.id);
+    const rows = rankedIds.length
+      ? await this.prisma.recipe.findMany({
+          where: { ...where, id: { in: rankedIds } },
+          include: {
+            owner: { select: { uid: true, nickname: true } },
+            category: true,
+            inspirationCategory: true,
+            currentVersion: true,
+            sceneLinks: { include: { scene: true } }
+          }
+        })
+      : [];
+    const rowById = new Map(rows.map(row => [row.id, row]));
+    const userId = request ? await this.resolveOptionalUserId(request) : null;
+    const saveIdByVersion = new Map<string, number>();
+    if (userId && rankedIds.length) {
+      const saves = await this.prisma.recipeCollection.findMany({
+          where: { userId, sourceRecipeId: { in: rankedIds } },
+          select: { id: true, sourceRecipeId: true, sourceVersionId: true },
+          orderBy: [{ createdAt: "desc" }, { id: "desc" }]
+        });
+      for (const save of saves) {
+        const key = `${save.sourceRecipeId}:${save.sourceVersionId}`;
+        if (!saveIdByVersion.has(key)) saveIdByVersion.set(key, save.id);
+      }
+    }
+    const items = rankedIds.flatMap(id => {
+      const row = rowById.get(id);
+      return row ? [this.toInspirationRecipeSummary(row, saveIdByVersion.get(`${id}:${row.currentVersionId}`) ?? null)] : [];
+    });
 
     return {
-      items: items.map(item => this.toInspirationRecipeSummary(item)),
+      items,
       page: normalizedPage,
       pageSize: normalizedPageSize,
       total,
@@ -2436,8 +2335,8 @@ export class RecipeService {
     };
   }
 
-  async getInspirationRecipe(recipeId: UUID, request?: RequestLike) {
-    const recipe = await this.prisma.recipe.findFirst({
+  async getInspirationRecipe(recipeId: UUID, request?: RequestLike, versionId?: UUID) {
+    let recipe = await this.prisma.recipe.findFirst({
       where: {
         id: recipeId,
         ...publicInspirationRecipeWhere("ACTIVE")
@@ -2451,9 +2350,24 @@ export class RecipeService {
       }
     });
     if (!recipe || !recipe.inspirationCategory) throw new NotFoundException("灵感菜谱不存在");
+    if (versionId && versionId !== recipe.currentVersionId) {
+      const versionReference = await this.prisma.recipeCollection.findFirst({
+        where: { sourceRecipeId: recipe.id, sourceVersionId: versionId },
+        select: { id: true }
+      });
+      if (!versionReference) throw new NotFoundException("灵感菜谱版本不存在");
+      const version = await this.prisma.recipeContentVersion.findUnique({ where: { id: versionId } });
+      if (!version) throw new NotFoundException("灵感菜谱版本不存在");
+      recipe = { ...recipe, currentVersionId: versionId, currentVersion: version } as RecipeRow;
+    }
     const userId = request ? await this.resolveOptionalUserId(request) : null;
-    const ownedRecipeId = userId ? await this.findOwnedRecipeIdByOriginVersion(userId, recipe.currentVersionId) : null;
-    return this.toInspirationRecipeDetail(this.prisma, recipe, userId, ownedRecipeId);
+    const saveId = userId
+      ? (await this.prisma.recipeCollection.findFirst({
+          where: { userId, sourceRecipeId: recipe.id, sourceVersionId: recipe.currentVersionId },
+          select: { id: true }
+        }))?.id ?? null
+      : null;
+    return this.toInspirationRecipeDetail(this.prisma, recipe, userId, saveId);
   }
 
   async reportRecipe(userId: UUID, recipeId: UUID, operationId: OperationId, reason: string): Promise<RecipeReportSummary> {
@@ -2704,11 +2618,6 @@ export class RecipeService {
       },
       include: {
         category: true,
-        scenes: {
-          include: {
-            scene: true
-          }
-        }
       }
     });
     if (!draft) throw new NotFoundException("草稿不存在");
@@ -2752,7 +2661,6 @@ export class RecipeService {
       ingredientRefs: refs.ingredientRefs,
       unitRefs: refs.unitRefs,
       category: draft.category ? toRecipeCategorySummary(draft.category) : null,
-      scenes: draft.scenes.map(link => toRecipeSceneSummary(link.scene)),
       createdAt: toIsoDate(draft.createdAt),
       updatedAt: toIsoDate(draft.updatedAt)
     };
@@ -2797,7 +2705,6 @@ export class RecipeService {
       inspirationCategory: recipe.inspirationCategory
         ? toInspirationCategorySummary(recipe.inspirationCategory)
         : null,
-      scenes: recipe.sceneLinks.map(link => toRecipeSceneSummary(link.scene)),
       contentVersionId: recipe.currentVersionId,
       content: this.normalizeRecipeEditContent(content, refs.ingredientMap),
       nutrition,
@@ -2867,7 +2774,6 @@ export class RecipeService {
     ]);
     return {
       category: recipe.category ? toRecipeCategorySummary(recipe.category) : null,
-      scenes: recipe.sceneLinks.map(link => toRecipeSceneSummary(link.scene)),
       planLinks,
       ingredientRefs: refs.ingredientRefs,
       unitRefs: refs.unitRefs,
@@ -3054,27 +2960,6 @@ export class RecipeService {
     });
   }
 
-  private toCollectedRecipeSummary(collection: CollectionRow): CollectedRecipeSummary {
-    const content = versionToContent(collection.sourceVersion);
-    return {
-      id: collection.id,
-      sourceRecipeId: collection.sourceRecipeId,
-      title: collection.sourceVersion.name,
-      coverImageUrl: collection.sourceRecipe.coverImageUrl,
-      difficulty: content.difficulty,
-      duration: content.duration,
-      difficultyText: recipeDifficultyText(content.difficulty),
-      durationText: recipeDurationText(content.duration),
-      category: toInspirationCategorySummary(
-        collection.sourceRecipe.inspirationCategory as NonNullable<CollectionRow["sourceRecipe"]["inspirationCategory"]>
-      ),
-      scenes: collection.sceneLinks.map(link => toRecipeSceneSummary(link.scene)),
-      contentVersionId: collection.sourceVersionId,
-      collectedAt: toIsoDate(collection.createdAt),
-      updatedAt: toIsoDate(collection.updatedAt)
-    };
-  }
-
   private async toCollectedRecipeDetail(tx: RecipeDb, collection: CollectionRow): Promise<CollectedRecipeDetail> {
     const content = versionToContent(collection.sourceVersion);
     const [nutrition, assistantAvailable] = await Promise.all([
@@ -3091,7 +2976,6 @@ export class RecipeService {
       category: toInspirationCategorySummary(
         collection.sourceRecipe.inspirationCategory as NonNullable<CollectionRow["sourceRecipe"]["inspirationCategory"]>
       ),
-      scenes: collection.sceneLinks.map(link => toRecipeSceneSummary(link.scene)),
       contentVersionId: collection.sourceVersionId,
       content,
       nutrition,
@@ -3101,12 +2985,36 @@ export class RecipeService {
     };
   }
 
-  private toInspirationRecipeSummary(recipe: RecipeRow): InspirationRecipeSummary {
+  private toSavedInspirationSummary(save: SavedInspirationRow): SavedInspirationSummary {
+    const content = versionToContent(save.sourceVersion);
+    return {
+      saveId: save.id,
+      sourceRecipeId: save.sourceRecipeId,
+      sourceVersionId: save.sourceVersionId,
+      title: save.sourceVersion.name,
+      coverImageUrl: this.versionCoverImageUrl(save.sourceVersion, save.sourceRecipe.coverImageUrl),
+      difficulty: content.difficulty,
+      duration: content.duration,
+      difficultyText: recipeDifficultyText(content.difficulty),
+      durationText: recipeDurationText(content.duration),
+      category: save.sourceRecipe.inspirationCategory
+        ? toInspirationCategorySummary(save.sourceRecipe.inspirationCategory)
+        : null,
+      owner: {
+        uid: save.sourceRecipe.owner.uid,
+        nickname: save.sourceRecipe.ownerNicknameSnapshot
+      },
+      savedAt: toIsoDate(save.createdAt),
+      isAvailable: isPublicInspirationRecipe(save.sourceRecipe)
+    };
+  }
+
+  private toInspirationRecipeSummary(recipe: RecipeRow, saveId: UUID | null = null): InspirationRecipeSummary {
     const content = versionToContent(recipe.currentVersion);
     return {
       id: recipe.id,
       title: recipe.title,
-      coverImageUrl: recipe.coverImageUrl,
+      coverImageUrl: this.versionCoverImageUrl(recipe.currentVersion, recipe.coverImageUrl),
       difficulty: content.difficulty,
       duration: content.duration,
       difficultyText: recipeDifficultyText(content.difficulty),
@@ -3114,7 +3022,10 @@ export class RecipeService {
       keywords: content.keywords,
       estimatedCalories: content.estimatedCalories,
       category: toInspirationCategorySummary(recipe.inspirationCategory as NonNullable<RecipeRow["inspirationCategory"]>),
+      contentVersionId: recipe.currentVersionId,
       collectCount: recipe.collectCount,
+      saveId,
+      isSavedToPrivate: saveId !== null,
       updatedAt: toIsoDate(recipe.updatedAt)
     };
   }
@@ -3123,18 +3034,18 @@ export class RecipeService {
     tx: RecipeDb,
     recipe: RecipeRow,
     userId: UUID | null = null,
-    ownedRecipeId: UUID | null = null
+    saveId: UUID | null = null
   ): Promise<InspirationRecipeDetail> {
     const content = versionToContent(recipe.currentVersion);
     const [nutrition, assistantAvailable, planLinks] = await Promise.all([
       loadRecipeNutritionSummary(tx, recipe.currentVersionId, content),
       this.hasReadyRecipeAssistant(tx, recipe.currentVersionId),
-      userId && ownedRecipeId ? this.loadRecipePlanLinks(tx, userId, ownedRecipeId) : Promise.resolve<RecipePlanLinkSummary[]>([])
+      userId ? this.loadRecipePlanLinks(tx, userId, recipe.id) : Promise.resolve<RecipePlanLinkSummary[]>([])
     ]);
     return {
       id: recipe.id,
       title: recipe.title,
-      coverImageUrl: recipe.coverImageUrl,
+      coverImageUrl: this.versionCoverImageUrl(recipe.currentVersion, recipe.coverImageUrl),
       difficultyText: recipeDifficultyText(content.difficulty),
       durationText: recipeDurationText(content.duration),
       category: toInspirationCategorySummary(recipe.inspirationCategory as NonNullable<RecipeRow["inspirationCategory"]>),
@@ -3144,13 +3055,23 @@ export class RecipeService {
       assistantAvailable,
       planLinks,
       collectCount: recipe.collectCount,
-      ownedRecipeId,
+      saveId,
+      isSavedToPrivate: saveId !== null,
       owner: {
         uid: recipe.owner.uid,
         nickname: recipe.ownerNicknameSnapshot
       },
       updatedAt: toIsoDate(recipe.updatedAt)
     };
+  }
+
+  private versionCoverImageUrl(version: { imagesJson: Prisma.JsonValue }, fallback: string | null) {
+    const images = version.imagesJson;
+    if (images && typeof images === "object" && !Array.isArray(images)) {
+      const coverImageUrl = (images as Prisma.JsonObject).coverImageUrl;
+      if (typeof coverImageUrl === "string" || coverImageUrl === null) return coverImageUrl;
+    }
+    return fallback;
   }
 
   private async hasReadyRecipeAssistant(tx: RecipeDb, recipeVersionId: UUID) {
@@ -3290,26 +3211,7 @@ export class RecipeService {
             },
             select: { id: true }
           });
-
-    if (content.sceneIds.length === 0) {
-      return {
-        categoryId: category?.id ?? null,
-        sceneIds: [] as UUID[]
-      };
-    }
-
-    const sceneRows = await tx.recipeScene.findMany({
-      where: {
-        id: { in: content.sceneIds },
-        userId
-      },
-      select: { id: true }
-    });
-    const sceneSet = new Set(sceneRows.map(item => item.id));
-    return {
-      categoryId: category?.id ?? null,
-      sceneIds: content.sceneIds.filter(sceneId => sceneSet.has(sceneId))
-    };
+    return { categoryId: category?.id ?? null };
   }
 
   private assertPublishContent(content: RecipeDraftContentInput) {
@@ -3475,6 +3377,7 @@ export class RecipeService {
 
   private buildVersionImageState(content: RecipeDraftContentInput): VersionImageState {
     return {
+      coverImageUrl: content.coverImageUrl ?? null,
       coverUploadId: content.coverUploadId ?? null,
       stepUploads: content.steps.map(item => ({
         slotKey: item.slotKey,

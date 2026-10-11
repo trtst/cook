@@ -89,11 +89,14 @@
 | Inspiration | GET | `/inspiration-categories` | 匿名灵感分类列表 |
 | Inspiration | GET | `/inspiration-recipes` | 匿名灵感菜谱分页 |
 | Inspiration | GET | `/inspiration-recipes/{recipeId}` | 匿名灵感菜谱详情 |
+| Inspiration | POST | `/recipes/saved-inspiration` | 将灵感固定版本收藏到当前用户私房菜 |
+| Inspiration | GET | `/recipes/saved-inspiration` | 当前用户收藏灵感分页 |
+| Inspiration | GET | `/recipes/saved-inspiration/{saveId}` | 当前用户收藏的固定版本详情 |
+| Inspiration | DELETE | `/recipes/saved-inspiration/{saveId}` | 从当前用户私房菜移除收藏 |
 | Recipe | GET | `/recipe-categories` | 当前用户个人分类列表 |
 | Recipe | POST | `/recipe-categories` | 新建个人分类 |
 | Recipe | PUT | `/recipe-categories/{categoryId}` | 修改个人分类 |
 | Recipe | POST | `/recipe-categories/reorder` | 重排个人分类 |
-| Recipe | GET/POST/PUT | `/recipe-scenes*` | 历史合集兼容接口，不再有前台入口 |
 | Recipe | GET | `/recipe-drafts` | 当前用户草稿分页 |
 | Recipe | POST | `/recipe-drafts` | 首次保存草稿或创建编辑草稿 |
 | Recipe | GET | `/recipe-drafts/{draftId}` | 草稿详情 |
@@ -101,7 +104,7 @@
 | Recipe | POST | `/recipe-drafts/{draftId}/delete` | 删除草稿 |
 | Recipe | POST | `/recipe-drafts/{draftId}/publish` | 发布草稿到“我的” |
 | Recipe | GET | `/recipes` | 当前用户已发布菜谱分页 |
-| Recipe | POST | `/recipes/from-inspiration` | 从灵感详情保存到私房菜，供加入计划流程复用 |
+| Recipe | POST | `/recipes/from-inspiration` | 用户明确改编灵感并创建可编辑的个人菜谱 |
 | Recipe | GET | `/recipes/{recipeId}` | 可选登录读取菜谱详情；匿名/非持有人仅返回公开正文，持有人额外返回 `personal` |
 | Recipe | POST | `/users/me/recipe-history/{historyId}/delete` | 只删除当前用户自己的菜谱浏览记录 |
 | Recipe | POST | `/recipes/{recipeId}/recommendations` | 推荐当前个人菜谱到系统菜谱审核 |
@@ -109,11 +112,11 @@
 | Recipe | POST | `/recipes/reorder` | 当前分类下重排我的菜谱 |
 | Recipe | POST | `/recipes/{recipeId}/delete` | 回收或删除菜谱 |
 | Recipe | POST | `/recipes/{recipeId}/report` | 举报菜谱 |
-| Collection | GET/POST | `/collections*` | 历史合集兼容接口，不再有前台入口 |
+| Inspiration | GET | `/collections/recipes/{collectionRecipeId}` | 只为旧固定版本引用保留的兼容详情读取，不提供合集列表或写入 |
 | AdminRecipeDomain | GET | `/admin/users/{userId}/recipe-domain` | 后台按用户读取菜谱域概览 |
 | AdminRecipeDomain | GET | `/admin/users/{userId}/recipes` | 后台按用户读取已发布菜谱 |
 | AdminRecipeDomain | GET | `/admin/users/{userId}/recipe-drafts` | 后台按用户读取菜谱草稿 |
-| AdminRecipeDomain | GET | `/admin/users/{userId}/collections*` | 历史合集兼容查询，不作为当前前台功能 |
+| AdminRecipe | PUT | `/admin/recipes/{recipeId}/recommendation-rank` | SUPER_ADMIN 调整灵感推荐档位并记录原因 |
 | AdminSystemData | GET | `/admin/system-data/export?categories=...` | 按类别导出数据快照 ZIP |
 | AdminSystemData | POST | `/admin/system-data/preview` | 校验快照并预览新增、覆盖、清理、依赖和冲突 |
 | AdminSystemData | POST | `/admin/system-data/import` | 事务性替换所选数据类别，要求幂等键 |
@@ -242,7 +245,6 @@
 | RandomMenu | `POST /random-menus/generate`、`POST /random-menu-slots/replace`、`POST /meal-plans` | 生成与调整不读取库存数量或要求确认库存 |
 | MealPlanCookAssistant | `GET /meal-plans/{planItemId}/cook-assistant`、`POST /meal-plans/{planItemId}/cook-assistant` | 已冻结为计划附属快照：一次生成、挂靠计划、菜单变更后按签名判过期 |
 | HomeRecentArrangement | `GET /home/recent-arrangement` | 已冻结首页“最近安排”单卡摘要契约：`24h -> 24~36h` 补位，当前窗口内饭局优先于计划，只返回 1 条最小摘要 |
-| RecipePromotion | 升级合集快照为“我的” | 已确认非本轮范围，待契约 |
 | InspirationInteraction | 收藏统计与推荐排序治理 | 已确认非本轮范围，待契约；菜谱/灵感不提供点赞能力 |
 
 | 模块 | 路径 | 缺失内容 |
@@ -253,7 +255,7 @@
 
 ## 暂不创建
 
-菜谱图片上传与修改、升级合集快照为“我的”、背景图上传、完整 Worker 运行、饭票、积分商城、OCR、AI、多家庭、冰箱图片、聊天、评论、关注和私信当前均不开放。菜谱/灵感不提供点赞能力；知识文章点赞属于 `site_contents` 内容链路。R1 草稿请求包含图片字段时返回业务 `code=400`。
+菜谱图片上传与修改、背景图上传、完整 Worker 运行、饭票、积分商城、OCR、AI、多家庭、冰箱图片、聊天、评论、关注和私信当前均不开放。菜谱/灵感不提供点赞能力；知识文章点赞属于 `site_contents` 内容链路。R1 草稿请求包含图片字段时返回业务 `code=400`。
 
 ## 维护规则
 

@@ -1373,6 +1373,32 @@ export class InspirationRecipeListQueryDto extends PageQueryDto {
   @IsOptional()
   @IsIn(["WITHIN_15", "BETWEEN_15_30", "BETWEEN_30_60", "OVER_60"])
   duration?: string;
+
+}
+
+export class InspirationRecipeDetailQueryDto {
+  @ApiPropertyOptional({ example: resourceIdExample, description: "可选的菜谱固定正文版本，用于分享已收藏的旧版本" })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  versionId?: number;
+}
+
+export class SavedInspirationListQueryDto extends PageQueryDto {}
+
+export class CreateSavedInspirationDto extends OperationDto {
+  @ApiProperty({ example: resourceIdExample })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  sourceRecipeId!: number;
+
+  @ApiProperty({ example: resourceIdExample })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  sourceVersionId!: number;
 }
 
 export class CollectionRecipeListQueryDto extends PageQueryDto {
@@ -1436,24 +1462,6 @@ export class UpdateRecipeCategoryDto extends VersionedOperationDto {
   name!: string;
 }
 
-export class RecipeSceneNameDto extends OperationDto {
-  @ApiProperty()
-  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
-  @IsString()
-  @MinLength(1)
-  @MaxLength(20)
-  name!: string;
-}
-
-export class UpdateRecipeSceneDto extends VersionedOperationDto {
-  @ApiProperty()
-  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
-  @IsString()
-  @MinLength(1)
-  @MaxLength(20)
-  name!: string;
-}
-
 export class ReorderItemDto {
   @ApiProperty({ example: resourceIdExample })
   @Type(() => Number)
@@ -1469,16 +1477,6 @@ export class ReorderItemDto {
 }
 
 export class ReorderRecipeCategoriesDto extends OperationDto {
-  @ApiProperty({ type: [ReorderItemDto] })
-  @IsArray()
-  @ArrayNotEmpty()
-  @ArrayMaxSize(50)
-  @ValidateNested({ each: true })
-  @Type(() => ReorderItemDto)
-  items!: ReorderItemDto[];
-}
-
-export class ReorderRecipeScenesDto extends OperationDto {
   @ApiProperty({ type: [ReorderItemDto] })
   @IsArray()
   @ArrayNotEmpty()
@@ -1785,15 +1783,6 @@ export class RecipeDraftContentDto {
   @Min(1)
   inspirationCategoryId?: number | null;
 
-  @ApiProperty({ type: [String], maxItems: 50 })
-  @IsArray()
-  @ArrayMaxSize(50)
-  @ArrayUnique()
-  @Type(() => Number)
-  @IsInt({ each: true })
-  @Min(1, { each: true })
-  sceneIds!: number[];
-
   @ApiPropertyOptional({ nullable: true, example: resourceIdExample })
   @IsOptional()
   @ValidateIf((_object, value) => value !== null)
@@ -1940,30 +1929,6 @@ export class CreateMyRecipeFromInspirationDto extends OperationDto {
   @Min(1)
   categoryId?: number | null;
 
-}
-
-export class CreateCollectionRecipeDto extends OperationDto {
-  @ApiProperty({ example: resourceIdExample })
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  sourceRecipeId!: number;
-
-  @ApiProperty({ example: resourceIdExample })
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  sourceVersionId!: number;
-
-  @ApiProperty({ type: [String], maxItems: 50 })
-  @IsArray()
-  @ArrayNotEmpty()
-  @ArrayMaxSize(50)
-  @ArrayUnique()
-  @Type(() => Number)
-  @IsInt({ each: true })
-  @Min(1, { each: true })
-  sceneIds!: number[];
 }
 
 export class ReportRecipeDto extends OperationDto {
@@ -3307,6 +3272,19 @@ export class UpdateAdminRecipeDto extends VersionedOperationDto {
   @ValidateNested()
   @Type(() => AdminRecipeContentDto)
   content!: AdminRecipeContentDto;
+}
+
+export class SetAdminRecipeRecommendationRankDto extends VersionedOperationDto {
+  @ApiProperty({ enum: ["NORMAL", "DOWNRANK", "STRONG_DOWNRANK"] })
+  @IsIn(["NORMAL", "DOWNRANK", "STRONG_DOWNRANK"])
+  rank!: "NORMAL" | "DOWNRANK" | "STRONG_DOWNRANK";
+
+  @ApiProperty({ minLength: 1, maxLength: 255 })
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(255)
+  reason!: string;
 }
 
 export class CreateAdminRecipeDto extends OperationDto {

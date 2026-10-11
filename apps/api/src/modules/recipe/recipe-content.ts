@@ -51,7 +51,6 @@ export function cleanDraftContent(content: RecipeDraftContentInput): RecipeDraft
     story: content.story?.trim() || null,
     categoryId: content.categoryId,
     inspirationCategoryId: content.inspirationCategoryId ?? null,
-    sceneIds: Array.from(new Set(content.sceneIds)),
     originVersionId: content.originVersionId ?? null,
     originCoverImageUrl: content.originCoverImageUrl?.trim() || null,
     coverUploadId: content.coverUploadId ?? null,
