@@ -31,6 +31,15 @@ assert.match(topicPageSource, /navigateTo\("\/pages_home\/topic-list\/index"\)/)
 assert.match(topicPageSource, /historyBrowse\.value\s*\?\s*uniPlatform\.navigation\.redirectTo/);
 assert.match(topicPageSource, /historyBrowse\.value\s*=\s*rawHistoryBrowse\s*===\s*"1"/);
 assert.match(topicPageSource, /[?&]historyBrowse=1/);
+assert.match(topicPageSource, /本期菜单/);
+assert.match(topicPageSource, /v-if="weekDays\.length > 1"/);
+assert.match(topicPageSource, /@click="selectWeekday\(day\.weekday\)"/);
+assert.match(topicPageSource, /topic\.value\.items\.filter\(item => item\.weekday === weekday\)/);
+assert.match(topicPageSource, /today >= value\.periodStartDate && today <= value\.periodEndDate/);
+assert.match(topicPageSource, /function addDayToPlan\(\)\s*\{\s*if \(dayItems\.value\.length\) openPlanSheet\(dayItems\.value\);\s*\}/);
+assert.match(topicPageSource, /title: topic\.value \? `\$\{weekRangeText\.value\}｜\$\{topic\.value\.title\}`/);
+assert.match(topicPageSource, /path: topicId\.value \? `\/pages_home\/topic\/index\?topicId=/);
+assert.match(topicPageSource, /imageUrl: topic\.value\?\.coverImageUrl \|\| "\/static\/assets\/logo\.png"/);
 assert.match(homeApiSource, /getTopicHistory\(page: number, pageSize: number\)/);
 assert.match(homeApiSource, /\/api\/home-topics\/history\?page=\$\{encodeURIComponent\(String\(page\)\)\}&pageSize=\$\{encodeURIComponent\(String\(pageSize\)\)\}/);
 assert.match(topicPageSource, /gap:\s*24rpx/);

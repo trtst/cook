@@ -116,9 +116,12 @@ export type HomeTopicType =
   | "BREAKFAST"
   | "LIGHT_DINNER";
 
+export type HomeTopicWeekday = "MONDAY" | "TUESDAY" | "WEDNESDAY" | "THURSDAY" | "FRIDAY" | "SATURDAY" | "SUNDAY";
+
 export interface HomeTopicRecipeItem {
   id: number;
   sourceVersionId: number;
+  weekday: HomeTopicWeekday;
   sort: number;
   title: string;
   coverImageUrl: string | null;
@@ -144,6 +147,8 @@ export interface HomeTopicHistoryItem {
   recType: HomeTopicType;
   recTypeText: string;
   issueNo: number;
+  periodStartDate: string;
+  periodEndDate: string;
   description: string;
   coverImageUrl: string | null;
   recipeCount: number;
@@ -160,6 +165,8 @@ export interface HomeTopicDetail {
   issueNo: number;
   description: string;
   coverImageUrl: string | null;
+  periodStartDate: string;
+  periodEndDate: string;
   recipeCount: number;
   publishedAt: string;
   updatedAt: string;

@@ -48,6 +48,9 @@ http://127.0.0.1:3100/api
 | POST | `/api/auth/password/change` | `authApi.changePassword` | 修改当前密码 |
 | POST | `/api/auth/refresh` | `authApi.refresh` | 轮换 refresh token 并刷新会话 |
 | POST | `/api/auth/logout` | `authApi.logout` | 吊销 refresh token |
+| GET | `/api/home-topics/current` | `homeApi.getCurrentTopic` | 读取当前已发布共享周刊，含周期日期与按日菜单 |
+| GET | `/api/home-topics/history?page=1&pageSize=20` | `homeApi.getTopicHistory` | 分页读取当前期之前的已发布周刊 |
+| GET | `/api/home-topics/{topicId}` | `homeApi.getTopic` | 读取指定已发布共享周刊 |
 | GET | `/api/auth/me` | `authApi.getMe` | 读取最小认证资料 |
 | GET | `/api/users/me` | `userApi.getCurrent` | 账号状态、展示占位和会员事实 |
 | PUT | `/api/users/me/profile` | `userApi.updateCurrent` | 保存个人资料字段，成功只返回状态 |

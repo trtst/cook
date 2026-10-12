@@ -40,8 +40,7 @@
                 <text class="topic-summary__title">{{ topic.title }}</text>
                 <text v-if="topic.subTitle" class="topic-summary__sub">{{ topic.subTitle }}</text>
                 <view class="topic-summary__stats">
-                  <text class="topic-summary__stat">{{ topic.recipeCount }} 道推荐</text>
-                  <text class="topic-summary__stat">{{ formatMonthDay(topic.updatedAt) }} 更新</text>
+                  <text class="topic-summary__stat">{{ weekRangeText }}</text>
                 </view>
               </view>
             </view>
@@ -52,13 +51,28 @@
 
             <view class="topic-section">
               <view class="topic-section__head">
-                <text class="topic-section__title font-medium">本期推荐</text>
-                <text class="topic-section__meta">{{ topic.items.length }} 道</text>
+                <text class="topic-section__title font-medium">本期菜单</text>
+                <view v-if="dayItems.length" class="topic-section__meta" @click="addDayToPlan">
+                  <text class="cookfont topic-section__meta-icon icon-add-plan" />
+                  <text>加入计划</text>
+                </view>
               </view>
 
-              <view class="recipe-list">
+              <view v-if="weekDays.length > 1" class="topic-weekdays">
                 <view
-                  v-for="(item, index) in topic.items"
+                  v-for="day in weekDays"
+                  :key="day.weekday"
+                  :class="['topic-weekdays__day', selectedWeekday === day.weekday ? 'topic-weekdays__day--active' : '']"
+                  @click="selectWeekday(day.weekday)"
+                >
+                  <text class="topic-weekdays__name">{{ day.name }}</text>
+                  <text class="topic-weekdays__date">{{ day.dateText }}</text>
+                </view>
+              </view>
+
+              <view v-if="dayItems.length" class="recipe-list">
+                <view
+                  v-for="(item, index) in dayItems"
                   :key="item.id"
                   :class="['recipe-card', index % 2 === 1 ? 'recipe-card--reverse' : '']"
                   hover-class="recipe-card--hover"
@@ -80,26 +94,26 @@
                       <ImageEmpty v-else class="recipe-card__cover recipe-card__cover--empty" copy="封面图" ratio="fill" />
 
                       <view class="recipe-card__footer">
-                        <view class="recipe-card__title-block">
+                        <view class="recipe-card__heading">
                           <text class="recipe-card__title">{{ item.title }}</text>
-                          <text v-if="item.recommendNote" class="recipe-card__note">{{ item.recommendNote }}</text>
+                          <view
+                            :class="[
+                              'recipe-card__action',
+                              item.ownedRecipeId ? 'recipe-card__action--ready' : 'recipe-card__action--guide'
+                            ]"
+                            @click.stop="handleRecipeAction(item)"
+                          >
+                            <text class="cookfont recipe-card__action-icon icon-add-plan" />
+                            <text>{{ recipeActionText(item) }}</text>
+                          </view>
                         </view>
-
-                        <view
-                          :class="[
-                            'recipe-card__action',
-                            item.ownedRecipeId ? 'recipe-card__action--ready' : 'recipe-card__action--guide'
-                          ]"
-                          @click.stop="handleRecipeAction(item)"
-                        >
-                          <text class="cookfont recipe-card__action-icon icon-add-plan" />
-                          <text>{{ recipeActionText(item) }}</text>
-                        </view>
+                        <text v-if="item.recommendNote" class="recipe-card__note">{{ item.recommendNote }}</text>
                       </view>
                     </view>
                   </view>
                 </view>
               </view>
+              <view v-else class="topic-day-empty">本期暂时没有可公开查看的菜谱</view>
             </view>
 
             <view v-if="visibleHistory.length" class="topic-section">
@@ -121,7 +135,7 @@
                     <image v-if="item.coverImageUrl" class="history-card__cover" :src="item.coverImageUrl" mode="aspectFill" />
                     <ImageEmpty v-else class="history-card__cover history-card__cover--empty" copy="封面图" ratio="fill" />
                     <view class="history-card__issue">
-                      <text class="history-card__issue-text">第 {{ item.issueNo }} 期</text>
+                      <text class="history-card__issue-text">{{ formatWeekRange(item) }}</text>
                     </view>
                     <view class="history-card__mask" />
                     <text class="history-card__title">{{ item.title }}</text>
@@ -135,7 +149,7 @@
     </scroll-view>
 
     <AddToPlanSheet
-      v-if="currentPlanItem"
+      v-if="planSheetItems.length"
       :visible="planSheetVisible"
       :items="planSheetItems"
       @close="closePlanSheet"
@@ -145,8 +159,8 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import { onLoad, onShow } from "@dcloudio/uni-app";
-import { homeApi, type HomeTopicDetail } from "@/apis/home";
+import { onLoad, onShareAppMessage, onShow } from "@dcloudio/uni-app";
+import { homeApi, type HomeTopicDetail, type HomeTopicWeekday } from "@/apis/home";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import ImageEmpty from "@/components/ImageEmpty.vue";
@@ -159,7 +173,7 @@ import { useLoginModalStore } from "@/stores/login-modal";
 import { useSessionStore } from "@/stores/session";
 import { uniPlatform } from "@/platform/uni";
 import emptyStateArt from "@/assets/empty.png";
-import { formatMonthDay, formatSort } from "../utils/date";
+import { formatSort } from "../utils/date";
 
 
 const pageStyle = usePageScrollStyle();
@@ -170,16 +184,26 @@ const { navBarTotalHeight } = useSystemInfo();
 const sessionStore = useSessionStore();
 const loginModalStore = useLoginModalStore();
 const NAV_FADE_DISTANCE = 96;
+const WEEKDAYS: { weekday: HomeTopicWeekday; name: string }[] = [
+  { weekday: "MONDAY", name: "周一" },
+  { weekday: "TUESDAY", name: "周二" },
+  { weekday: "WEDNESDAY", name: "周三" },
+  { weekday: "THURSDAY", name: "周四" },
+  { weekday: "FRIDAY", name: "周五" },
+  { weekday: "SATURDAY", name: "周六" },
+  { weekday: "SUNDAY", name: "周日" }
+];
 
 const loading = ref(false);
 const errorText = ref("");
 const topic = ref<HomeTopicDetail | null>(null);
 const topicId = ref(0);
 const historyBrowse = ref(false);
+const selectedWeekday = ref<HomeTopicWeekday>("MONDAY");
 const scrollAnchor = ref("");
 const scrollTop = ref(0);
 const planSheetVisible = ref(false);
-const currentPlanItemId = ref<number | null>(null);
+const currentPlanItems = ref<HomeTopicDetail["items"]>([]);
 const shouldRefreshOnShow = ref(false);
 
 watch(() => planSheetVisible.value, visible => setLocked(visible), { immediate: true });
@@ -201,15 +225,31 @@ const emptyStyle = computed(() => ({
 const navTitle = computed(() => topic.value?.title || "本周灵感");
 const navProgress = computed(() => Math.min(1, Math.max(0, scrollTop.value / NAV_FADE_DISTANCE)));
 const visibleHistory = computed(() => topic.value?.history.slice(0, 5) ?? []);
-const currentPlanItem = computed(() => (topic.value?.items ?? []).find(item => item.id === currentPlanItemId.value) ?? null);
+const weekDays = computed(() => {
+  const current = topic.value;
+  if (!current) return [];
+  const available = new Set(current.items.map(item => item.weekday));
+  return WEEKDAYS.flatMap((item, index) => {
+    if (!available.has(item.weekday)) return [];
+    const date = addDays(current.periodStartDate, index);
+    return date ? [{ ...item, date, dateText: formatDateLabel(date) }] : [];
+  });
+});
+const selectedDay = computed(() => weekDays.value.find(day => day.weekday === selectedWeekday.value) ?? weekDays.value[0] ?? null);
+const dayItems = computed(() => {
+  const weekday = selectedDay.value?.weekday;
+  if (!weekday || !topic.value) return [];
+  return topic.value.items.filter(item => item.weekday === weekday).sort((left, right) => left.sort - right.sort);
+});
+const weekRangeText = computed(() => {
+  if (!topic.value) return "";
+  return formatWeekRange(topic.value);
+});
 const planSheetItems = computed(() => {
-  const item = currentPlanItem.value;
-  if (!item) return [];
-  const recipeId = item.ownedRecipeId ?? item.id;
-  return [{
-    recipeId,
+  return currentPlanItems.value.map(item => ({
+    recipeId: item.ownedRecipeId ?? item.id,
     ...(!item.ownedRecipeId && item.sourceVersionId ? { recipeVersionId: item.sourceVersionId } : {})
-  }];
+  }));
 });
 const navBackdropStyle = computed(() => ({
   height: `${navBarTotalHeight.value}px`,
@@ -228,6 +268,12 @@ onLoad(query => {
   void loadTopic();
 });
 
+onShareAppMessage(() => ({
+  title: topic.value ? `${weekRangeText.value}｜${topic.value.title}` : "炊火记共享周刊",
+  path: topicId.value ? `/pages_home/topic/index?topicId=${encodeURIComponent(String(topicId.value))}` : "/pages_home/topic/index",
+  imageUrl: topic.value?.coverImageUrl || "/static/assets/logo.png"
+}));
+
 onShow(() => {
   if (!shouldRefreshOnShow.value) return;
   shouldRefreshOnShow.value = false;
@@ -245,10 +291,12 @@ async function loadTopic(nextId = topicId.value, resetScroll = true) {
       const result = await homeApi.getTopic(nextId);
       topic.value = result.topic;
       topicId.value = result.topic.id;
+      selectInitialWeekday(result.topic);
     } else {
       const result = await homeApi.getCurrentTopic();
       topic.value = result.topic;
       topicId.value = result.topic?.id ?? 0;
+      if (result.topic) selectInitialWeekday(result.topic);
     }
     errorText.value = "";
     if (resetScroll) {
@@ -293,27 +341,74 @@ function openHistoryList() {
 }
 
 function handleRecipeAction(item: HomeTopicDetail["items"][number]) {
-  openPlanSheet(item);
+  openPlanSheet([item]);
+}
+
+function addDayToPlan() {
+  if (dayItems.value.length) openPlanSheet(dayItems.value);
 }
 
 function openLogin(afterLogin?: () => void) {
   loginModalStore.open(null, afterLogin);
 }
 
-function openPlanSheet(item: HomeTopicDetail["items"][number]) {
+function openPlanSheet(items: HomeTopicDetail["items"]) {
+  if (!items.length) return;
   if (!sessionStore.isLoggedIn) {
     openLogin(() => {
-      openPlanSheet(item);
+      openPlanSheet(items);
     });
     return;
   }
-  currentPlanItemId.value = item.id;
+  currentPlanItems.value = items;
   planSheetVisible.value = true;
 }
 
 function closePlanSheet() {
   planSheetVisible.value = false;
-  currentPlanItemId.value = null;
+  currentPlanItems.value = [];
+}
+
+function selectWeekday(weekday: HomeTopicWeekday) {
+  selectedWeekday.value = weekday;
+}
+
+function selectInitialWeekday(value: HomeTopicDetail) {
+  const available = new Set(value.items.map(item => item.weekday));
+  if (!available.size) {
+    selectedWeekday.value = "MONDAY";
+    return;
+  }
+  const today = beijingToday();
+  const currentWeekday = today >= value.periodStartDate && today <= value.periodEndDate ? weekdayForDate(today) : "MONDAY";
+  selectedWeekday.value = available.has(currentWeekday) ? currentWeekday : available.has("MONDAY") ? "MONDAY" : WEEKDAYS.find(day => available.has(day.weekday))!.weekday;
+}
+
+function beijingToday() {
+  return new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+function weekdayForDate(value: string): HomeTopicWeekday {
+  const [year, month, day] = value.split("-").map(Number);
+  const dayIndex = new Date(Date.UTC(year, month - 1, day)).getUTCDay();
+  return WEEKDAYS[(dayIndex + 6) % 7].weekday;
+}
+
+function addDays(value: string, count: number) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return "";
+  const [, year, month, day] = match;
+  const date = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day) + count));
+  return `${date.getUTCFullYear()}-${`${date.getUTCMonth() + 1}`.padStart(2, "0")}-${`${date.getUTCDate()}`.padStart(2, "0")}`;
+}
+
+function formatDateLabel(value: string) {
+  const match = /^\d{4}-(\d{2})-(\d{2})$/.exec(value);
+  return match ? `${match[1]}.${match[2]}` : value;
+}
+
+function formatWeekRange(value: { periodStartDate: string; periodEndDate: string }) {
+  return `${formatDateLabel(value.periodStartDate)} ～ ${formatDateLabel(value.periodEndDate)}`;
 }
 
 </script>
@@ -494,6 +589,7 @@ function closePlanSheet() {
 
 .topic-summary__meta {
   display: flex;
+  align-items: center;
   flex-wrap: wrap;
   gap: 12rpx;
 }
@@ -615,8 +711,55 @@ function closePlanSheet() {
 }
 
 .topic-section__meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8rpx;
+  color: var(--color-primary);
+  font-size: 24rpx;
+  font-weight: 700;
+}
+
+.topic-section__meta-icon {
+  font-size: 26rpx;
+  line-height: 1;
+}
+
+.topic-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8rpx;
+}
+
+.topic-weekdays__day {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: center;
+  gap: 6rpx;
+  border-radius: var(--radius-xs);
+  padding: 12rpx 2rpx;
+  color: var(--color-text-secondary);
+  background: var(--material-card-bg);
+  font-size: 20rpx;
+  line-height: 1.25;
+}
+
+.topic-weekdays__day--active {
+  color: var(--color-primary);
+  background: var(--page-primary-fade-bg);
+  font-weight: 700;
+}
+
+.topic-weekdays__name,
+.topic-weekdays__date {
+  white-space: nowrap;
+}
+
+.topic-day-empty {
+  padding: 52rpx 24rpx;
   color: var(--color-text-secondary);
   font-size: 24rpx;
+  text-align: center;
 }
 
 .recipe-list {
@@ -718,6 +861,8 @@ function closePlanSheet() {
 }
 
 .recipe-card__title {
+  min-width: 0;
+  flex: 1;
   color: var(--color-text);
   font-size: 34rpx;
   font-weight: 700;
@@ -726,15 +871,17 @@ function closePlanSheet() {
 
 .recipe-card__footer {
   display: flex;
-  align-items: center;
-  gap: 20rpx;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6rpx;
 }
 
-.recipe-card__title-block {
-  min-width: 0;
+.recipe-card__heading {
   display: flex;
-  flex-direction: column;
-  gap: 10rpx;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12rpx;
+  min-width: 0;
 }
 
 .recipe-card__note {

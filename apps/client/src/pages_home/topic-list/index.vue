@@ -31,7 +31,7 @@
               </view>
               <text class="history-card__title">{{ item.title }}</text>
               <text v-if="item.subTitle" class="history-card__subtitle">{{ item.subTitle }}</text>
-              <text class="history-card__count">{{ item.recipeCount }} 道推荐 · {{ formatMonthDay(item.updatedAt) }} 更新</text>
+              <text class="history-card__count">{{ formatWeekRange(item) }}</text>
             </view>
             <text class="history-card__arrow">›</text>
           </view>
@@ -57,7 +57,6 @@ import { useTheme } from "@/composables/useTheme";
 import { useSystemInfo } from "@/composables/useSystemInfo";
 import { uniPlatform } from "@/platform/uni";
 import emptyStateArt from "@/assets/empty.png";
-import { formatMonthDay } from "../utils/date";
 
 const pageStyle = usePageScrollStyle();
 const { themeVars, themeClasses } = useTheme();
@@ -128,6 +127,15 @@ function handleScroll(event: { detail?: { scrollTop?: number } }) {
 
 function openTopic(topicId: number) {
   void uniPlatform.navigation.navigateTo(`/pages_home/topic/index?topicId=${encodeURIComponent(String(topicId))}&historyBrowse=1`);
+}
+
+function formatWeekRange(item: HomeTopicHistoryItem) {
+  return `${formatDateLabel(item.periodStartDate)} ～ ${formatDateLabel(item.periodEndDate)}`;
+}
+
+function formatDateLabel(value: string) {
+  const match = /^\d{4}-(\d{2})-(\d{2})$/.exec(value);
+  return match ? `${match[1]}.${match[2]}` : value;
 }
 </script>
 

@@ -5,11 +5,48 @@ const { URL } = require("url");
 const API_BASE_URL = process.env.API_BASE_URL || "http://127.0.0.1:3100/api";
 const ADMIN_USERNAME = process.env.ADMIN_SEED_USERNAME || "admin";
 const ADMIN_PASSWORD = process.env.ADMIN_SEED_PASSWORD || "change-me";
+const WEEKDAYS = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"];
+const WEEKDAY_NAMES = {
+  MONDAY: "周一",
+  TUESDAY: "周二",
+  WEDNESDAY: "周三",
+  THURSDAY: "周四",
+  FRIDAY: "周五",
+  SATURDAY: "周六",
+  SUNDAY: "周日"
+};
 
 jest.setTimeout(30000);
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
+}
+
+function beijingToday() {
+  return new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+function weekdayForDate(value) {
+  const [year, month, day] = value.split("-").map(Number);
+  const dayIndex = new Date(Date.UTC(year, month - 1, day)).getUTCDay();
+  return WEEKDAYS[(dayIndex + 6) % 7];
+}
+
+function visibleDay(topic) {
+  const available = new Set(topic.items.map((item) => item.weekday));
+  const today = beijingToday();
+  const expected = today >= topic.periodStartDate && today <= topic.periodEndDate
+    ? weekdayForDate(today)
+    : "MONDAY";
+  const weekday = available.has(expected)
+    ? expected
+    : available.has("MONDAY")
+      ? "MONDAY"
+      : WEEKDAYS.find((item) => available.has(item));
+  return {
+    weekday,
+    recipeTitles: topic.items.filter((item) => item.weekday === weekday).map((item) => item.title)
+  };
 }
 
 async function collectTexts(page) {
@@ -107,63 +144,33 @@ async function loginAdmin() {
 }
 
 async function createTopicFixture() {
+  const publicCurrent = await requestData("/home-topics/current");
+  if (publicCurrent.topic?.items?.length) {
+    const day = visibleDay(publicCurrent.topic);
+    return {
+      topicId: publicCurrent.topic.id,
+      title: publicCurrent.topic.title,
+      previousTitle: publicCurrent.topic.history[0]?.title ?? null,
+      hasHistory: publicCurrent.topic.history.length > 0,
+      weekday: day.weekday,
+      recipeTitles: day.recipeTitles,
+      visibleWeekdayCount: new Set(publicCurrent.topic.items.map((item) => item.weekday)).size
+    };
+  }
+
   const adminToken = await loginAdmin();
   const adminHeaders = {
     authorization: `Bearer ${adminToken}`
   };
   const topics = await requestData("/admin/home-topics", { headers: adminHeaders }, true);
   const recipes = await requestData("/admin/home-topics/recipes", { headers: adminHeaders }, true);
-  assert(recipes.items.length >= 3, "missing inspiration recipes for weekly topic fixture");
+  assert(recipes.items.length >= 7, "weekly topic fixture needs seven publicly available inspiration recipes");
 
   const issueBase = Math.max(0, ...topics.topics.map((item) => item.issueNo)) + 1;
   const suffix = `${Date.now()}`.slice(-6);
-  const previousTitle = `本周灵感往期验收-${suffix}`;
   const currentTitle = `本周灵感当前验收-${suffix}`;
-  const recipeIds = recipes.items.slice(0, 3).map((item) => item.id);
-  const recipeTitles = recipes.items.slice(0, 3).map((item) => item.title);
-
-  const previousResult = await requestData(
-    "/admin/home-topics",
-    {
-      method: "POST",
-      headers: {
-        ...adminHeaders,
-        "Idempotency-Key": nextIdempotencyKey()
-      },
-      body: JSON.stringify({
-        title: previousTitle,
-        subTitle: "用于验证往期回顾",
-        recType: "HOME_STYLE",
-        issueNo: issueBase,
-        description: "往期专题测试数据",
-        items: recipeIds.map((recipeId, index) => ({
-          recipeId,
-          recommendNote: `往期推荐 ${index + 1}`
-        }))
-      })
-    },
-    true
-  );
-  const previousTopic = previousResult.topics.find((item) => item.title === previousTitle);
-  assert(previousTopic, "failed to create previous weekly topic fixture");
-
-  await requestData(
-    `/admin/home-topics/${previousTopic.id}/status`,
-    {
-      method: "POST",
-      headers: {
-        ...adminHeaders,
-        "Idempotency-Key": nextIdempotencyKey()
-      },
-      body: JSON.stringify({
-        status: "LISTED",
-        expectedVersion: previousTopic.version
-      })
-    },
-    true
-  );
-
-  await new Promise((resolve) => setTimeout(resolve, 20));
+  const recipeIds = recipes.items.slice(0, 7).map((item) => item.id);
+  const weekdays = WEEKDAYS;
 
   const currentResult = await requestData(
     "/admin/home-topics",
@@ -177,10 +184,12 @@ async function createTopicFixture() {
         title: currentTitle,
         subTitle: "用于验证本期推荐",
         recType: "HOME_STYLE",
-        issueNo: issueBase + 1,
+        issueNo: issueBase,
         description: "当前专题测试数据",
         items: recipeIds.map((recipeId, index) => ({
           recipeId,
+          weekday: weekdays[index],
+          sortOrder: 1,
           recommendNote: `当前推荐 ${index + 1}`
         }))
       })
@@ -199,18 +208,24 @@ async function createTopicFixture() {
         "Idempotency-Key": nextIdempotencyKey()
       },
       body: JSON.stringify({
-        status: "LISTED",
+        status: "PUBLISHED",
         expectedVersion: currentTopic.version
       })
     },
     true
   );
 
+  const day = visibleDay(currentTopic);
+  const previousTitle = topics.topics.find((item) => item.status === "PUBLISHED" && item.periodStartDate < currentTopic.periodStartDate)?.title ?? null;
+
   return {
     topicId: currentTopic.id,
     title: currentTitle,
     previousTitle,
-    recipeTitles
+    hasHistory: Boolean(previousTitle),
+    weekday: day.weekday,
+    recipeTitles: day.recipeTitles,
+    visibleWeekdayCount: new Set(currentTopic.items.map((item) => item.weekday)).size
   };
 }
 
@@ -224,15 +239,19 @@ describe("pages_home/topic/index", () => {
     await page.waitFor(".topic-summary__title", 8000);
   });
 
-  it("本周灵感专题页可以展示本期推荐与往期回顾主状态", async () => {
+  it("共享周刊页展示选中日菜单及存在时的往期内容", async () => {
     expect(await page.path).toBe("pages_home/topic/index");
 
     const texts = await collectTexts(page);
     expect(texts).toContain(fixture.title);
-    expect(texts).toContain("本期推荐");
-    expect(texts).toContain("往期回顾");
+    expect(texts).toContain("本期菜单");
     expect(texts).toContain("加入计划");
-    expect(texts).toContain(fixture.previousTitle);
+    if (fixture.hasHistory) {
+      expect(texts).toContain("往期回顾");
+      expect(texts).toContain(fixture.previousTitle);
+    }
+    if (fixture.visibleWeekdayCount > 1) expect(texts).toContain(WEEKDAY_NAMES[fixture.weekday]);
+    expect(fixture.recipeTitles.length).toBeGreaterThan(0);
     fixture.recipeTitles.forEach((title) => {
       expect(texts).toContain(title);
     });
