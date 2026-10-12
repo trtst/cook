@@ -52,7 +52,7 @@
 
             <view class="topic-section">
               <view class="topic-section__head">
-                <text class="topic-section__title">本期推荐</text>
+                <text class="topic-section__title font-medium">本期推荐</text>
                 <text class="topic-section__meta">{{ topic.items.length }} 道</text>
               </view>
 
@@ -417,8 +417,8 @@ function closePlanSheet() {
   position: absolute;
   top: 0;
   right: 0;
+  bottom: 0;
   left: 0;
-  height: 760rpx;
   overflow: hidden;
 }
 
@@ -556,7 +556,7 @@ function closePlanSheet() {
   border-radius: var(--radius-xl) var(--radius-xl) 0 0;
   padding: 20rpx var(--space-page) 0;
   overflow: hidden;
-  background: var(--color-page);
+  background: color-mix(in srgb, var(--color-page) 30%, transparent);
   isolation: isolate;
 }
 
@@ -605,12 +605,12 @@ function closePlanSheet() {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 20rpx 0 40rpx;
+  padding: 0 0 40rpx;
 }
 
 .topic-section__title {
   color: var(--color-text);
-  font-size: 32rpx;
+  font-size: 40rpx;
   font-weight: 700;
 }
 
