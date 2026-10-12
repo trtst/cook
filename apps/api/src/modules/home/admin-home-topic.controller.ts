@@ -5,8 +5,8 @@ import { ok } from "../../common/api-response";
 import type { RequestWithAdmin } from "../../common/auth-context";
 import { AdminAuthGuard } from "../../common/admin-auth.guard";
 import { ApiIdempotencyKey, ReadIdempotencyKey } from "../../common/idempotency-key";
-import { CreateHomeTopicDto, DeleteHomeTopicDto, HomeTopicRecipeQueryDto, SetHomeTopicStatusDto, UpdateHomeTopicDto, UpdateHomeTopicImageDto } from "../../contracts/dtos";
-import { AdminHomeTopicItemModel, AdminHomeTopicsResponseModel, ApiOkModel, HomeTopicRecipeSearchResponseModel } from "../../contracts/openapi";
+import { CreateHomeTopicDto, DeleteHomeTopicDto, DismissHomeTopicTodoDto, HomeTopicHistoryQueryDto, HomeTopicRecipeQueryDto, ReplaceHomeTopicItemDto, SetHomeTopicScheduleDto, SetHomeTopicStatusDto, UpdateHomeTopicDto, UpdateHomeTopicImageDto } from "../../contracts/dtos";
+import { AdminHomeTopicItemModel, AdminHomeTopicTodosPageModel, AdminHomeTopicsResponseModel, ApiOkModel, HomeTopicRecipeSearchResponseModel } from "../../contracts/openapi";
 import { HomeTopicService } from "./home-topic.service";
 
 @ApiTags("admin-home-topics")
@@ -26,6 +26,12 @@ export class AdminHomeTopicController {
   @ApiOkModel(HomeTopicRecipeSearchResponseModel, "搜索可加入专题的灵感菜谱")
   searchRecipes(@Query() query: HomeTopicRecipeQueryDto) {
     return this.homeTopicService.searchRecipes(query.keyword).then(result => ok(result));
+  }
+
+  @Get("todos")
+  @ApiOkModel(AdminHomeTopicTodosPageModel, "分页读取失效的共享周刊菜谱待办")
+  getTodos(@Query() query: HomeTopicHistoryQueryDto) {
+    return this.homeTopicService.listTopicTodos(query.page, query.pageSize).then(result => ok(result));
   }
 
   @Post()
@@ -57,6 +63,42 @@ export class AdminHomeTopicController {
     @Body() body: SetHomeTopicStatusDto
   ) {
     return this.homeTopicService.setTopicStatus(request.admin.adminId, topicId, operationId, body).then(result => ok(result));
+  }
+
+  @Post(":topicId/schedule")
+  @ApiIdempotencyKey()
+  @ApiOkModel(AdminHomeTopicItemModel, "设置、调整或取消共享周刊预约发布")
+  setTopicSchedule(
+    @Req() request: RequestWithAdmin,
+    @Param("topicId", ParseIntPipe) topicId: number,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: SetHomeTopicScheduleDto
+  ) {
+    return this.homeTopicService.setTopicSchedule(request.admin.adminId, topicId, operationId, body).then(result => ok(result));
+  }
+
+  @Post("items/:itemId/replace")
+  @ApiIdempotencyKey()
+  @ApiOkModel(AdminHomeTopicItemModel, "替换失效的共享周刊菜谱")
+  replaceTopicItem(
+    @Req() request: RequestWithAdmin,
+    @Param("itemId", ParseIntPipe) itemId: number,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: ReplaceHomeTopicItemDto
+  ) {
+    return this.homeTopicService.replaceTopicItem(request.admin.adminId, itemId, operationId, body).then(result => ok(result));
+  }
+
+  @Post("items/:itemId/dismiss")
+  @ApiIdempotencyKey()
+  @ApiOkModel(AdminHomeTopicItemModel, "忽略失效的共享周刊菜谱待办")
+  dismissTopicTodo(
+    @Req() request: RequestWithAdmin,
+    @Param("itemId", ParseIntPipe) itemId: number,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: DismissHomeTopicTodoDto
+  ) {
+    return this.homeTopicService.dismissTopicTodo(request.admin.adminId, itemId, operationId, body).then(result => ok(result));
   }
 
   @Delete(":topicId")

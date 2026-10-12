@@ -56,10 +56,14 @@
 | AdminHome | DELETE | `/admin/home-entries/{placement}/image` | 后台清空指定首页快捷入口图片 |
 | AdminHomeTopic | GET | `/admin/home-topics` | 后台读取本周灵感专题列表与类别选项 |
 | AdminHomeTopic | GET | `/admin/home-topics/recipes` | 后台搜索可加入专题的灵感菜谱 |
+| AdminHomeTopic | GET | `/admin/home-topics/todos` | 分页读取失效共享周刊菜谱待办 |
 | AdminHomeTopic | POST | `/admin/home-topics` | 后台新建本周灵感专题 |
 | AdminHomeTopic | PUT | `/admin/home-topics/{topicId}` | 后台更新本周灵感专题 |
 | AdminHomeTopic | POST | `/admin/home-topics/{topicId}/status` | 后台切换本周灵感专题上架状态 |
-| AdminHomeTopic | DELETE | `/admin/home-topics/{topicId}` | 后台删除未上架本周灵感专题 |
+| AdminHomeTopic | POST | `/admin/home-topics/{topicId}/schedule` | 设置、调整或取消共享周刊预约发布 |
+| AdminHomeTopic | POST | `/admin/home-topics/items/{itemId}/replace` | 替换失效周刊菜谱 |
+| AdminHomeTopic | POST | `/admin/home-topics/items/{itemId}/dismiss` | 忽略并审计失效周刊菜谱待办 |
+| AdminHomeTopic | DELETE | `/admin/home-topics/{topicId}` | 后台删除草稿周刊 |
 | AdminHomeTopic | POST | `/admin/home-topics/{topicId}/image` | 后台上传或替换专题封面图 |
 | AdminHomeTopic | DELETE | `/admin/home-topics/{topicId}/image` | 后台清空专题封面图 |
 | AdminTableTopic | GET | `/admin/table-topics` | 后台读取餐桌话题列表 |

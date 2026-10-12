@@ -397,8 +397,19 @@ enum HomeTopicType {
 }
 
 enum HomeTopicStatus {
-  LISTED
+  DRAFT
+  PUBLISHED
   UNLISTED
+}
+
+enum HomeTopicWeekday {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+  SUNDAY
 }
 
 enum TableTopicStatus {
@@ -740,18 +751,21 @@ model HomeTopic {
   title         String          @db.VarChar(20)
   subTitle      String?         @map("sub_title") @db.VarChar(40)
   recType       HomeTopicType   @map("rec_type")
-  status        HomeTopicStatus @default(UNLISTED)
+  status        HomeTopicStatus @default(DRAFT)
   issueNo       Int             @unique @map("issue_no")
   description   String          @db.VarChar(120)
   coverImageUrl String?         @map("cover_image_url") @db.VarChar(512)
-  publishedAt   DateTime        @map("published_at") @db.Timestamptz(3)
+  periodStartDate DateTime      @unique @map("period_start_date") @db.Date
+  scheduledPublishAt DateTime?  @map("scheduled_publish_at") @db.Timestamptz(3)
+  publishedAt   DateTime?       @map("published_at") @db.Timestamptz(3)
   version       Int             @default(1)
   createdAt     DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt     DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   items HomeTopicItem[]
 
-  @@index([status, publishedAt, id])
+  @@index([status, periodStartDate, issueNo])
+  @@index([status, scheduledPublishAt])
   @@map("home_topics")
 }
 
@@ -760,8 +774,10 @@ model HomeTopicItem {
   topicId         Int      @map("topic_id")
   recipeId        Int      @map("recipe_id")
   sourceVersionId Int      @map("source_version_id")
+  weekday         HomeTopicWeekday
   sortOrder       Int      @map("sort_order")
   recommendNote String? @map("recommend_note") @db.VarChar(60)
+  todoDismissedAt DateTime? @map("todo_dismissed_at") @db.Timestamptz(3)
   createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
@@ -770,7 +786,7 @@ model HomeTopicItem {
   sourceVersion RecipeContentVersion @relation("HomeTopicItemSourceVersion", fields: [sourceVersionId], references: [id], onDelete: Restrict)
 
   @@unique([topicId, recipeId])
-  @@unique([topicId, sortOrder])
+  @@unique([topicId, weekday, sortOrder])
   @@index([topicId, sortOrder, id])
   @@index([sourceVersionId])
   @@map("home_topic_items")

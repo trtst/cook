@@ -827,6 +827,25 @@ export class HomeTopicTypeOptionModel {
 export class HomeTopicRecipeItemModel {
   @ApiProperty(uuid) id!: string;
   @ApiProperty(uuid) sourceVersionId!: string;
+  @ApiProperty({ type: String, enum: ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"] })
+  weekday!: string;
+  @ApiProperty({ type: Number, minimum: 1 }) sort!: number;
+  @ApiProperty({ type: String }) title!: string;
+  @ApiProperty(nullableString) coverImageUrl!: string | null;
+  @ApiProperty({ ...uuid, nullable: true }) ownedRecipeId!: string | null;
+  @ApiProperty(nullableString) recommendNote!: string | null;
+  @ApiProperty({ type: String, nullable: true, enum: ["BEGINNER", "EASY", "SKILLED", "CHALLENGING"] }) difficulty!: string | null;
+  @ApiProperty({ type: String, nullable: true, enum: ["WITHIN_15", "BETWEEN_15_30", "BETWEEN_30_60", "OVER_60"] }) duration!: string | null;
+  @ApiProperty(nullableString) difficultyText!: string | null;
+  @ApiProperty(nullableString) durationText!: string | null;
+  @ApiProperty({ type: InspirationCategoryModel }) category!: InspirationCategoryModel;
+  @ApiProperty({ type: Number, minimum: 0 }) collectCount!: number;
+  @ApiProperty(dateTime) updatedAt!: string;
+}
+
+export class HomeTopicRecipeSearchItemModel {
+  @ApiProperty(uuid) id!: string;
+  @ApiProperty(uuid) sourceVersionId!: string;
   @ApiProperty({ type: Number, minimum: 1 }) sort!: number;
   @ApiProperty({ type: String }) title!: string;
   @ApiProperty(nullableString) coverImageUrl!: string | null;
@@ -849,6 +868,8 @@ export class HomeTopicHistoryItemModel {
   recType!: string;
   @ApiProperty({ type: String }) recTypeText!: string;
   @ApiProperty({ type: Number, minimum: 1 }) issueNo!: number;
+  @ApiProperty({ type: String, format: "date" }) periodStartDate!: string;
+  @ApiProperty({ type: String, format: "date" }) periodEndDate!: string;
   @ApiProperty({ type: String }) description!: string;
   @ApiProperty(nullableString) coverImageUrl!: string | null;
   @ApiProperty({ type: Number, minimum: 0 }) recipeCount!: number;
@@ -866,6 +887,8 @@ export class HomeTopicDetailModel {
   @ApiProperty({ type: Number, minimum: 1 }) issueNo!: number;
   @ApiProperty({ type: String }) description!: string;
   @ApiProperty(nullableString) coverImageUrl!: string | null;
+  @ApiProperty({ type: String, format: "date" }) periodStartDate!: string;
+  @ApiProperty({ type: String, format: "date" }) periodEndDate!: string;
   @ApiProperty({ type: Number, minimum: 0 }) recipeCount!: number;
   @ApiProperty(dateTime) publishedAt!: string;
   @ApiProperty(dateTime) updatedAt!: string;
@@ -882,7 +905,11 @@ export class HomeTopicDetailResponseModel {
 }
 
 export class HomeTopicRecipeSearchResponseModel {
-  @ApiProperty({ type: [HomeTopicRecipeItemModel] }) items!: HomeTopicRecipeItemModel[];
+  @ApiProperty({ type: [HomeTopicRecipeSearchItemModel] }) items!: HomeTopicRecipeSearchItemModel[];
+}
+
+export class AdminHomeTopicRecipeItemModel extends HomeTopicRecipeItemModel {
+  @ApiProperty({ type: Boolean }) publiclyAvailable!: boolean;
 }
 
 export class AdminHomeTopicItemModel {
@@ -892,21 +919,46 @@ export class AdminHomeTopicItemModel {
   @ApiProperty({ type: String, enum: ["WEEKEND_GATHERING", "QUICK_AFTER_WORK", "HOME_STYLE", "ONE_PERSON", "BREAKFAST", "LIGHT_DINNER"] })
   recType!: string;
   @ApiProperty({ type: String }) recTypeText!: string;
-  @ApiProperty({ type: String, enum: ["LISTED", "UNLISTED"] })
+  @ApiProperty({ type: String, enum: ["DRAFT", "PUBLISHED", "UNLISTED"] })
   status!: string;
   @ApiProperty({ type: Number, minimum: 1 }) issueNo!: number;
+  @ApiProperty({ type: String, format: "date" }) periodStartDate!: string;
+  @ApiProperty({ type: String, format: "date" }) periodEndDate!: string;
+  @ApiProperty({ type: String, format: "date-time", nullable: true }) scheduledPublishAt!: string | null;
   @ApiProperty({ type: String }) description!: string;
   @ApiProperty(nullableString) coverImageUrl!: string | null;
   @ApiProperty({ type: Number, minimum: 0 }) recipeCount!: number;
-  @ApiProperty(dateTime) publishedAt!: string;
+  @ApiProperty({ ...dateTime, nullable: true }) publishedAt!: string | null;
   @ApiProperty(dateTime) updatedAt!: string;
-  @ApiProperty({ type: [HomeTopicRecipeItemModel] }) items!: HomeTopicRecipeItemModel[];
+  @ApiProperty({ type: [AdminHomeTopicRecipeItemModel] }) items!: AdminHomeTopicRecipeItemModel[];
   @ApiProperty({ type: Number, minimum: 1 }) version!: number;
 }
 
 export class AdminHomeTopicsResponseModel {
   @ApiProperty({ type: [AdminHomeTopicItemModel] }) topics!: AdminHomeTopicItemModel[];
   @ApiProperty({ type: [HomeTopicTypeOptionModel] }) recTypes!: HomeTopicTypeOptionModel[];
+}
+
+export class AdminHomeTopicTodoItemModel {
+  @ApiProperty(uuid) itemId!: string;
+  @ApiProperty(uuid) topicId!: string;
+  @ApiProperty({ type: String }) topicTitle!: string;
+  @ApiProperty({ type: Number, minimum: 1 }) issueNo!: number;
+  @ApiProperty({ type: String, format: "date" }) periodStartDate!: string;
+  @ApiProperty({ type: Number, minimum: 1 }) topicVersion!: number;
+  @ApiProperty({ type: String, enum: ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"] })
+  weekday!: string;
+  @ApiProperty(uuid) recipeId!: string;
+  @ApiProperty({ type: String }) recipeName!: string;
+  @ApiProperty(uuid) sourceVersionId!: string;
+}
+
+export class AdminHomeTopicTodosPageModel {
+  @ApiProperty({ type: [AdminHomeTopicTodoItemModel] }) items!: AdminHomeTopicTodoItemModel[];
+  @ApiProperty({ type: Number, minimum: 1 }) page!: number;
+  @ApiProperty({ type: Number, minimum: 1, maximum: 100 }) pageSize!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) total!: number;
+  @ApiProperty({ type: Boolean }) hasNext!: boolean;
 }
 
 export class AdminInspirationCategoryModel {

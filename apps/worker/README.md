@@ -1,6 +1,6 @@
 # 炊火记 Worker
 
-`apps/worker` is the async worker boundary. The meal reminder consumer and the knowledge article scheduled-publish loop have independent enable switches. The article loop does not consume Outbox events.
+`apps/worker` is the async worker boundary. Meal reminders, knowledge articles, and shared weekly topics have independent enable switches. Scheduled publishing does not consume Outbox events.
 
 Other Outbox and worker behavior remains disabled. Do not add unrelated event
 types or consumers to this runtime.
@@ -22,7 +22,14 @@ pnpm dev
 without meal reminder credentials and requires only `DATABASE_URL` plus the
 article scheduled-publish migration.
 
-When both switches are disabled, the worker prints a short status line and
+`HOME_TOPIC_SCHEDULED_PUBLISH_WORKER_ENABLED` defaults to `false`. It requires
+only `DATABASE_URL` and the shared weekly topic migration. At publish time it
+locks due draft rows, rechecks that every weekday still has a publicly eligible
+recipe, then publishes using the scheduled timestamp. If the menu is no longer
+complete, it clears the schedule, leaves the topic as a draft, increments its
+version, and writes a system audit event.
+
+When all switches are disabled, the worker prints a short status line and
 exits without opening PostgreSQL or WeChat connections. When the reminder
 switch is enabled, it claims only due
 `MEAL_REMINDER_SEND` rows, in bounded batches, and uses the current user’s
@@ -35,9 +42,9 @@ chance of reclaiming a reminder while another worker may still be sending it.
 Recoveries are logged by count only.
 
 Do not set `WORKER_ENABLED=true` until the meal reminder migration and matching
-WeChat template configuration are deployed. Do not enable article publishing
-until the scheduled-publish migration is deployed. No other Outbox event is
-processed by this worker.
+WeChat template configuration are deployed. Do not enable article or home topic
+publishing until their scheduled-publish migrations are deployed. No other
+Outbox event is processed by this worker.
 
 ## Production deployment
 

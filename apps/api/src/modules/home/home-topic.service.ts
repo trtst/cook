@@ -7,6 +7,7 @@ import { PrismaService } from "../../common/prisma.service";
 import { UserTokenService } from "../../common/security/user-token.service";
 import type {
   AdminHomeTopicItem,
+  AdminHomeTopicTodoItem,
   AdminHomeTopicsResponse,
   CreateHomeTopicRequest,
   DeleteHomeTopicRequest,
@@ -17,17 +18,23 @@ import type {
   HomeTopicHistoryItem,
   PageResult,
   HomeTopicRecipeItem,
+  HomeTopicRecipeSearchItem,
   HomeTopicRecipeSearchResponse,
   HomeTopicType,
   HomeTopicTypeOption,
+  HomeTopicWeekday,
   OperationId,
   RecipeDifficulty,
   RecipeDuration,
   SetHomeTopicStatusRequest,
+  SetHomeTopicScheduleRequest,
+  ReplaceHomeTopicItemRequest,
+  DismissHomeTopicTodoRequest,
   UUID,
   UpdateHomeTopicRequest
 } from "../../contracts/types";
 import { HomeTopicImageService } from "./home-topic-image.service";
+import { beijingWeekEnd, isoDate, nextBeijingWeekStart } from "./home-topic-week";
 import { publicInspirationRecipeWhere } from "../recipe/public-content-user-pool";
 
 type TopicDb = Prisma.TransactionClient | PrismaService;
@@ -72,7 +79,7 @@ const publicTopicInclude = {
       sourceVersion: true,
       recipe: { include: { inspirationCategory: true } }
     },
-    orderBy: [{ sortOrder: "asc" }, { id: "asc" }]
+    orderBy: [{ weekday: "asc" }, { sortOrder: "asc" }, { id: "asc" }]
   }
 } satisfies Prisma.HomeTopicInclude;
 const historyTopicSelect = {
@@ -81,6 +88,7 @@ const historyTopicSelect = {
   subTitle: true,
   recType: true,
   issueNo: true,
+  periodStartDate: true,
   description: true,
   coverImageUrl: true,
   publishedAt: true,
@@ -120,14 +128,14 @@ export class HomeTopicService {
 
   async getCurrentTopic(request: RequestLike): Promise<HomeTopicCurrentResponse> {
     const current = await this.prisma.homeTopic.findFirst({
-      where: { status: TopicStatus.LISTED },
+      where: { status: TopicStatus.PUBLISHED },
       include: publicTopicInclude,
-      orderBy: [{ issueNo: "desc" }]
+      orderBy: [{ periodStartDate: "desc" }, { issueNo: "desc" }]
     });
     if (!current) return { topic: null };
 
     const ownedRecipeMap = await this.loadOwnedRecipeMap(request, current.items.map(item => item.sourceVersionId));
-    const history = await this.queryTopicHistory(request, current.issueNo, 1, 5);
+    const history = await this.queryTopicHistory(request, current.periodStartDate, 1, 5);
     return {
       topic: this.toTopicDetail(request, current, ownedRecipeMap, history.items)
     };
@@ -135,14 +143,14 @@ export class HomeTopicService {
 
   async getTopic(request: RequestLike, topicId: UUID): Promise<HomeTopicDetailResponse> {
     const current = await this.prisma.homeTopic.findFirst({
-      where: { id: topicId, status: TopicStatus.LISTED },
+      where: { id: topicId, status: TopicStatus.PUBLISHED },
       include: publicTopicInclude
     });
     if (!current) {
       throw new NotFoundException("本周灵感专题不存在");
     }
     const ownedRecipeMap = await this.loadOwnedRecipeMap(request, current.items.map(item => item.sourceVersionId));
-    const history = await this.queryTopicHistory(request, current.issueNo, 1, 5);
+    const history = await this.queryTopicHistory(request, current.periodStartDate, 1, 5);
     return {
       topic: this.toTopicDetail(request, current, ownedRecipeMap, history.items)
     };
@@ -150,14 +158,14 @@ export class HomeTopicService {
 
   async listTopicHistory(request: RequestLike, page: number, pageSize: number): Promise<PageResult<HomeTopicHistoryItem>> {
     const current = await this.prisma.homeTopic.findFirst({
-      where: { status: TopicStatus.LISTED },
-      orderBy: [{ issueNo: "desc" }],
-      select: { issueNo: true }
+      where: { status: TopicStatus.PUBLISHED },
+      orderBy: [{ periodStartDate: "desc" }, { issueNo: "desc" }],
+      select: { periodStartDate: true }
     });
     const nextPage = toPositiveInt(page, 1);
     const nextPageSize = Math.min(toPositiveInt(pageSize, 20), 100);
     if (!current) return { items: [], page: nextPage, pageSize: nextPageSize, total: 0, hasNext: false };
-    return this.queryTopicHistory(request, current.issueNo, nextPage, nextPageSize);
+    return this.queryTopicHistory(request, current.periodStartDate, nextPage, nextPageSize);
   }
 
   async getAdminTopics(): Promise<AdminHomeTopicsResponse> {
@@ -204,6 +212,7 @@ export class HomeTopicService {
 
       await startAdminIdempotentOperation(tx, operationId, "admin-home-topics:create", adminId, requestHash);
       const recipes = await this.loadRecipes(tx, data.items.map(item => item.recipeId));
+      const recipeMap = new Map(recipes.map(recipe => [recipe.id, recipe]));
 
       try {
         await tx.homeTopic.create({
@@ -211,19 +220,25 @@ export class HomeTopicService {
             title: data.title,
             subTitle: data.subTitle,
             recType: data.recType as TopicType,
-            status: "UNLISTED",
+            status: "DRAFT",
             issueNo: data.issueNo,
             description: data.description,
             coverImageUrl: null,
-            publishedAt: new Date(),
+            periodStartDate: nextBeijingWeekStart(new Date()),
+            publishedAt: null,
             items: {
               createMany: {
-                data: recipes.map((item, index) => ({
-                  recipeId: item.id,
-                  sourceVersionId: item.currentVersionId,
-                  sortOrder: index + 1,
-                  recommendNote: data.items[index]?.recommendNote ?? null
-                }))
+                data: data.items.map(item => {
+                  const recipe = recipeMap.get(item.recipeId);
+                  if (!recipe) throw new BadRequestException("本期推荐里包含不可用的灵感菜谱");
+                  return {
+                    recipeId: recipe.id,
+                    sourceVersionId: recipe.currentVersionId,
+                    weekday: item.weekday,
+                    sortOrder: item.sortOrder,
+                    recommendNote: item.recommendNote
+                  };
+                })
               }
             }
           }
@@ -257,19 +272,237 @@ export class HomeTopicService {
         throw new ConflictException("本周灵感专题已被更新，请刷新后重试");
       }
 
-      if ((current.status as HomeTopicStatus) !== body.status) {
-        await tx.homeTopic.update({
-          where: { id: topicId },
-          data: {
-            status: body.status as TopicStatus,
-            ...(body.status === "LISTED" ? { publishedAt: new Date() } : {}),
+      const fromStatus = current.status as HomeTopicStatus;
+      if (fromStatus !== body.status) {
+        const now = new Date();
+        let updateData: Prisma.HomeTopicUpdateInput;
+        if (fromStatus === "DRAFT" && body.status === "PUBLISHED") {
+          this.assertPublishReady(current.items.filter(item => this.isPublicTopicItem(item)));
+          updateData = {
+            status: "PUBLISHED",
+            periodStartDate: nextBeijingWeekStart(now),
+            scheduledPublishAt: null,
+            publishedAt: now,
             version: { increment: 1 }
+          };
+        } else if (fromStatus === "PUBLISHED" && body.status === "UNLISTED") {
+          updateData = { status: "UNLISTED", scheduledPublishAt: null, version: { increment: 1 } };
+        } else if (fromStatus === "UNLISTED" && body.status === "DRAFT") {
+          updateData = { status: "DRAFT", scheduledPublishAt: null, publishedAt: null, version: { increment: 1 } };
+        } else {
+          throw new BadRequestException("周刊状态不能按此方向切换");
+        }
+        try {
+          await tx.homeTopic.update({ where: { id: topicId }, data: updateData });
+        } catch (error) {
+          this.raiseTopicWriteError(error, current.issueNo);
+        }
+        await tx.auditEvent.create({
+          data: {
+            actorType: "ADMIN",
+            actorAdminId: adminId,
+            action: body.status === "PUBLISHED" ? "HOME_TOPIC_PUBLISHED" : body.status === "UNLISTED" ? "HOME_TOPIC_UNLISTED" : "HOME_TOPIC_RESTORED_TO_DRAFT",
+            objectType: "HOME_TOPIC",
+            objectId: topicId,
+            payload: { title: current.title, issueNo: current.issueNo, fromStatus, toStatus: body.status }
           }
         });
       }
 
       const result = await this.loadAdminTopic(tx, topicId);
       await completeAdminIdempotentOperation(tx, operationId, "admin-home-topics:status", adminId, requestHash, result);
+      return result;
+    });
+  }
+
+  async setTopicSchedule(
+    adminId: UUID,
+    topicId: UUID,
+    operationId: OperationId,
+    body: SetHomeTopicScheduleRequest
+  ): Promise<AdminHomeTopicItem> {
+    const scheduledPublishAt = body.scheduledPublishAt === null ? null : new Date(body.scheduledPublishAt);
+    if (scheduledPublishAt && scheduledPublishAt.getTime() <= Date.now()) {
+      throw new BadRequestException("预约发布时间必须晚于当前时间");
+    }
+    const requestHash = hashText(JSON.stringify({ topicId, scheduledPublishAt: scheduledPublishAt?.toISOString() ?? null, expectedVersion: body.expectedVersion }));
+
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getAdminIdempotentResult<AdminHomeTopicItem>(tx, operationId, "admin-home-topics:schedule", adminId, requestHash);
+      if (repeated) return repeated;
+      await startAdminIdempotentOperation(tx, operationId, "admin-home-topics:schedule", adminId, requestHash);
+
+      const current = await this.requireTopic(tx, topicId);
+      if (current.version !== body.expectedVersion) throw new ConflictException("本周灵感专题已被更新，请刷新后重试");
+      if (current.status !== "DRAFT") throw new BadRequestException("只有草稿周刊可以设置或取消预约");
+      if (scheduledPublishAt) this.assertPublishReady(current.items.filter(item => this.isPublicTopicItem(item)));
+      else if (!current.scheduledPublishAt) throw new BadRequestException("该草稿当前没有预约发布");
+
+      try {
+        await tx.homeTopic.update({
+          where: { id: topicId },
+          data: {
+            scheduledPublishAt,
+            ...(scheduledPublishAt ? { periodStartDate: nextBeijingWeekStart(scheduledPublishAt) } : {}),
+            version: { increment: 1 }
+          }
+        });
+      } catch (error) {
+        this.raiseTopicWriteError(error, current.issueNo);
+      }
+      await tx.auditEvent.create({
+        data: {
+          actorType: "ADMIN",
+          actorAdminId: adminId,
+          action: scheduledPublishAt ? "HOME_TOPIC_SCHEDULED" : "HOME_TOPIC_SCHEDULE_CANCELLED",
+          objectType: "HOME_TOPIC",
+          objectId: topicId,
+          payload: { title: current.title, issueNo: current.issueNo, scheduledPublishAt: scheduledPublishAt?.toISOString() ?? null }
+        }
+      });
+      const result = await this.loadAdminTopic(tx, topicId);
+      await completeAdminIdempotentOperation(tx, operationId, "admin-home-topics:schedule", adminId, requestHash, result);
+      return result;
+    });
+  }
+
+  async listTopicTodos(page: number, pageSize: number): Promise<PageResult<AdminHomeTopicTodoItem>> {
+    const currentPage = toPositiveInt(page, 1);
+    const currentPageSize = Math.min(toPositiveInt(pageSize, 20), 100);
+    const skip = (currentPage - 1) * currentPageSize;
+    const where: Prisma.HomeTopicItemWhereInput = {
+      todoDismissedAt: null,
+      recipe: {
+        is: {
+          OR: [
+            { isInspiration: false },
+            { inspirationCategoryId: null },
+            { status: { not: "ACTIVE" } }
+          ]
+        }
+      }
+    };
+    const [rows, total] = await Promise.all([
+      this.prisma.homeTopicItem.findMany({
+        where,
+        select: {
+          id: true,
+          topicId: true,
+          weekday: true,
+          recipeId: true,
+          sourceVersionId: true,
+          topic: { select: { title: true, issueNo: true, periodStartDate: true, version: true } },
+          sourceVersion: { select: { name: true } }
+        },
+        orderBy: [{ topic: { periodStartDate: "desc" } }, { weekday: "asc" }, { sortOrder: "asc" }, { id: "asc" }],
+        skip,
+        take: currentPageSize
+      }),
+      this.prisma.homeTopicItem.count({ where })
+    ]);
+    return {
+      items: rows.map(row => ({
+        itemId: row.id,
+        topicId: row.topicId,
+        topicTitle: row.topic.title,
+        issueNo: row.topic.issueNo,
+        periodStartDate: isoDate(row.topic.periodStartDate),
+        topicVersion: row.topic.version,
+        weekday: row.weekday as HomeTopicWeekday,
+        recipeId: row.recipeId,
+        recipeName: row.sourceVersion.name,
+        sourceVersionId: row.sourceVersionId
+      })),
+      page: currentPage,
+      pageSize: currentPageSize,
+      total,
+      hasNext: skip + rows.length < total
+    };
+  }
+
+  async replaceTopicItem(
+    adminId: UUID,
+    itemId: UUID,
+    operationId: OperationId,
+    body: ReplaceHomeTopicItemRequest
+  ): Promise<AdminHomeTopicItem> {
+    const requestHash = hashText(JSON.stringify({ itemId, replacementRecipeId: body.replacementRecipeId, expectedVersion: body.expectedVersion }));
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getAdminIdempotentResult<AdminHomeTopicItem>(tx, operationId, "admin-home-topic-items:replace", adminId, requestHash);
+      if (repeated) return repeated;
+      await startAdminIdempotentOperation(tx, operationId, "admin-home-topic-items:replace", adminId, requestHash);
+
+      const current = await tx.homeTopicItem.findUnique({ where: { id: itemId }, include: { topic: true } });
+      if (!current) throw new NotFoundException("周刊菜谱项不存在");
+      if (current.topic.version !== body.expectedVersion) throw new ConflictException("本周灵感专题已被更新，请刷新后重试");
+      const [recipe] = await this.loadRecipes(tx, [body.replacementRecipeId]);
+      const updatedTopic = await tx.homeTopic.updateMany({
+        where: { id: current.topicId, version: body.expectedVersion },
+        data: { version: { increment: 1 } }
+      });
+      if (updatedTopic.count !== 1) throw new ConflictException("本周灵感专题已被更新，请刷新后重试");
+      try {
+        await tx.homeTopicItem.update({
+          where: { id: itemId },
+          data: { recipeId: recipe.id, sourceVersionId: recipe.currentVersionId, todoDismissedAt: null }
+        });
+      } catch (error) {
+        this.raiseTopicWriteError(error, current.topic.issueNo);
+      }
+      await tx.auditEvent.create({
+        data: {
+          actorType: "ADMIN",
+          actorAdminId: adminId,
+          action: "HOME_TOPIC_ITEM_REPLACED",
+          objectType: "HOME_TOPIC_ITEM",
+          objectId: itemId,
+          payload: { topicId: current.topicId, oldRecipeId: current.recipeId, newRecipeId: recipe.id }
+        }
+      });
+      const result = await this.loadAdminTopic(tx, current.topicId);
+      await completeAdminIdempotentOperation(tx, operationId, "admin-home-topic-items:replace", adminId, requestHash, result);
+      return result;
+    });
+  }
+
+  async dismissTopicTodo(
+    adminId: UUID,
+    itemId: UUID,
+    operationId: OperationId,
+    body: DismissHomeTopicTodoRequest
+  ): Promise<AdminHomeTopicItem> {
+    const requestHash = hashText(JSON.stringify({ itemId, expectedVersion: body.expectedVersion }));
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getAdminIdempotentResult<AdminHomeTopicItem>(tx, operationId, "admin-home-topic-items:dismiss", adminId, requestHash);
+      if (repeated) return repeated;
+      await startAdminIdempotentOperation(tx, operationId, "admin-home-topic-items:dismiss", adminId, requestHash);
+
+      const current = await tx.homeTopicItem.findUnique({ where: { id: itemId }, include: { topic: true, recipe: true } });
+      if (!current) throw new NotFoundException("周刊菜谱项不存在");
+      if (current.topic.version !== body.expectedVersion) throw new ConflictException("本周灵感专题已被更新，请刷新后重试");
+      if (current.todoDismissedAt) throw new ConflictException("该失效菜谱待办已经忽略");
+      if (current.recipe.isInspiration && current.recipe.inspirationCategoryId !== null && current.recipe.status === "ACTIVE") {
+        throw new BadRequestException("该菜谱当前仍可公开展示，无需忽略待办");
+      }
+      const dismissedAt = new Date();
+      const updatedTopic = await tx.homeTopic.updateMany({
+        where: { id: current.topicId, version: body.expectedVersion },
+        data: { version: { increment: 1 } }
+      });
+      if (updatedTopic.count !== 1) throw new ConflictException("本周灵感专题已被更新，请刷新后重试");
+      await tx.homeTopicItem.update({ where: { id: itemId }, data: { todoDismissedAt: dismissedAt } });
+      await tx.auditEvent.create({
+        data: {
+          actorType: "ADMIN",
+          actorAdminId: adminId,
+          action: "HOME_TOPIC_ITEM_TODO_DISMISSED",
+          objectType: "HOME_TOPIC_ITEM",
+          objectId: itemId,
+          payload: { topicId: current.topicId, recipeId: current.recipeId, dismissedAt: dismissedAt.toISOString() }
+        }
+      });
+      const result = await this.loadAdminTopic(tx, current.topicId);
+      await completeAdminIdempotentOperation(tx, operationId, "admin-home-topic-items:dismiss", adminId, requestHash, result);
       return result;
     });
   }
@@ -296,13 +529,23 @@ export class HomeTopicService {
         if (current.version !== body.expectedVersion) {
           throw new ConflictException("本周灵感专题已被更新，请刷新后重试");
         }
-        if (current.status === "LISTED") {
-          throw new BadRequestException("请先下架本周灵感专题再删除");
+        if (current.status !== "DRAFT") {
+          throw new BadRequestException("只有草稿周刊可以删除；已下架周刊请先转为草稿");
         }
 
         backupPath = isTopicImagePath(current.coverImageUrl) ? await this.imageService.stageClear(topicId) : null;
         stagedClear = backupPath !== null;
 
+        await tx.auditEvent.create({
+          data: {
+            actorType: "ADMIN",
+            actorAdminId: adminId,
+            action: "HOME_TOPIC_DELETED",
+            objectType: "HOME_TOPIC",
+            objectId: topicId,
+            payload: { title: current.title, issueNo: current.issueNo }
+          }
+        });
         await tx.homeTopic.delete({
           where: { id: topicId }
         });
@@ -345,9 +588,17 @@ export class HomeTopicService {
         throw new ConflictException("本周灵感专题已被更新，请刷新后重试");
       }
 
-      const recipes = await this.loadRecipes(tx, data.items.map(item => item.recipeId));
+      const unavailableItems = current.items.filter(item => !this.isPublicTopicItem(item));
+      const unavailableIds = new Set(unavailableItems.map(item => item.recipeId));
+      const editableItems = data.items.filter(item => !unavailableIds.has(item.recipeId));
+      const recipes = await this.loadRecipes(tx, editableItems.map(item => item.recipeId));
       const sourceVersionMap = new Map(current.items.map(item => [item.recipeId, item.sourceVersionId]));
+      const recipeMap = new Map(recipes.map(recipe => [recipe.id, recipe]));
+      if (current.scheduledPublishAt) this.assertPublishReady(data.items.filter(item => !unavailableIds.has(item.recipeId)));
       try {
+        for (let index = 0; index < unavailableItems.length; index += 1) {
+          await tx.homeTopicItem.update({ where: { id: unavailableItems[index].id }, data: { sortOrder: 1_000_000 + index } });
+        }
         await tx.homeTopic.update({
           where: { id: topicId },
           data: {
@@ -358,18 +609,31 @@ export class HomeTopicService {
             description: data.description,
             version: { increment: 1 },
             items: {
-              deleteMany: {},
+              deleteMany: unavailableItems.length ? { recipeId: { notIn: [...unavailableIds] } } : {},
               createMany: {
-                data: recipes.map((item, index) => ({
-                  recipeId: item.id,
-                  sourceVersionId: sourceVersionMap.get(item.id) ?? item.currentVersionId,
-                  sortOrder: index + 1,
-                  recommendNote: data.items[index]?.recommendNote ?? null
-                }))
+                data: editableItems.map(item => {
+                  const recipe = recipeMap.get(item.recipeId);
+                  if (!recipe) throw new BadRequestException("本期推荐里包含不可用的灵感菜谱");
+                  return {
+                    recipeId: recipe.id,
+                    sourceVersionId: sourceVersionMap.get(recipe.id) ?? recipe.currentVersionId,
+                    weekday: item.weekday,
+                    sortOrder: item.sortOrder,
+                    recommendNote: item.recommendNote
+                  };
+                })
               }
             }
           }
         });
+        const nextSortByWeekday = new Map<HomeTopicWeekday, number>();
+        for (const item of editableItems) nextSortByWeekday.set(item.weekday, Math.max(nextSortByWeekday.get(item.weekday) ?? 0, item.sortOrder));
+        for (let index = 0; index < unavailableItems.length; index += 1) {
+          const item = unavailableItems[index];
+          const nextSort = (nextSortByWeekday.get(item.weekday as HomeTopicWeekday) ?? 0) + 1;
+          await tx.homeTopicItem.update({ where: { id: item.id }, data: { sortOrder: nextSort } });
+          nextSortByWeekday.set(item.weekday as HomeTopicWeekday, nextSort);
+        }
       } catch (error) {
         this.raiseTopicWriteError(error, data.issueNo);
       }
@@ -491,17 +755,17 @@ export class HomeTopicService {
 
   private async queryTopicHistory(
     request: RequestLike,
-    currentIssueNo: number,
+    currentPeriodStartDate: Date,
     page: number,
     pageSize: number
   ): Promise<PageResult<HomeTopicHistoryItem>> {
-    const where = { status: TopicStatus.LISTED, issueNo: { lt: currentIssueNo } } satisfies Prisma.HomeTopicWhereInput;
+    const where = { status: TopicStatus.PUBLISHED, periodStartDate: { lt: currentPeriodStartDate } } satisfies Prisma.HomeTopicWhereInput;
     const skip = (page - 1) * pageSize;
     const [topics, total] = await Promise.all([
       this.prisma.homeTopic.findMany({
         where,
         select: historyTopicSelect,
-        orderBy: [{ issueNo: "desc" }],
+        orderBy: [{ periodStartDate: "desc" }, { issueNo: "desc" }],
         skip,
         take: pageSize
       }),
@@ -520,7 +784,6 @@ export class HomeTopicService {
     return db.homeTopic.findMany({
       include: {
         items: {
-          where: { recipe: recipeWhere },
           include: {
             sourceVersion: true,
             recipe: {
@@ -529,7 +792,7 @@ export class HomeTopicService {
               }
             }
           },
-          orderBy: [{ sortOrder: "asc" }, { id: "asc" }]
+          orderBy: [{ weekday: "asc" }, { sortOrder: "asc" }, { id: "asc" }]
         }
       },
       orderBy: [{ status: "asc" }, { publishedAt: "desc" }, { id: "desc" }]
@@ -541,7 +804,6 @@ export class HomeTopicService {
       where: { id: topicId },
       include: {
         items: {
-          where: { recipe: recipeWhere },
           include: {
             sourceVersion: true,
             recipe: {
@@ -550,7 +812,7 @@ export class HomeTopicService {
               }
             }
           },
-          orderBy: [{ sortOrder: "asc" }, { id: "asc" }]
+          orderBy: [{ weekday: "asc" }, { sortOrder: "asc" }, { id: "asc" }]
         }
       }
     });
@@ -597,9 +859,24 @@ export class HomeTopicService {
       description: body.description.trim(),
       items: body.items.map(item => ({
         recipeId: item.recipeId,
+        weekday: item.weekday,
+        sortOrder: item.sortOrder,
         recommendNote: cleanText(item.recommendNote)
       }))
     };
+  }
+
+  private assertPublishReady(items: Array<{ weekday: HomeTopicWeekday }>) {
+    const configured = new Set(items.map(item => item.weekday));
+    const missing = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"].filter(day => !configured.has(day as HomeTopicWeekday));
+    if (missing.length) {
+      const names = { MONDAY: "周一", TUESDAY: "周二", WEDNESDAY: "周三", THURSDAY: "周四", FRIDAY: "周五", SATURDAY: "周六", SUNDAY: "周日" } as const;
+      throw new BadRequestException(`周刊发布前每天至少需要一道可公开菜谱：${missing.map(day => names[day as keyof typeof names]).join("、")}`);
+    }
+  }
+
+  private isPublicTopicItem(item: { recipe: { isInspiration: boolean; inspirationCategoryId: number | null; status: string } }) {
+    return item.recipe.isInspiration && item.recipe.inspirationCategoryId !== null && item.recipe.status === "ACTIVE";
   }
 
   private toTopicDetail(
@@ -615,10 +892,12 @@ export class HomeTopicService {
       recType: topic.recType as HomeTopicType,
       recTypeText: topicTypeText(topic.recType as HomeTopicType),
       issueNo: topic.issueNo,
+      periodStartDate: isoDate(topic.periodStartDate),
+      periodEndDate: isoDate(beijingWeekEnd(topic.periodStartDate)),
       description: topic.description,
       coverImageUrl: this.resolveImageUrl(request, topic.coverImageUrl, topic.updatedAt),
       recipeCount: topic.items.length,
-      publishedAt: toIso(topic.publishedAt),
+      publishedAt: toIso(topic.publishedAt!),
       updatedAt: toIso(topic.updatedAt),
       items: topic.items.map(item =>
         this.toTopicRecipe(item, ownedRecipeMap.get(item.sourceVersionId) ?? null)
@@ -636,12 +915,15 @@ export class HomeTopicService {
       recTypeText: topicTypeText(topic.recType as HomeTopicType),
       status: topic.status as HomeTopicStatus,
       issueNo: topic.issueNo,
+      periodStartDate: isoDate(topic.periodStartDate),
+      periodEndDate: isoDate(beijingWeekEnd(topic.periodStartDate)),
+      scheduledPublishAt: topic.scheduledPublishAt ? toIso(topic.scheduledPublishAt) : null,
       description: topic.description,
       coverImageUrl: topic.coverImageUrl,
       recipeCount: topic.items.length,
-      publishedAt: toIso(topic.publishedAt),
+      publishedAt: topic.publishedAt ? toIso(topic.publishedAt) : null,
       updatedAt: toIso(topic.updatedAt),
-      items: topic.items.map(item => this.toTopicRecipe(item, null)),
+      items: topic.items.map(item => ({ ...this.toTopicRecipe(item, null), publiclyAvailable: this.isPublicTopicItem(item) })),
       version: topic.version
     };
   }
@@ -654,10 +936,12 @@ export class HomeTopicService {
       recType: topic.recType as HomeTopicType,
       recTypeText: topicTypeText(topic.recType as HomeTopicType),
       issueNo: topic.issueNo,
+      periodStartDate: isoDate(topic.periodStartDate),
+      periodEndDate: isoDate(beijingWeekEnd(topic.periodStartDate)),
       description: topic.description,
       coverImageUrl: this.resolveImageUrl(request, topic.coverImageUrl, topic.updatedAt),
       recipeCount: topic._count.items,
-      publishedAt: toIso(topic.publishedAt),
+      publishedAt: toIso(topic.publishedAt!),
       updatedAt: toIso(topic.updatedAt)
     };
   }
@@ -668,6 +952,7 @@ export class HomeTopicService {
     return {
       id: item.recipe.id,
       sourceVersionId: item.sourceVersionId,
+      weekday: item.weekday as HomeTopicWeekday,
       sort: item.sortOrder,
       title: sourceVersion.name,
       coverImageUrl: item.recipe.coverImageUrl,
@@ -678,16 +963,16 @@ export class HomeTopicService {
       difficultyText: recipeDifficultyText((sourceVersion.difficulty ?? null) as RecipeDifficulty | null),
       durationText: recipeDurationText((sourceVersion.duration ?? null) as RecipeDuration | null),
       category: {
-        id: category!.id,
-        name: category!.name,
-        iconKey: category!.iconKey ?? null
+        id: category?.id ?? 0,
+        name: category?.name ?? "菜谱已失效",
+        iconKey: category?.iconKey ?? null
       },
       collectCount: item.recipe.collectCount,
       updatedAt: toIso(sourceVersion.createdAt)
     };
   }
 
-  private toSearchRecipe(recipe: RecipeRow, sort: number): HomeTopicRecipeItem {
+  private toSearchRecipe(recipe: RecipeRow, sort: number): HomeTopicRecipeSearchItem {
     const category = recipe.inspirationCategory;
     return {
       id: recipe.id,
@@ -774,6 +1059,11 @@ export class HomeTopicService {
 
   private raiseTopicWriteError(error: unknown, issueNo: number): never {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      const target = Array.isArray(error.meta?.target) ? error.meta.target.join(",") : String(error.meta?.target ?? "");
+      if (target.includes("period_start_date")) throw new ConflictException("该自然周已存在周刊，请编辑已有期数或调整预约时间");
+      if (target.includes("topic_id") && target.includes("weekday") && target.includes("sort_order")) {
+        throw new ConflictException("同一天的菜单顺序重复，请刷新后重试");
+      }
       throw new ConflictException(`第 ${issueNo} 期已存在，请调整期数后重试`);
     }
     throw error;

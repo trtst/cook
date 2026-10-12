@@ -2,6 +2,7 @@ export type UUID = number;
 export type ResourceId = UUID;
 export type OperationId = string;
 export type IsoDateTime = string;
+export type IsoDate = string;
 export type MealSlot = "BREAKFAST" | "LUNCH" | "AFTERNOON_TEA" | "DINNER" | "LATE_NIGHT";
 
 export interface ApiResponse<T> {
@@ -512,7 +513,8 @@ export type HomeTopicType =
   | "ONE_PERSON"
   | "BREAKFAST"
   | "LIGHT_DINNER";
-export type HomeTopicStatus = "LISTED" | "UNLISTED";
+export type HomeTopicStatus = "DRAFT" | "PUBLISHED" | "UNLISTED";
+export type HomeTopicWeekday = "MONDAY" | "TUESDAY" | "WEDNESDAY" | "THURSDAY" | "FRIDAY" | "SATURDAY" | "SUNDAY";
 
 export interface HomeTopicTypeOption {
   label: string;
@@ -522,6 +524,8 @@ export interface HomeTopicTypeOption {
 export interface HomeTopicRecipeItem {
   id: UUID;
   sourceVersionId: UUID;
+  weekday: HomeTopicWeekday;
+  publiclyAvailable?: boolean;
   sort: number;
   title: string;
   coverImageUrl: string | null;
@@ -536,6 +540,8 @@ export interface HomeTopicRecipeItem {
   updatedAt: IsoDateTime;
 }
 
+export interface HomeTopicRecipeSearchItem extends Omit<HomeTopicRecipeItem, "weekday" | "publiclyAvailable"> {}
+
 export interface HomeTopicHistoryItem {
   id: UUID;
   title: string;
@@ -543,6 +549,8 @@ export interface HomeTopicHistoryItem {
   recType: HomeTopicType;
   recTypeText: string;
   issueNo: number;
+  periodStartDate: IsoDate;
+  periodEndDate: IsoDate;
   description: string;
   coverImageUrl: string | null;
   recipeCount: number;
@@ -559,6 +567,8 @@ export interface HomeTopicDetail {
   issueNo: number;
   description: string;
   coverImageUrl: string | null;
+  periodStartDate: IsoDate;
+  periodEndDate: IsoDate;
   recipeCount: number;
   publishedAt: IsoDateTime;
   updatedAt: IsoDateTime;
@@ -582,10 +592,13 @@ export interface AdminHomeTopicItem {
   recTypeText: string;
   status: HomeTopicStatus;
   issueNo: number;
+  periodStartDate: IsoDate;
+  periodEndDate: IsoDate;
+  scheduledPublishAt: IsoDateTime | null;
   description: string;
   coverImageUrl: string | null;
   recipeCount: number;
-  publishedAt: IsoDateTime;
+  publishedAt: IsoDateTime | null;
   updatedAt: IsoDateTime;
   items: HomeTopicRecipeItem[];
   version: number;
@@ -598,6 +611,8 @@ export interface AdminHomeTopicsResponse {
 
 export interface HomeTopicPickInput {
   recipeId: UUID;
+  weekday: HomeTopicWeekday;
+  sortOrder: number;
   recommendNote: string | null;
 }
 
@@ -619,6 +634,33 @@ export interface SetHomeTopicStatusRequest {
   expectedVersion: number;
 }
 
+export interface SetHomeTopicScheduleRequest {
+  scheduledPublishAt: IsoDateTime | null;
+  expectedVersion: number;
+}
+
+export interface ReplaceHomeTopicItemRequest {
+  replacementRecipeId: UUID;
+  expectedVersion: number;
+}
+
+export interface DismissHomeTopicTodoRequest {
+  expectedVersion: number;
+}
+
+export interface AdminHomeTopicTodoItem {
+  itemId: UUID;
+  topicId: UUID;
+  topicTitle: string;
+  issueNo: number;
+  periodStartDate: IsoDate;
+  topicVersion: number;
+  weekday: HomeTopicWeekday;
+  recipeId: UUID;
+  recipeName: string;
+  sourceVersionId: UUID;
+}
+
 export interface DeleteHomeTopicRequest {
   expectedVersion: number;
 }
@@ -628,7 +670,7 @@ export interface HomeTopicRecipeQuery {
 }
 
 export interface HomeTopicRecipeSearchResponse {
-  items: HomeTopicRecipeItem[];
+  items: HomeTopicRecipeSearchItem[];
 }
 
 export interface UpdateCurrentUserRequest {

@@ -63,6 +63,7 @@ const membershipCodeStatusValues = ["ACTIVE", "REDEEMED", "DISABLED"] as const;
 const dashboardTrendRangeValues = ["7D", "30D"] as const;
 const siteContentTypeValues = ["PAGE", "ARTICLE"] as const;
 const siteContentStatusValues = ["DRAFT", "PUBLISHED", "UNLISTED"] as const;
+const homeTopicWeekdayValues = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"] as const;
 const siteContentArticleChannelCodeValues = ["KITCHEN", "COOK", "FOOD"] as const;
 const authCodeSceneValues = ["LOGIN", "PHONE_CHANGE"] as const;
 const notificationReminderDayValues = [1, 2, 3, 5, 7] as const;
@@ -780,6 +781,16 @@ export class HomeTopicPickDto {
   @Min(1)
   recipeId!: number;
 
+  @ApiProperty({ enum: homeTopicWeekdayValues })
+  @IsIn(homeTopicWeekdayValues)
+  weekday!: (typeof homeTopicWeekdayValues)[number];
+
+  @ApiProperty({ minimum: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  sortOrder!: number;
+
   @ApiProperty({ nullable: true, maxLength: 60 })
   @Transform(({ value }) => trimString(value))
   @IsDefined()
@@ -822,9 +833,9 @@ export class CreateHomeTopicDto extends OperationDto {
   @MaxLength(120)
   description!: string;
 
-  @ApiProperty({ type: [HomeTopicPickDto], minItems: 3 })
+  @ApiProperty({ type: [HomeTopicPickDto], maxItems: 200 })
   @IsArray()
-  @ArrayMinSize(3)
+  @ArrayMaxSize(200)
   @ArrayUnique((item: HomeTopicPickDto) => item.recipeId)
   @ValidateNested({ each: true })
   @Type(() => HomeTopicPickDto)
@@ -840,10 +851,46 @@ export class UpdateHomeTopicDto extends CreateHomeTopicDto {
 }
 
 export class SetHomeTopicStatusDto extends OperationDto {
-  @ApiProperty({ enum: ["LISTED", "UNLISTED"] })
-  @IsIn(["LISTED", "UNLISTED"])
-  status!: "LISTED" | "UNLISTED";
+  @ApiProperty({ enum: ["DRAFT", "PUBLISHED", "UNLISTED"] })
+  @IsIn(["DRAFT", "PUBLISHED", "UNLISTED"])
+  status!: "DRAFT" | "PUBLISHED" | "UNLISTED";
 
+  @ApiProperty({ minimum: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  expectedVersion!: number;
+}
+
+export class SetHomeTopicScheduleDto extends OperationDto {
+  @ApiProperty({ type: String, nullable: true, format: "date-time" })
+  @IsDefined()
+  @ValidateIf((_object, value) => value !== null)
+  @IsISO8601({ strict: true })
+  scheduledPublishAt!: string | null;
+
+  @ApiProperty({ minimum: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  expectedVersion!: number;
+}
+
+export class ReplaceHomeTopicItemDto extends OperationDto {
+  @ApiProperty({ minimum: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  replacementRecipeId!: number;
+
+  @ApiProperty({ minimum: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  expectedVersion!: number;
+}
+
+export class DismissHomeTopicTodoDto extends OperationDto {
   @ApiProperty({ minimum: 1 })
   @Type(() => Number)
   @IsInt()

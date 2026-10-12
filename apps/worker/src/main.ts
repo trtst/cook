@@ -63,6 +63,10 @@ function articlePublishEnabled() {
   return TRUE_VALUES.has((process.env.ARTICLE_SCHEDULED_PUBLISH_WORKER_ENABLED ?? "").toLowerCase());
 }
 
+function homeTopicPublishEnabled() {
+  return TRUE_VALUES.has((process.env.HOME_TOPIC_SCHEDULED_PUBLISH_WORKER_ENABLED ?? "").toLowerCase());
+}
+
 function mealReferenceTime(planDate: Date | string, mealSlot: string) {
   const dateText = typeof planDate === "string" ? planDate.slice(0, 10) : planDate.toISOString().slice(0, 10);
   const times: Record<string, string> = {
@@ -387,10 +391,78 @@ async function runScheduledArticlePublishWorker(pool: Pool, isStopping: () => bo
   }
 }
 
+async function publishScheduledHomeTopics(pool: Pool) {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const due = await client.query<{ id: number; title: string; issue_no: number; scheduled_publish_at: Date; version: number }>(
+      `SELECT id, title, issue_no, scheduled_publish_at, version
+         FROM home_topics
+        WHERE status = 'DRAFT' AND scheduled_publish_at IS NOT NULL AND scheduled_publish_at <= NOW()
+        ORDER BY scheduled_publish_at, id
+        LIMIT 20 FOR UPDATE SKIP LOCKED`
+    );
+
+    for (const topic of due.rows) {
+      const ready = await client.query<{ weekday_count: number }>(
+        `SELECT COUNT(DISTINCT item.weekday)::int AS weekday_count
+           FROM home_topic_items item
+           JOIN recipes recipe ON recipe.id = item.recipe_id
+          WHERE item.topic_id = $1 AND recipe.is_inspiration = TRUE
+            AND recipe.inspiration_category_id IS NOT NULL AND recipe.status = 'ACTIVE'`,
+        [topic.id]
+      );
+      const publishable = ready.rows[0]?.weekday_count === 7;
+      const updated = await client.query(
+        `UPDATE home_topics
+            SET status = CASE WHEN $2 THEN 'PUBLISHED'::"HomeTopicStatus" ELSE 'DRAFT'::"HomeTopicStatus" END,
+                published_at = CASE WHEN $2 THEN scheduled_publish_at ELSE published_at END,
+                scheduled_publish_at = NULL, version = version + 1, updated_at = NOW()
+          WHERE id = $1 AND status = 'DRAFT' AND scheduled_publish_at IS NOT NULL AND scheduled_publish_at <= NOW()`,
+        [topic.id, publishable]
+      );
+      if (updated.rowCount !== 1) continue;
+      await client.query(
+        `INSERT INTO audit_events (actor_type, action, object_type, object_id, payload)
+         VALUES ('SYSTEM', $2, 'HOME_TOPIC', $1, $3::jsonb)`,
+        [topic.id, publishable ? "HOME_TOPIC_AUTO_PUBLISHED" : "HOME_TOPIC_SCHEDULE_FAILED", JSON.stringify({
+          title: topic.title,
+          issueNo: topic.issue_no,
+          scheduledPublishAt: topic.scheduled_publish_at.toISOString(),
+          reason: publishable ? null : "weekly_menu_no_longer_publishable"
+        })]
+      );
+      console.info(`[worker] scheduled home topic ${topic.id} ${publishable ? "published" : "schedule cleared: incomplete public menu"}.`);
+    }
+    await client.query("COMMIT");
+    return due.rows.length;
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function runScheduledHomeTopicPublishWorker(pool: Pool, isStopping: () => boolean) {
+  console.info("[worker] scheduled shared weekly topic publisher started.");
+  while (!isStopping()) {
+    try {
+      const count = await publishScheduledHomeTopics(pool);
+      if (count === 0) await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "unknown error";
+      console.error(`[worker] scheduled home topic iteration failed: ${message}`);
+      await new Promise(resolve => setTimeout(resolve, ERROR_RETRY_INTERVAL_MS));
+    }
+  }
+}
+
 async function runWorker() {
   const config = readConfig();
   const scheduledArticlesEnabled = articlePublishEnabled();
-  if (!config.enabled && !scheduledArticlesEnabled) {
+  const scheduledHomeTopicsEnabled = homeTopicPublishEnabled();
+  if (!config.enabled && !scheduledArticlesEnabled && !scheduledHomeTopicsEnabled) {
     console.info(`[worker] disabled in ${config.env}; no async jobs were started.`);
     return;
   }
@@ -409,6 +481,7 @@ async function runWorker() {
     const workers: Promise<void>[] = [];
     if (config.enabled) workers.push(runMealReminderWorker(pool, appId, () => stopping));
     if (scheduledArticlesEnabled) workers.push(runScheduledArticlePublishWorker(pool, () => stopping));
+    if (scheduledHomeTopicsEnabled) workers.push(runScheduledHomeTopicPublishWorker(pool, () => stopping));
     await Promise.all(workers);
   } finally {
     await pool.end();

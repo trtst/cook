@@ -6,7 +6,7 @@ test("home topic history returns a bounded summary page before the current issue
   const calls: { findMany?: unknown; count?: unknown } = {};
   const prisma = {
     homeTopic: {
-      findFirst: async () => ({ issueNo: 12 }),
+      findFirst: async () => ({ periodStartDate: new Date("2026-10-12T00:00:00.000Z") }),
       findMany: async (args: unknown) => {
         calls.findMany = args;
         return [{
@@ -15,6 +15,7 @@ test("home topic history returns a bounded summary page before the current issue
           subTitle: null,
           recType: "HOME_STYLE",
           issueNo: 8,
+          periodStartDate: new Date("2026-09-28T00:00:00.000Z"),
           description: "本期寄语",
           coverImageUrl: null,
           publishedAt: new Date("2026-10-01T00:00:00.000Z"),
@@ -33,24 +34,25 @@ test("home topic history returns a bounded summary page before the current issue
   const result = await service.listTopicHistory({ protocol: "https" }, 2, 150);
 
   assert.deepEqual(calls.findMany, {
-    where: { status: "LISTED", issueNo: { lt: 12 } },
+    where: { status: "PUBLISHED", periodStartDate: { lt: new Date("2026-10-12T00:00:00.000Z") } },
     select: {
       id: true,
       title: true,
       subTitle: true,
       recType: true,
       issueNo: true,
+      periodStartDate: true,
       description: true,
       coverImageUrl: true,
       publishedAt: true,
       updatedAt: true,
       _count: { select: { items: { where: { recipe: { isInspiration: true, inspirationCategoryId: { not: null }, status: "ACTIVE" } } } } }
     },
-    orderBy: [{ issueNo: "desc" }],
+    orderBy: [{ periodStartDate: "desc" }, { issueNo: "desc" }],
     skip: 100,
     take: 100
   });
-  assert.deepEqual(calls.count, { where: { status: "LISTED", issueNo: { lt: 12 } } });
+  assert.deepEqual(calls.count, { where: { status: "PUBLISHED", periodStartDate: { lt: new Date("2026-10-12T00:00:00.000Z") } } });
   assert.deepEqual(result, {
     items: [{
       id: 8,
@@ -59,6 +61,8 @@ test("home topic history returns a bounded summary page before the current issue
       recType: "HOME_STYLE",
       recTypeText: "家常下饭",
       issueNo: 8,
+      periodStartDate: "2026-09-28",
+      periodEndDate: "2026-10-04",
       description: "本期寄语",
       coverImageUrl: null,
       recipeCount: 3,
@@ -105,6 +109,7 @@ test("home topic detail keeps only five lightweight history previews", async () 
         subTitle: null,
         recType: "HOME_STYLE",
         issueNo: 12,
+        periodStartDate: new Date("2026-10-12T00:00:00.000Z"),
         description: "本期寄语",
         coverImageUrl: null,
         publishedAt: new Date("2026-10-10T00:00:00.000Z"),
@@ -126,20 +131,21 @@ test("home topic detail keeps only five lightweight history previews", async () 
   assert.equal(result.topic?.id, 12);
   assert.equal(historyQueries.length, 1);
   assert.deepEqual(historyQueries[0], {
-    where: { status: "LISTED", issueNo: { lt: 12 } },
+    where: { status: "PUBLISHED", periodStartDate: { lt: new Date("2026-10-12T00:00:00.000Z") } },
     select: {
       id: true,
       title: true,
       subTitle: true,
       recType: true,
       issueNo: true,
+      periodStartDate: true,
       description: true,
       coverImageUrl: true,
       publishedAt: true,
       updatedAt: true,
       _count: { select: { items: { where: { recipe: { isInspiration: true, inspirationCategoryId: { not: null }, status: "ACTIVE" } } } } }
     },
-    orderBy: [{ issueNo: "desc" }],
+    orderBy: [{ periodStartDate: "desc" }, { issueNo: "desc" }],
     skip: 0,
     take: 5
   });

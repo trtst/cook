@@ -108,6 +108,8 @@ async function createTopic(
         description: input.description,
         items: input.recipeIds.map((recipeId, index) => ({
           recipeId,
+          weekday: ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"][index],
+          sortOrder: 1,
           recommendNote: `第 ${index + 1} 道推荐`
         }))
       })
@@ -116,7 +118,7 @@ async function createTopic(
   );
 }
 
-async function setTopicStatus(adminHeaders: Record<string, string>, topic: AdminHomeTopicItem, status: "LISTED" | "UNLISTED") {
+async function setTopicStatus(adminHeaders: Record<string, string>, topic: AdminHomeTopicItem, status: "DRAFT" | "PUBLISHED" | "UNLISTED") {
   return requestData<AdminHomeTopicItem>(
     `/admin/home-topics/${topic.id}/status`,
     {
@@ -146,46 +148,38 @@ async function main() {
     authorization: `Bearer ${adminToken}`
   };
 
+  const existingCurrent = await requestData<HomeTopicCurrentResponse>("/home-topics/current");
+  if (existingCurrent.topic) {
+    const detail = await requestData<HomeTopicDetailResponse>(`/home-topics/${existingCurrent.topic.id}`);
+    assert(detail.topic.id === existingCurrent.topic.id, "current topic detail id mismatch");
+    assert(detail.topic.items.length > 0, "current topic should expose at least one publicly available recipe");
+    console.log(JSON.stringify({ apiBaseUrl, currentTopicId: detail.topic.id, currentTitle: detail.topic.title, recipeTitles: detail.topic.items.map(item => item.title), historyTitles: existingCurrent.topic.history.map(item => item.title), readOnly: true }, null, 2));
+    return;
+  }
+
   const existing = await listTopics(adminHeaders);
   const recipes = await searchRecipes(adminHeaders);
-  assert(recipes.items.length >= 3, "home weekly topics need at least 3 inspiration recipe fixtures");
+  assert(recipes.items.length >= 7, "home weekly topics need at least 7 inspiration recipe fixtures");
 
   const issueBase = Math.max(0, ...existing.topics.map(item => item.issueNo)) + 1;
   const suffix = nextIdempotencyKey().slice(-6);
-  const previousTitle = `本周灵感验收往期-${suffix}`;
   const currentTitle = `本周灵感验收当前-${suffix}`;
-
-  const previousResult = await createTopic(adminHeaders, {
-    title: previousTitle,
-    subTitle: "用于验证往期专题链路",
-    issueNo: issueBase,
-    description: "先创建一条往期专题，用于验证 history 返回。",
-    recipeIds: recipes.items.slice(0, 3).map(item => item.id)
-  });
-  const previousTopic = findTopic(previousResult.topics, previousTitle);
-  const listedPrevious = await setTopicStatus(adminHeaders, previousTopic, "LISTED");
-
-  await new Promise(resolve => setTimeout(resolve, 20));
 
   const currentResult = await createTopic(adminHeaders, {
     title: currentTitle,
     subTitle: "用于验证当前专题与首页入口",
-    issueNo: issueBase + 1,
-    description: "当前专题应返回本期推荐，并能通过首页入口进入专题页。",
-    recipeIds: recipes.items.slice(0, 3).map(item => item.id)
+    issueNo: issueBase,
+    description: "当前专题应返回七日菜单，并能通过首页入口进入专题页。",
+    recipeIds: recipes.items.slice(0, 7).map(item => item.id)
   });
   const currentTopic = findTopic(currentResult.topics, currentTitle);
-  const listedCurrent = await setTopicStatus(adminHeaders, currentTopic, "LISTED");
+  const listedCurrent = await setTopicStatus(adminHeaders, currentTopic, "PUBLISHED");
 
   const current = await requestData<HomeTopicCurrentResponse>("/home-topics/current");
   assert(current.topic, "current home topic should exist after listing");
   assert(current.topic.id === listedCurrent.id, `current topic should be ${listedCurrent.id}, got ${current.topic.id}`);
   assert(current.topic.title === currentTitle, `current topic title mismatch: ${current.topic.title}`);
-  assert(current.topic.items.length >= 3, "current topic should expose at least 3 recipe items");
-  assert(
-    current.topic.history.some(item => item.id === listedPrevious.id && item.title === previousTitle),
-    "current topic history should include the previously listed topic"
-  );
+  assert(new Set(current.topic.items.map(item => item.weekday)).size === 7, "current topic should expose a recipe for every weekday");
 
   const detail = await requestData<HomeTopicDetailResponse>(`/home-topics/${listedCurrent.id}`);
   assert(detail.topic.id === listedCurrent.id, "topic detail id mismatch");
@@ -198,8 +192,6 @@ async function main() {
         apiBaseUrl,
         listedCurrentTopicId: listedCurrent.id,
         listedCurrentTitle: currentTitle,
-        listedPreviousTopicId: listedPrevious.id,
-        listedPreviousTitle: previousTitle,
         recipeTitles: detail.topic.items.map(item => item.title),
         historyTitles: current.topic.history.map(item => item.title),
         homeEntryTarget: weeklyEntry.targetValue
