@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
-import { Delete, Plus } from "@element-plus/icons-vue";
+import { Delete, Plus, Refresh, Upload } from "@element-plus/icons-vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { useRouter } from "vue-router";
-import { homeTopicsApi, type AdminHomeTopicItem, type AdminHomeTopicsResponse, type HomeTopicStatus, type HomeTopicTodosResponse, type HomeTopicRecipeItem } from "@/apis/home-topics";
+import { homeTopicsApi, type AdminHomeTopicItem, type AdminHomeTopicsResponse, type HomeTopicStatus, type HomeTopicTodosResponse, type HomeTopicRecipeItem, type HomeTopicRecipeStatsSnapshot, type HomeTopicBatchImportInput, type HomeTopicBatchPreviewResponse, type HomeTopicBatchImportResponse } from "@/apis/home-topics";
 import { adminAppConfig } from "@/apis/config";
 import { useAdminHeaderRefresh } from "@/composables/useAdminHeader";
 import { formatDateTime } from "@/utils/date";
@@ -23,9 +23,19 @@ const todoCandidates = ref<HomeTopicRecipeItem[]>([]);
 const todoSearch = ref("");
 const todoTarget = ref<HomeTopicTodosResponse["items"][number] | null>(null);
 const todoBusyId = ref<number | null>(null);
+const stats = ref<HomeTopicRecipeStatsSnapshot | null>(null);
+const statsBusy = ref(false);
+const importDialogOpen = ref(false);
+const importJson = ref("");
+const previewSource = ref("");
+const importBusy = ref(false);
+const importBatch = ref<HomeTopicBatchImportInput | null>(null);
+const importPreview = ref<HomeTopicBatchPreviewResponse | null>(null);
+const importResult = ref<HomeTopicBatchImportResponse | null>(null);
 const router = useRouter();
 const apiOrigin = resolveApiOrigin();
 const hasTopics = computed(() => topics.value.length > 0);
+const importableCount = computed(() => previewSource.value === importJson.value ? importPreview.value?.issues.filter(item => item.valid).length ?? 0 : 0);
 
 useAdminHeaderRefresh(() => {
   void loadPage();
@@ -152,15 +162,80 @@ async function cancelSchedule(item: AdminHomeTopicItem) {
 async function loadPage() {
   loading.value = true;
   try {
-    const [result, todoResult] = await Promise.all([homeTopicsApi.getTopics(), homeTopicsApi.getTodos()]);
+    const [result, todoResult, statsResult] = await Promise.all([homeTopicsApi.getTopics(), homeTopicsApi.getTodos(), homeTopicsApi.getRecipeStats()]);
     assignResponse(result);
     todos.value = todoResult.items;
     todoTotal.value = todoResult.total;
+    stats.value = statsResult.snapshot;
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : "加载本周灵感失败");
   } finally {
     loading.value = false;
   }
+}
+
+async function rebuildStats() {
+  if (statsBusy.value) return;
+  statsBusy.value = true;
+  try {
+    const result = await homeTopicsApi.rebuildRecipeStats(createOperationId());
+    stats.value = result.snapshot;
+    ElMessage.success(`统计已更新，共 ${result.snapshot.eligibleRecipeCount} 道可用菜谱`);
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : "重新统计失败，原统计仍保留");
+  } finally {
+    statsBusy.value = false;
+  }
+}
+
+function openBatchImport() {
+  importJson.value = "";
+  previewSource.value = "";
+  importBatch.value = null;
+  importPreview.value = null;
+  importResult.value = null;
+  importDialogOpen.value = true;
+}
+
+async function previewBatchImport() {
+  const source = importJson.value;
+  importResult.value = null;
+  importBatch.value = null;
+  importPreview.value = null;
+  try {
+    const parsed = JSON.parse(source) as HomeTopicBatchImportInput;
+    const result = await homeTopicsApi.previewBatchImport(parsed);
+    importBatch.value = parsed;
+    importPreview.value = result;
+    previewSource.value = source;
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : "JSON 格式或周刊数据不正确");
+  }
+}
+
+async function commitBatchImport() {
+  const batch = importBatch.value;
+  if (!batch || !importPreview.value || previewSource.value !== importJson.value || importableCount.value < 1 || importBusy.value) return;
+  importBusy.value = true;
+  try {
+    const result = await homeTopicsApi.importBatch(batch, createOperationId());
+    importResult.value = result;
+    const imported = result.issues.filter(item => item.status === "IMPORTED").length;
+    ElMessage.success(`已导入 ${imported} 期草稿`);
+    await loadPage();
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : "导入周刊失败");
+  } finally {
+    importBusy.value = false;
+  }
+}
+
+function formatFacetRows(rows: HomeTopicRecipeStatsSnapshot["facets"]["allIngredients"]) {
+  return rows.slice(0, 12).map(item => `${item.value} ${item.count}`).join("、");
+}
+
+function batchIssue(issueIndex: number) {
+  return importBatch.value?.issues[issueIndex - 1] ?? null;
 }
 
 async function searchTodoReplacement(todo: HomeTopicTodosResponse["items"][number]) {
@@ -294,8 +369,75 @@ onMounted(() => {
           <h3>本周灵感</h3>
           <p class="section-panel__hint">专题列表和创建/编辑页已经拆开。这里先看列表，再进入独立编辑页。</p>
         </div>
-        <el-button type="primary" :icon="Plus" @click="openCreate">新建专题</el-button>
+        <div class="section-panel__actions">
+          <el-button :icon="Upload" @click="openBatchImport">导入 JSON</el-button>
+          <el-button type="primary" :icon="Plus" @click="openCreate">新建专题</el-button>
+        </div>
       </div>
+
+      <section class="surface-panel stats-panel">
+        <div class="todo-panel__head">
+          <div><h4>共享菜谱统计</h4><p>供运营和 Codex 选题参考；只统计当前可公开的系统灵感菜谱。</p></div>
+          <el-button :icon="Refresh" :loading="statsBusy" @click="rebuildStats">重新统计</el-button>
+        </div>
+        <div v-if="stats" class="stats-summary">
+          <strong>{{ stats.eligibleRecipeCount }} 道可用菜谱</strong>
+          <span>快照 {{ stats.snapshotId }}</span>
+          <span>生成于 {{ formatDateTime(stats.generatedAt) }}</span>
+        </div>
+        <el-empty v-else description="尚无统计快照，请先重新统计" :image-size="48" />
+        <div v-if="stats" class="stats-facets">
+          <p><strong>主要食材</strong>{{ formatFacetRows(stats.facets.primaryIngredients) || "暂无确认数据" }} · 覆盖 {{ stats.coverage.primaryIngredients }} 道</p>
+          <p><strong>全部食材</strong>{{ formatFacetRows(stats.facets.allIngredients) || "暂无数据" }} · 覆盖 {{ stats.coverage.ingredients }} 道</p>
+          <p><strong>菜系</strong>{{ formatFacetRows(stats.facets.cuisines) || "暂无确认数据" }} · 覆盖 {{ stats.coverage.cuisines }} 道</p>
+          <p><strong>菜式/做法</strong>{{ formatFacetRows(stats.facets.dishStyles) || "暂无确认数据" }} · 覆盖 {{ stats.coverage.dishStyles }} 道</p>
+          <p><strong>菜品角色</strong>{{ formatFacetRows(stats.facets.dishRoles) || "暂无确认数据" }} · 蛋白 {{ formatFacetRows(stats.facets.proteins) || "暂无确认数据" }}</p>
+          <p><strong>难度/时长</strong>{{ formatFacetRows(stats.facets.difficulties) || "暂无数据" }} · {{ formatFacetRows(stats.facets.durations) || "暂无数据" }}</p>
+        </div>
+      </section>
+
+      <el-dialog v-model="importDialogOpen" title="导入共享周刊 JSON" width="820px" destroy-on-close>
+        <p class="import-help">粘贴 Codex 生成的 schemaVersion 1 JSON。预览会检查统计快照、日期、每日菜单、菜谱当前公开状态和固定版本；导入仅创建草稿，不会预约或上架。</p>
+        <el-input v-model="importJson" type="textarea" :rows="14" placeholder="粘贴完整 JSON 批次" spellcheck="false" />
+        <div class="import-actions">
+          <el-button :disabled="!importJson.trim() || importBusy" @click="previewBatchImport">校验并预览</el-button>
+          <span v-if="importPreview">可导入 {{ importableCount }} / {{ importPreview.issues.length }} 期</span>
+        </div>
+        <el-table v-if="importPreview" :data="importPreview.issues" size="small" class="import-preview-table">
+          <el-table-column type="expand">
+            <template #default="scope">
+              <div v-if="batchIssue(scope.row.issueIndex)" class="import-issue-detail">
+                <p><strong>主题理由：</strong>{{ batchIssue(scope.row.issueIndex)?.themeRationale }}</p>
+                <p><strong>计划发布时间：</strong>{{ formatDateTime(scope.row.plannedPublishAt) }}（上海时间）</p>
+                <div v-for="day in batchIssue(scope.row.issueIndex)?.days" :key="day.weekday" class="import-day-detail">
+                  <strong>{{ weekdayLabel(day.weekday) }}</strong>
+                  <span v-for="item in day.items" :key="`${item.recipeId}-${item.sortOrder}`">菜谱 {{ item.recipeId }}：{{ item.recommendNote || "无推荐理由" }}</span>
+                </div>
+              </div>
+            </template>
+          </el-table-column>
+          <el-table-column prop="issueIndex" label="#" width="55" />
+          <el-table-column prop="title" label="标题" min-width="150" />
+          <el-table-column prop="themeRationale" label="主题理由" min-width="220" show-overflow-tooltip />
+          <el-table-column label="周期" min-width="180">
+            <template #default="scope">{{ scope.row.periodStartDate }} ～ {{ scope.row.periodEndDate }}</template>
+          </el-table-column>
+          <el-table-column label="菜数" prop="recipeCount" width="70" />
+          <el-table-column label="校验" width="90">
+            <template #default="scope"><el-tag :type="scope.row.valid ? 'success' : 'danger'">{{ scope.row.valid ? "可导入" : "有问题" }}</el-tag></template>
+          </el-table-column>
+          <el-table-column label="问题" min-width="240">
+            <template #default="scope">{{ scope.row.errors.join("；") || "—" }}</template>
+          </el-table-column>
+        </el-table>
+        <el-alert v-if="importResult" class="import-result" type="info" :closable="false" title="导入结果">
+          <p v-for="item in importResult.issues" :key="item.issueIndex">第 {{ item.issueIndex }} 期：{{ item.status === "IMPORTED" ? `已创建草稿（${item.topic?.periodStartDate}，ID ${item.topic?.id}）` : item.errors.join("；") }}</p>
+        </el-alert>
+        <template #footer>
+          <el-button @click="importDialogOpen = false">关闭</el-button>
+          <el-button type="primary" :disabled="importableCount < 1" :loading="importBusy" @click="commitBatchImport">导入 {{ importableCount }} 期为草稿</el-button>
+        </template>
+      </el-dialog>
 
       <section class="surface-panel todo-panel">
         <div class="todo-panel__head"><div><h4>失效菜谱待办</h4><p>忽略后会保留操作者与菜谱项记录。</p></div><strong>{{ todoTotal }}</strong></div>
@@ -410,6 +552,12 @@ onMounted(() => {
   gap: 20px;
 }
 
+.section-panel__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .section-panel__header {
   display: flex;
   align-items: flex-start;
@@ -437,6 +585,95 @@ onMounted(() => {
   border: 1px solid #eef2f7;
   border-radius: 24px;
   background: linear-gradient(180deg, #ffffff, #fbfdff);
+}
+
+.stats-panel {
+  gap: 12px;
+}
+
+.stats-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 18px;
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.stats-summary strong {
+  color: #1f2937;
+  font-size: 16px;
+}
+
+.stats-facets {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 20px;
+}
+
+.stats-facets p {
+  margin: 0;
+  color: #6b7280;
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.stats-facets strong {
+  display: block;
+  margin-bottom: 2px;
+  color: #374151;
+}
+
+.import-help {
+  margin: 0 0 12px;
+  color: #6b7280;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.import-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.import-preview-table {
+  margin-top: 14px;
+}
+
+.import-issue-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 12px 12px;
+  color: #4b5563;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.import-issue-detail p {
+  margin: 0;
+}
+
+.import-day-detail {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  gap: 8px;
+}
+
+.import-day-detail span {
+  color: #6b7280;
+}
+
+.import-result {
+  margin-top: 14px;
+}
+
+.import-result p {
+  margin: 4px 0;
 }
 
 .topic-list {
@@ -545,6 +782,10 @@ onMounted(() => {
   .topic-row {
     grid-template-columns: minmax(0, 1fr);
     display: grid;
+  }
+
+  .stats-facets {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .topic-row__cover {

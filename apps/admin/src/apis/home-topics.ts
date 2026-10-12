@@ -38,6 +38,8 @@ export interface HomeTopicRecipeItem {
   };
   collectCount: number;
   updatedAt: string;
+  ingredients?: string[];
+  tags?: Array<{ code: string; value: string }>;
 }
 
 export interface AdminHomeTopicItem {
@@ -67,6 +69,97 @@ export interface AdminHomeTopicsResponse {
 
 export interface HomeTopicRecipeSearchResponse {
   items: HomeTopicRecipeItem[];
+  page: number;
+  pageSize: number;
+  total: number;
+  hasNext: boolean;
+}
+
+export interface HomeTopicRecipeStatsFacet { value: string; count: number }
+
+export interface HomeTopicRecipeStatsSnapshot {
+  snapshotId: string;
+  generatedAt: string;
+  eligibleRecipeCount: number;
+  coverage: {
+    ingredients: number;
+    primaryIngredients: number;
+    cuisines: number;
+    dishStyles: number;
+    dishRoles: number;
+    proteins: number;
+    difficulties: number;
+    durations: number;
+  };
+  facets: {
+    allIngredients: HomeTopicRecipeStatsFacet[];
+    primaryIngredients: HomeTopicRecipeStatsFacet[];
+    cuisines: HomeTopicRecipeStatsFacet[];
+    dishStyles: HomeTopicRecipeStatsFacet[];
+    dishRoles: HomeTopicRecipeStatsFacet[];
+    proteins: HomeTopicRecipeStatsFacet[];
+    difficulties: HomeTopicRecipeStatsFacet[];
+    durations: HomeTopicRecipeStatsFacet[];
+  };
+}
+
+export interface HomeTopicRecipeStatsResponse { snapshot: HomeTopicRecipeStatsSnapshot | null }
+
+export interface HomeTopicBatchPreviewIssue {
+  issueIndex: number;
+  periodStartDate: string;
+  periodEndDate: string;
+  plannedPublishAt: string;
+  title: string;
+  themeRationale: string;
+  recipeCount: number;
+  valid: boolean;
+  errors: string[];
+  conflictingTopicId: number | null;
+}
+
+export interface HomeTopicBatchPreviewResponse {
+  statsSnapshotId: string;
+  currentSnapshotId: string | null;
+  valid: boolean;
+  issues: HomeTopicBatchPreviewIssue[];
+}
+
+export interface HomeTopicBatchImportResponse {
+  issues: Array<{
+    issueIndex: number;
+    status: "IMPORTED" | "REJECTED";
+    topic: AdminHomeTopicItem | null;
+    errors: string[];
+  }>;
+}
+
+export interface HomeTopicRecipeSearchQuery {
+  keyword?: string;
+  ingredient?: string;
+  cuisine?: string;
+  dishStyle?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface HomeTopicBatchImportInput {
+  schemaVersion: 1;
+  statsSnapshotId: string;
+  generatedAt: string;
+  issues: Array<{
+    periodStartDate: string;
+    plannedPublishAt: string;
+    title: string;
+    subTitle: string | null;
+    recType: HomeTopicType;
+    description: string;
+    themeRationale: string;
+    days: Array<{
+      weekday: HomeTopicWeekday;
+      items: Array<{ recipeId: number; sourceVersionId: number; sortOrder: number; recommendNote: string | null }>;
+    }>;
+  }>;
 }
 
 export interface HomeTopicPickInput {
@@ -115,10 +208,26 @@ export const homeTopicsApi = {
   getTopics() {
     return requestData<AdminHomeTopicsResponse>("/admin/home-topics");
   },
-  searchRecipes(keyword?: string) {
-    return requestData<HomeTopicRecipeSearchResponse>("/admin/home-topics/recipes", {
-      query: keyword ? { keyword } : undefined
+  getRecipeStats() {
+    return requestData<HomeTopicRecipeStatsResponse>("/admin/home-topics/statistics");
+  },
+  rebuildRecipeStats(operationId: OperationId) {
+    return requestData<{ snapshot: HomeTopicRecipeStatsSnapshot }>("/admin/home-topics/statistics/rebuild", {
+      method: "POST",
+      idempotencyKey: operationId
     });
+  },
+  searchRecipes(query?: string | HomeTopicRecipeSearchQuery) {
+    const searchQuery = typeof query === "string" ? { keyword: query } : query;
+    return requestData<HomeTopicRecipeSearchResponse>("/admin/home-topics/recipes", {
+      query: searchQuery ? { page: 1, pageSize: 20, ...searchQuery } : { page: 1, pageSize: 20 }
+    });
+  },
+  previewBatchImport(body: HomeTopicBatchImportInput) {
+    return requestData<HomeTopicBatchPreviewResponse>("/admin/home-topics/import/preview", { method: "POST", body });
+  },
+  importBatch(body: HomeTopicBatchImportInput, operationId: OperationId) {
+    return requestData<HomeTopicBatchImportResponse>("/admin/home-topics/import", { method: "POST", body, idempotencyKey: operationId });
   },
   createTopic(body: CreateHomeTopicRequest, operationId: OperationId) {
     return requestData<AdminHomeTopicsResponse>("/admin/home-topics", {
