@@ -11,6 +11,10 @@ import { createOperationId } from "@/utils/operation-id";
 
 const loading = ref(true);
 const statusBusyId = ref<number | null>(null);
+const scheduleBusyId = ref<number | null>(null);
+const scheduleDialogOpen = ref(false);
+const scheduleInput = ref("");
+const scheduleTarget = ref<AdminHomeTopicItem | null>(null);
 const deleteBusyId = ref<number | null>(null);
 const topics = ref<AdminHomeTopicItem[]>([]);
 const todos = ref<HomeTopicTodosResponse["items"]>([]);
@@ -75,6 +79,74 @@ function topicStatusText(status: HomeTopicStatus) {
 
 function topicActionText(status: HomeTopicStatus) {
   return status === "DRAFT" ? "发布" : status === "PUBLISHED" ? "下架" : "转为草稿";
+}
+
+function toShanghaiDateInput(value: string) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23"
+  }).formatToParts(new Date(value));
+  const field = (name: string) => parts.find(part => part.type === name)?.value ?? "";
+  return `${field("year")}-${field("month")}-${field("day")} ${field("hour")}:${field("minute")}:${field("second")}`;
+}
+
+function openSchedule(item: AdminHomeTopicItem) {
+  scheduleTarget.value = item;
+  scheduleInput.value = toShanghaiDateInput(item.scheduledPublishAt ?? new Date(Date.now() + 60 * 60 * 1000).toISOString());
+  scheduleDialogOpen.value = true;
+}
+
+async function saveSchedule() {
+  const item = scheduleTarget.value;
+  if (!item || !scheduleInput.value || new Date(`${scheduleInput.value.replace(" ", "T")}+08:00`).getTime() <= Date.now()) {
+    ElMessage.warning("请选择晚于当前时间的发布时间");
+    return;
+  }
+  scheduleBusyId.value = item.id;
+  try {
+    const result = await homeTopicsApi.setTopicSchedule(item.id, {
+      scheduledPublishAt: new Date(`${scheduleInput.value.replace(" ", "T")}+08:00`).toISOString(),
+      expectedVersion: item.version
+    }, createOperationId());
+    patchTopic(result);
+    scheduleDialogOpen.value = false;
+    ElMessage.success("已预约定时发布");
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : "预约定时发布失败");
+  } finally {
+    scheduleBusyId.value = null;
+  }
+}
+
+async function cancelSchedule(item: AdminHomeTopicItem) {
+  try {
+    await ElMessageBox.confirm(`取消“${item.title}”的定时发布？`, "取消预约", {
+      confirmButtonText: "确认取消",
+      cancelButtonText: "返回",
+      type: "warning"
+    });
+  } catch {
+    return;
+  }
+  scheduleBusyId.value = item.id;
+  try {
+    const result = await homeTopicsApi.setTopicSchedule(item.id, {
+      scheduledPublishAt: null,
+      expectedVersion: item.version
+    }, createOperationId());
+    patchTopic(result);
+    ElMessage.success("已取消定时发布");
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : "取消预约失败");
+  } finally {
+    scheduleBusyId.value = null;
+  }
 }
 
 async function loadPage() {
@@ -278,6 +350,20 @@ onMounted(() => {
               {{ topicActionText(item.status) }}
             </el-button>
             <el-button
+              v-if="item.status === 'DRAFT' && !item.scheduledPublishAt"
+              type="primary"
+              plain
+              :loading="scheduleBusyId === item.id"
+              @click="openSchedule(item)"
+            >定时发布</el-button>
+            <el-button
+              v-if="item.status === 'DRAFT' && item.scheduledPublishAt"
+              type="warning"
+              plain
+              :loading="scheduleBusyId === item.id"
+              @click="cancelSchedule(item)"
+            >取消预约</el-button>
+            <el-button
               plain
               type="danger"
               :icon="Delete"
@@ -296,6 +382,23 @@ onMounted(() => {
         <p>先新建一篇，再决定什么时候上架到前台。</p>
         <el-button type="primary" :icon="Plus" @click="openCreate">去新建</el-button>
       </section>
+
+      <el-dialog v-model="scheduleDialogOpen" title="定时发布" width="420px">
+        <p class="schedule-help">专题将在所选北京时间自动发布。</p>
+        <el-date-picker
+          v-model="scheduleInput"
+          :disabled="scheduleBusyId !== null"
+          type="datetime"
+          value-format="YYYY-MM-DD HH:mm:ss"
+          format="YYYY-MM-DD HH:mm:ss"
+          placeholder="选择发布时间"
+          style="width: 100%"
+        />
+        <template #footer>
+          <el-button :disabled="scheduleBusyId !== null" @click="scheduleDialogOpen = false">取消</el-button>
+          <el-button type="primary" :loading="scheduleBusyId !== null" @click="saveSchedule">确认预约</el-button>
+        </template>
+      </el-dialog>
     </section>
   </section>
 </template>

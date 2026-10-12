@@ -43,6 +43,7 @@ const searchReady = ref(false);
 const statusBusy = ref(false);
 const selectedWeekday = ref<HomeTopicWeekday>("MONDAY");
 const scheduleInput = ref("");
+const scheduleDialogOpen = ref(false);
 const previewVisible = ref(false);
 const previewRecipeId = ref<number | null>(null);
 const fileInput = ref<HTMLInputElement | null>(null);
@@ -148,9 +149,24 @@ function createForm(): TopicForm {
 
 function toDateTimeInput(value: string | null) {
   if (!value) return "";
-  const date = new Date(value);
-  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
-  return local.toISOString().slice(0, 19).replace("T", " ");
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23"
+  }).formatToParts(new Date(value));
+  const field = (name: string) => parts.find(part => part.type === name)?.value ?? "";
+  return `${field("year")}-${field("month")}-${field("day")} ${field("hour")}:${field("minute")}:${field("second")}`;
+}
+
+function openScheduleDialog() {
+  const nextTime = form.value?.scheduledPublishAt ?? new Date(Date.now() + 60 * 60 * 1000).toISOString();
+  scheduleInput.value = toDateTimeInput(nextTime);
+  scheduleDialogOpen.value = true;
 }
 
 function nextIssueNo() {
@@ -420,16 +436,36 @@ function moveRecipe(weekday: HomeTopicWeekday, index: number, offset: number) {
 async function saveSchedule() {
   const current = form.value;
   if (!current?.id) return;
-  const scheduledPublishAt = scheduleInput.value ? new Date(scheduleInput.value).toISOString() : null;
+  if (!scheduleInput.value || new Date(`${scheduleInput.value.replace(" ", "T")}+08:00`).getTime() <= Date.now()) {
+    ElMessage.warning("请选择晚于当前时间的发布时间");
+    return;
+  }
+  const scheduledPublishAt = new Date(`${scheduleInput.value.replace(" ", "T")}+08:00`).toISOString();
   statusBusy.value = true;
   try {
     const result = await homeTopicsApi.setTopicSchedule(current.id, { scheduledPublishAt, expectedVersion: current.version }, createOperationId());
     patchTopic(result);
     Object.assign(current, toForm(result));
     scheduleInput.value = toDateTimeInput(result.scheduledPublishAt);
-    ElMessage.success(scheduledPublishAt ? "预约发布已保存" : "预约发布已取消，周期保持不变");
+    scheduleDialogOpen.value = false;
+    ElMessage.success("预约发布已保存");
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : "保存预约失败");
+  } finally { statusBusy.value = false; }
+}
+
+async function cancelSchedule() {
+  const current = form.value;
+  if (!current?.id || !current.scheduledPublishAt) return;
+  statusBusy.value = true;
+  try {
+    const result = await homeTopicsApi.setTopicSchedule(current.id, { scheduledPublishAt: null, expectedVersion: current.version }, createOperationId());
+    patchTopic(result);
+    Object.assign(current, toForm(result));
+    scheduleInput.value = "";
+    ElMessage.success("已取消定时发布");
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : "取消预约失败");
   } finally { statusBusy.value = false; }
 }
 
@@ -512,6 +548,8 @@ onMounted(() => {
           <el-button v-if="form?.id" :loading="statusBusy" @click="toggleTopicStatus">
             {{ topicActionText(form.status) }}
           </el-button>
+          <el-button v-if="form?.id && form.status === 'DRAFT'" type="primary" plain :loading="statusBusy" @click="openScheduleDialog">定时发布</el-button>
+          <el-button v-if="form?.id && form.status === 'DRAFT' && form.scheduledPublishAt" type="warning" plain :loading="statusBusy" @click="cancelSchedule">取消预约</el-button>
           <el-button type="primary" :loading="saveBusy" :disabled="!canSave" @click="saveTopic">保存专题</el-button>
         </div>
       </div>
@@ -572,13 +610,6 @@ onMounted(() => {
             <el-form-item label="专题寄语">
               <el-input v-model="form.description" type="textarea" :rows="4" maxlength="120" show-word-limit />
             </el-form-item>
-            <div v-if="form.id && form.status === 'DRAFT'" class="schedule-row">
-              <label>预约发布时间</label>
-              <el-date-picker v-model="scheduleInput" type="datetime" value-format="YYYY-MM-DD HH:mm:ss" placeholder="选择预约时间" />
-              <el-button :loading="statusBusy" @click="saveSchedule">{{ form.scheduledPublishAt ? "更新预约" : "设置预约" }}</el-button>
-              <el-button v-if="form.scheduledPublishAt" :loading="statusBusy" @click="scheduleInput = ''; saveSchedule()">取消预约</el-button>
-              <span v-if="form.scheduledPublishAt" class="schedule-row__hint">当前预约：{{ form.scheduledPublishAt }}</span>
-            </div>
           </el-form>
 
           <section class="recipe-panel">
@@ -673,6 +704,23 @@ onMounted(() => {
       </section>
     </section>
 
+    <el-dialog v-model="scheduleDialogOpen" title="定时发布" width="420px">
+      <p class="schedule-help">专题将在所选北京时间自动发布。</p>
+      <el-date-picker
+        v-model="scheduleInput"
+        :disabled="statusBusy"
+        type="datetime"
+        value-format="YYYY-MM-DD HH:mm:ss"
+        format="YYYY-MM-DD HH:mm:ss"
+        placeholder="选择发布时间"
+        style="width: 100%"
+      />
+      <template #footer>
+        <el-button :disabled="statusBusy" @click="scheduleDialogOpen = false">取消</el-button>
+        <el-button type="primary" :loading="statusBusy" @click="saveSchedule">确认预约</el-button>
+      </template>
+    </el-dialog>
+
     <RecipePreviewDrawer :visible="previewVisible" :recipe-id="previewRecipeId" @close="closeRecipePreview" />
   </section>
 </template>
@@ -722,9 +770,8 @@ onMounted(() => {
   flex-wrap: wrap;
 }
 
-.schedule-row, .weekday-pick { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.schedule-row { padding: 12px 14px; border-radius: 12px; background: #f8fafc; }
-.schedule-row__hint, .picked-day h6 span { color: #6b7280; font-size: 12px; }
+.weekday-pick { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.picked-day h6 span { color: #6b7280; font-size: 12px; }
 .picked-days { display: flex; flex-direction: column; gap: 18px; }
 .picked-day { padding: 14px; border: 1px solid #edf0f4; border-radius: 16px; }
 .picked-day h6 { margin: 0 0 12px; font-size: 15px; }
