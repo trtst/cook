@@ -4,7 +4,7 @@
 
 **Goal:** 把现有扁平 HomeTopic 改造成按北京时间自然周展示的共享周刊，支持七天编排、草稿/预约发布、历史浏览、朋友分享和失效菜谱运营待办。
 
-**Architecture:** 继续使用平台所有的 `HomeTopic` 与 `HomeTopicItem`；周期开始日、发布状态、菜品星期归属和待办处理状态由 API/数据库维护。后台负责按星期编排、发布和处理待办；独立 Worker 执行预约发布；小程序按 API 返回的日期和星期展示并提供原生朋友分享。此计划不实现个人周刊、AI、会员、付费、炊火币或签到。
+**Architecture:** 继续使用平台所有的 `HomeTopic` 与 `HomeTopicItem`；周期开始日、发布状态、菜品星期归属和待办处理状态由 API/数据库维护。后台负责按星期编排、发布和处理待办；独立 Worker 执行预约发布；小程序按 API 返回的日期和星期展示并提供原生朋友分享。本计划主体不实现个人周刊、服务端模型集成、会员、付费、炊火币或签到；文末单列已确认并实现的 Codex 批量选题补充阶段，其真实认证线上验收仍待完成。
 
 **Tech Stack:** uni-app + Vue 3 + TypeScript、NestJS、Prisma 5.22、PostgreSQL、Vue 3 + Element Plus、OpenAPI 3.0、现有 Node/PostgreSQL Worker。
 
@@ -178,6 +178,43 @@
 - [x] **Step 5: Update the central change log with actual validation.** Keep automated checks, authenticated Admin acceptance, Worker acceptance and DevTools/device acceptance separate; do not claim production acceptance from local checks.
 
 **Deliverable:** synchronized contracts and evidence for API, Admin, Worker and mini-program acceptance; no deployment or production migration is included in this plan.
+
+## 补充任务：Codex 批量选题与周刊 JSON 导入
+
+此任务承接设计稿的“Codex 批量选题与周刊 JSON 导入”补充阶段，不改变前述已完成任务的状态。用户已确认 API 与 Bearer/SUPER_ADMIN 权限契约；统计、分页候选搜索、JSON 逐期预览/草稿导入和 Admin 操作已实现。测试环境已完成真实登录态 API 流程、匿名拒绝验证；首个测试周刊已准备并经用户完成内容审核，当前仍保留为未预约、未上架的草稿。
+
+### Task 8：确认统计快照、候选搜索与批次 JSON 契约（已完成）
+
+**预期涉及文件（契约审阅后再确认）：**
+
+- `docs/superpowers/specs/2026-10-12-shared-weekly-day-menu-design.md`
+- `docs/api-contract.md`、`docs/api-index.md`、`docs/client-api.md`
+- `apps/api/src/modules/home/` 及 Admin API 类型/页面
+- 必要时的 Prisma schema、migration 和后台周刊导入页面
+
+- [x] 定义共享统计快照字段、主要/全部食材统计、标签覆盖率、生成时间和快照 ID。
+- [x] 定义后台手动重建、失败保留旧快照的语义。
+- [x] 定义严格 Admin Bearer + SUPER_ADMIN 认证的统计、候选搜索及导入接口；搜索带分页且仅返回当前公开系统灵感菜谱。
+- [x] 明确候选固定 `sourceVersionId`、已确认标签、食材、难度和时长字段。
+- [x] 定义周期周一、上个周日 15:00（Asia/Shanghai）、最多 12 期的批次 JSON Schema。
+- [x] 定义批内去重、逐期失败、冲突不覆盖和候选数据变化后重新校验规则。
+- [x] 定义后台 JSON 文本导入、逐期预览/校验、有效期导入为草稿且不自动发布，以及幂等规则。
+- [x] 明确 token 只用于认证请求，不进入日志、JSON 文件或导入内容；授权与公开资格均由服务端校验。
+- [x] 契约审阅已由用户确认；契约及实现清单同步到 API、Admin 和本计划。
+
+**当前交付：** 契约已确认，实现已落地。API/Admin type-check、Prisma validate、API/Admin build 和 `git diff --check` 已通过；Admin Bearer/SUPER_ADMIN 守卫及 401/403 响应聚焦测试 7/7 通过。`verify:openapi` 仍受本机 tsx IPC sandbox 限制，已从编译后的 Nest 应用生成并检查路由文档。测试环境已通过真实 SUPER_ADMIN 后台会话完成统计读取、候选搜索、JSON 逐期预览和首期草稿导入；另用无 Authorization 的真实 GET 验证 API 返回业务 `code=401`。未使用聊天中粘贴的 Bearer token，未访问或写入生产环境。
+
+### Task 9：线上认证验收与首个测试周刊预发布
+
+- [x] TEST API 无 Authorization 的统计 GET 返回 HTTP 200、业务 `code=401`；普通管理员 `403` 由 Admin 守卫测试覆盖，SUPER_ADMIN 的真实登录态读取由后台会话覆盖。
+- [x] 测试环境已登录 SUPER_ADMIN 会话读取统计并搜索候选；通过逐期预览后完成草稿导入。
+- [x] 根据测试环境候选数据生成首期共享周刊 JSON，并在后台逐期预览通过。
+- [x] 导入为 DRAFT；测试后台显示 2026-10-26 至 2026-11-01、16 道菜、状态“草稿”，未预约、未上架。专题 ID 为 6，现已打开编辑页供人工审核。
+- [x] 内容复核后调整 3 道菜：周一以洋葱孜然牛肉片替换芦笋牛肉粒，周五以清炒菠菜替换重复的南瓜菜，周六以凉拌藕片替换藕带；保持 7 天、16 道菜和各日内 `01..n` 排序，未调整其他菜品。
+- [x] 根据用户“基本 OK，细节需要优化”的反馈，保留菜单与日期，仅润色副标题、专题寄语及 16 道菜的推荐说明；删除泛化的“适合周中/调节口味”等句式，改为具体呈现风味、口感和搭配。再次精简寄语并让副标题更贴合秋日家常，TEST 后台提示保存成功，草稿升至版本 4。
+- [x] 修复测试菜谱封面：此前已通过 TEST 清单迁移 153 条快照封面及本期原 9 道菜封面；此次发现替换菜谱 10002373 仍引用快照对象，按单条迁移清单只修复该菜谱当前版本，目标为 `dev/uploads/recipe-images/10002373/10002373_10001524.jpg`。迁移脚本校验对象 SHA-256；刷新后台后 16/16 张封面均 `naturalWidth > 0`。仅写入 TEST，保留源对象和旧版本。
+- [x] 未部署、未执行线上 migration、未预约发布；2026-10-19 至 2026-10-25 已有一篇已发布测试周刊，因此本草稿顺延到下一个空档周。
+- [x] 用户完成内容人工审核并通过版本 4；草稿编辑页已打开并保留在测试后台，未预约、未上架。
 
 ## Scope Self-Review
 

@@ -5,16 +5,36 @@ import { ok } from "../../common/api-response";
 import type { RequestWithAdmin } from "../../common/auth-context";
 import { AdminAuthGuard } from "../../common/admin-auth.guard";
 import { ApiIdempotencyKey, ReadIdempotencyKey } from "../../common/idempotency-key";
-import { CreateHomeTopicDto, DeleteHomeTopicDto, DismissHomeTopicTodoDto, HomeTopicHistoryQueryDto, HomeTopicRecipeQueryDto, ReplaceHomeTopicItemDto, SetHomeTopicScheduleDto, SetHomeTopicStatusDto, UpdateHomeTopicDto, UpdateHomeTopicImageDto } from "../../contracts/dtos";
-import { AdminHomeTopicItemModel, AdminHomeTopicTodosPageModel, AdminHomeTopicsResponseModel, ApiOkModel, HomeTopicRecipeSearchResponseModel } from "../../contracts/openapi";
+import { CreateHomeTopicDto, DeleteHomeTopicDto, DismissHomeTopicTodoDto, HomeTopicBatchImportDto, HomeTopicHistoryQueryDto, HomeTopicRecipeQueryDto, ReplaceHomeTopicItemDto, SetHomeTopicScheduleDto, SetHomeTopicStatusDto, UpdateHomeTopicDto, UpdateHomeTopicImageDto } from "../../contracts/dtos";
+import { AdminHomeTopicItemModel, AdminHomeTopicTodosPageModel, AdminHomeTopicsResponseModel, ApiOkModel, HomeTopicBatchImportResponseModel, HomeTopicBatchPreviewResponseModel, HomeTopicRecipeSearchResponseModel, HomeTopicRecipeStatsResponseModel, RebuildHomeTopicRecipeStatsResponseModel } from "../../contracts/openapi";
+import { SuperAdminGuard } from "../../common/super-admin.guard";
 import { HomeTopicService } from "./home-topic.service";
+import { HomeTopicStatsService } from "./home-topic-stats.service";
 
 @ApiTags("admin-home-topics")
 @Controller("admin/home-topics")
 @UseGuards(AdminAuthGuard)
 @ApiBearerAuth("AdminBearerAuth")
 export class AdminHomeTopicController {
-  constructor(@Inject(HomeTopicService) private readonly homeTopicService: HomeTopicService) {}
+  constructor(
+    @Inject(HomeTopicService) private readonly homeTopicService: HomeTopicService,
+    @Inject(HomeTopicStatsService) private readonly statsService: HomeTopicStatsService
+  ) {}
+
+  @Get("statistics")
+  @UseGuards(SuperAdminGuard)
+  @ApiOkModel(HomeTopicRecipeStatsResponseModel, "读取共享周刊可用菜谱统计快照")
+  getRecipeStats() {
+    return this.statsService.getSnapshot().then(result => ok(result));
+  }
+
+  @Post("statistics/rebuild")
+  @UseGuards(SuperAdminGuard)
+  @ApiIdempotencyKey()
+  @ApiOkModel(RebuildHomeTopicRecipeStatsResponseModel, "重建共享周刊可用菜谱统计快照")
+  rebuildRecipeStats(@Req() request: RequestWithAdmin, @ReadIdempotencyKey() operationId: string) {
+    return this.statsService.rebuild(request.admin.adminId, operationId).then(result => ok(result));
+  }
 
   @Get()
   @ApiOkModel(AdminHomeTopicsResponseModel, "读取后台本周灵感专题配置")
@@ -23,9 +43,25 @@ export class AdminHomeTopicController {
   }
 
   @Get("recipes")
+  @UseGuards(SuperAdminGuard)
   @ApiOkModel(HomeTopicRecipeSearchResponseModel, "搜索可加入专题的灵感菜谱")
   searchRecipes(@Query() query: HomeTopicRecipeQueryDto) {
-    return this.homeTopicService.searchRecipes(query.keyword).then(result => ok(result));
+    return this.homeTopicService.searchRecipes(query).then(result => ok(result));
+  }
+
+  @Post("import/preview")
+  @UseGuards(SuperAdminGuard)
+  @ApiOkModel(HomeTopicBatchPreviewResponseModel, "预览并校验共享周刊 JSON 批次")
+  previewImport(@Body() body: HomeTopicBatchImportDto) {
+    return this.homeTopicService.previewBatchImport(body).then(result => ok(result));
+  }
+
+  @Post("import")
+  @UseGuards(SuperAdminGuard)
+  @ApiIdempotencyKey()
+  @ApiOkModel(HomeTopicBatchImportResponseModel, "将共享周刊 JSON 批次有效期导入为草稿")
+  importBatch(@Req() request: RequestWithAdmin, @ReadIdempotencyKey() operationId: string, @Body() body: HomeTopicBatchImportDto) {
+    return this.homeTopicService.importBatch(request.admin.adminId, operationId, body).then(result => ok(result));
   }
 
   @Get("todos")

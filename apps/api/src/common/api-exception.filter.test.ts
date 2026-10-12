@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { BadRequestException, HttpException, HttpStatus, ServiceUnavailableException, UnauthorizedException } from "@nestjs/common";
+import { BadRequestException, ForbiddenException, HttpException, HttpStatus, ServiceUnavailableException, UnauthorizedException } from "@nestjs/common";
 import { ApiExceptionFilter } from "./api-exception.filter";
 
 function createHost() {
@@ -58,6 +58,11 @@ test("business HttpException returns HTTP 200 and preserves business code", () =
   assert.equal(unauthorized.statusCode, HttpStatus.OK);
   assert.equal(unauthorized.body.code, 401);
   assert.equal(unauthorized.body.message, "未登录或 token 失效");
+
+  const forbidden = capture(new ForbiddenException("无权执行该操作"));
+  assert.equal(forbidden.statusCode, HttpStatus.OK);
+  assert.equal(forbidden.body.code, 403);
+  assert.equal(forbidden.body.message, "无权执行该操作");
 
   const unavailable = capture(new ServiceUnavailableException("短信服务暂不可用"));
   assert.equal(unavailable.statusCode, HttpStatus.OK);

@@ -18,8 +18,12 @@ import type {
   HomeTopicHistoryItem,
   PageResult,
   HomeTopicRecipeItem,
+  HomeTopicRecipeQuery,
   HomeTopicRecipeSearchItem,
   HomeTopicRecipeSearchResponse,
+  HomeTopicBatchImportInput,
+  HomeTopicBatchPreviewResponse,
+  HomeTopicBatchImportResponse,
   HomeTopicType,
   HomeTopicTypeOption,
   HomeTopicWeekday,
@@ -65,6 +69,13 @@ type RecipeRow = Prisma.RecipeGetPayload<{
   include: {
     inspirationCategory: true;
     currentVersion: true;
+  };
+}>;
+
+type SearchRecipeRow = Prisma.RecipeGetPayload<{
+  include: {
+    inspirationCategory: true;
+    currentVersion: { include: { versionTags: true } };
   };
 }>;
 
@@ -116,6 +127,30 @@ function toPositiveInt(value: number, fallback: number) {
 
 function isTopicImagePath(value: string | null | undefined) {
   return Boolean(value && topicImagePath.test(value));
+}
+
+function readIngredientNames(value: Prisma.JsonValue) {
+  if (!Array.isArray(value)) return [];
+  const names = new Set<string>();
+  for (const raw of value) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+    const item = raw as Record<string, unknown>;
+    const name = typeof item.ingredientName === "string" ? item.ingredientName : "";
+    if (name.trim()) names.add(name.trim());
+  }
+  return [...names];
+}
+
+const weekdays: HomeTopicWeekday[] = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"];
+const weekdayNames: Record<HomeTopicWeekday, string> = {
+  MONDAY: "周一", TUESDAY: "周二", WEDNESDAY: "周三", THURSDAY: "周四", FRIDAY: "周五", SATURDAY: "周六", SUNDAY: "周日"
+};
+
+function scheduledPublishDate(periodStartDate: string) {
+  const start = new Date(`${periodStartDate}T00:00:00.000Z`);
+  const sunday = new Date(start.getTime() - 24 * 60 * 60 * 1000);
+  const dateText = sunday.toISOString().slice(0, 10);
+  return new Date(`${dateText}T15:00:00+08:00`);
 }
 
 @Injectable()
@@ -176,30 +211,176 @@ export class HomeTopicService {
     };
   }
 
-  async searchRecipes(keyword?: string): Promise<HomeTopicRecipeSearchResponse> {
-    const searchKey = keyword?.trim() ?? "";
+  async searchRecipes(query: HomeTopicRecipeQuery = { page: 1, pageSize: 20 }): Promise<HomeTopicRecipeSearchResponse> {
+    const searchKey = query.keyword?.trim() ?? "";
+    const ingredient = query.ingredient?.trim() ?? "";
+    const cuisine = query.cuisine?.trim() ?? "";
+    const dishStyle = query.dishStyle?.trim() ?? "";
     const recipeId = /^\d+$/.test(searchKey) ? Number(searchKey) : null;
-    const items = await this.prisma.recipe.findMany({
-      where: {
-        ...recipeWhere,
-        ...(searchKey
-          ? recipeId
-            ? {
-                OR: [{ id: recipeId }, { searchText: { contains: searchKey } }]
+    const page = toPositiveInt(query.page, 1);
+    const pageSize = Math.min(toPositiveInt(query.pageSize, 20), 100);
+    const skip = (page - 1) * pageSize;
+    const tagFilters: Prisma.RecipeContentVersionWhereInput[] = [];
+    if (cuisine) tagFilters.push({ versionTags: { some: { tagCode: "CUISINE", tagValue: cuisine, status: "CONFIRMED" } } });
+    if (dishStyle) tagFilters.push({ versionTags: { some: { tagCode: "DISH_STYLE", tagValue: dishStyle, status: "CONFIRMED" } } });
+    const where: Prisma.RecipeWhereInput = {
+      ...recipeWhere,
+      ...(searchKey
+        ? recipeId
+          ? { OR: [{ id: recipeId }, { searchText: { contains: searchKey, mode: "insensitive" } }] }
+          : { searchText: { contains: searchKey, mode: "insensitive" } }
+        : {}),
+      ...((ingredient || tagFilters.length)
+        ? {
+            currentVersion: {
+              is: {
+                AND: [
+                  ...(ingredient ? [{ searchText: { contains: ingredient, mode: "insensitive" as const } }] : []),
+                  ...tagFilters
+                ]
               }
-            : { searchText: { contains: searchKey } }
-          : {})
+            }
+          }
+        : {})
+    };
+    const [items, total] = await Promise.all([this.prisma.recipe.findMany({
+      where: {
+        ...where
       },
       include: {
         inspirationCategory: true,
-        currentVersion: true
+        currentVersion: {
+          include: {
+            versionTags: { where: { status: "CONFIRMED" }, orderBy: [{ tagCode: "asc" }, { sortOrder: "asc" }, { id: "asc" }] }
+          }
+        }
       },
       orderBy: [{ collectCount: "desc" }, { updatedAt: "desc" }, { id: "desc" }],
-      take: 20
-    });
+      skip,
+      take: pageSize
+    }), this.prisma.recipe.count({ where })]);
     return {
-      items: items.map((item, index) => this.toSearchRecipe(item, index + 1))
+      items: items.map((item, index) => this.toSearchRecipe(item, skip + index + 1)),
+      page,
+      pageSize,
+      total,
+      hasNext: skip + items.length < total
     };
+  }
+
+  async previewBatchImport(body: HomeTopicBatchImportInput): Promise<HomeTopicBatchPreviewResponse> {
+    return this.buildBatchPreview(this.prisma, body);
+  }
+
+  async importBatch(adminId: UUID, operationId: OperationId, body: HomeTopicBatchImportInput): Promise<HomeTopicBatchImportResponse> {
+    const requestHash = hashText(JSON.stringify(body));
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getAdminIdempotentResult<HomeTopicBatchImportResponse>(
+        tx,
+        operationId,
+        "admin-home-topics:batch-import",
+        adminId,
+        requestHash
+      );
+      if (repeated) return repeated;
+      await startAdminIdempotentOperation(tx, operationId, "admin-home-topics:batch-import", adminId, requestHash);
+
+      // Serialize topic inserts while the batch checks unique periods and allocates issue numbers.
+      await tx.$executeRaw`LOCK TABLE "home_topics" IN SHARE ROW EXCLUSIVE MODE`;
+
+      const preview = await this.buildBatchPreview(tx, body);
+      const results: HomeTopicBatchImportResponse["issues"] = preview.issues.map(item => ({
+        issueIndex: item.issueIndex,
+        status: "REJECTED",
+        topic: null,
+        errors: item.errors
+      }));
+      const validIssues = body.issues.filter((_issue, index) => preview.issues[index]?.valid);
+      const recipeIds = [...new Set(validIssues.flatMap(issue => issue.days.flatMap(day => day.items.map(item => item.recipeId))))];
+      const recipes = recipeIds.length
+        ? await tx.recipe.findMany({
+            where: { ...recipeWhere, id: { in: recipeIds } },
+            select: { id: true, currentVersionId: true }
+          })
+        : [];
+      const recipeMap = new Map(recipes.map(item => [item.id, item]));
+      let nextIssueNo = (await tx.homeTopic.aggregate({ _max: { issueNo: true } }))._max.issueNo ?? 0;
+
+      for (const [index, issue] of body.issues.entries()) {
+        const issuePreview = preview.issues[index];
+        if (!issuePreview?.valid) continue;
+        const missingRecipe = issue.days.flatMap(day => day.items).find(item => recipeMap.get(item.recipeId)?.currentVersionId !== item.sourceVersionId);
+        if (missingRecipe) {
+          results[index] = { issueIndex: index + 1, status: "REJECTED", topic: null, errors: ["导入期间有菜谱版本或公开状态变化，请重新预览"] };
+          continue;
+        }
+        const savepoint = `home_topic_import_${index + 1}`;
+        const savepointSql = Prisma.raw(savepoint);
+        await tx.$executeRaw(Prisma.sql`SAVEPOINT ${savepointSql}`);
+        try {
+          const created = await tx.homeTopic.create({
+            data: {
+              title: issue.title,
+              subTitle: cleanText(issue.subTitle),
+              recType: issue.recType as TopicType,
+              status: "DRAFT",
+              issueNo: nextIssueNo + 1,
+              description: issue.description,
+              periodStartDate: new Date(`${issue.periodStartDate}T00:00:00.000Z`),
+              scheduledPublishAt: null,
+              publishedAt: null,
+              items: {
+                createMany: {
+                  data: issue.days.flatMap(day => day.items.map(item => ({
+                    recipeId: item.recipeId,
+                    sourceVersionId: item.sourceVersionId,
+                    weekday: day.weekday,
+                    sortOrder: item.sortOrder,
+                    recommendNote: cleanText(item.recommendNote)
+                  })))
+                }
+              }
+            }
+          });
+          const topic = await this.loadAdminTopic(tx, created.id);
+          await tx.auditEvent.create({
+            data: {
+              actorType: "ADMIN",
+              actorAdminId: adminId,
+              action: "HOME_TOPIC_BATCH_IMPORTED",
+              objectType: "HOME_TOPIC",
+              objectId: created.id,
+              payload: {
+                statsSnapshotId: body.statsSnapshotId,
+                periodStartDate: issue.periodStartDate,
+                recipeCount: issuePreview.recipeCount,
+                themeRationale: issue.themeRationale
+              }
+            }
+          });
+          await tx.$executeRaw(Prisma.sql`RELEASE SAVEPOINT ${savepointSql}`);
+          nextIssueNo += 1;
+          results[index] = { issueIndex: index + 1, status: "IMPORTED", topic, errors: [] };
+        } catch (error) {
+          await tx.$executeRaw(Prisma.sql`ROLLBACK TO SAVEPOINT ${savepointSql}`);
+          await tx.$executeRaw(Prisma.sql`RELEASE SAVEPOINT ${savepointSql}`);
+          if (error instanceof Prisma.PrismaClientKnownRequestError && ["P2002", "P2003"].includes(error.code)) {
+            results[index] = {
+              issueIndex: index + 1,
+              status: "REJECTED",
+              topic: null,
+              errors: ["该期写入时发生周期、期号或菜谱关联冲突，请重新预览"]
+            };
+            continue;
+          }
+          throw error;
+        }
+      }
+
+      const result = { issues: results };
+      await completeAdminIdempotentOperation(tx, operationId, "admin-home-topics:batch-import", adminId, requestHash, result);
+      return result;
+    });
   }
 
   async createTopic(adminId: UUID, operationId: OperationId, body: CreateHomeTopicRequest): Promise<AdminHomeTopicsResponse> {
@@ -748,6 +929,95 @@ export class HomeTopicService {
     } satisfies AdminHomeTopicsResponse;
   }
 
+  private async buildBatchPreview(db: TopicDb, body: HomeTopicBatchImportInput): Promise<HomeTopicBatchPreviewResponse> {
+    const currentSnapshot = await db.homeTopicRecipeStatsSnapshot.findUnique({ where: { scope: "PUBLIC_INSPIRATION" }, select: { snapshotId: true } });
+    const issueDates = body.issues.map(issue => new Date(`${issue.periodStartDate}T00:00:00.000Z`));
+    const existingTopics = issueDates.length
+      ? await db.homeTopic.findMany({ where: { periodStartDate: { in: issueDates } }, select: { id: true, periodStartDate: true } })
+      : [];
+    const topicByDate = new Map(existingTopics.map(item => [isoDate(item.periodStartDate), item.id]));
+    const recipeIds = [...new Set(body.issues.flatMap(issue => issue.days.flatMap(day => day.items.map(item => item.recipeId))))];
+    const recipes = recipeIds.length
+      ? await db.recipe.findMany({
+          where: { ...recipeWhere, id: { in: recipeIds } },
+          select: { id: true, currentVersionId: true }
+        })
+      : [];
+    const recipeById = new Map(recipes.map(item => [item.id, item.currentVersionId]));
+    const seenDates = new Set<string>();
+    const seenRecipeIds = new Set<number>();
+    const results: HomeTopicBatchPreviewResponse["issues"] = [];
+
+    for (const [index, issue] of body.issues.entries()) {
+      const errors: string[] = [];
+      const periodStart = new Date(`${issue.periodStartDate}T00:00:00.000Z`);
+      const periodEnd = new Date(periodStart.getTime() + 6 * 24 * 60 * 60 * 1000);
+      const periodDate = isoDate(periodStart);
+      const dayOfWeek = periodStart.getUTCDay();
+      if (dayOfWeek !== 1) errors.push("周期开始日必须是周一");
+      if (seenDates.has(periodDate)) errors.push("批次内存在重复周期");
+      seenDates.add(periodDate);
+      const existingTopicId = topicByDate.get(periodDate) ?? null;
+      if (existingTopicId !== null) errors.push(`该周已有周刊（ID ${existingTopicId}），不会覆盖`);
+      if (body.statsSnapshotId !== currentSnapshot?.snapshotId) errors.push("统计快照已变化或不存在，请重新读取统计并生成批次");
+      if (index > 0) {
+        const previousDate = new Date(`${body.issues[index - 1]!.periodStartDate}T00:00:00.000Z`);
+        if (periodStart.getTime() !== previousDate.getTime() + 7 * 24 * 60 * 60 * 1000) errors.push("批次周刊必须按周连续排列");
+      }
+
+      const plannedPublishAt = new Date(issue.plannedPublishAt);
+      const expectedPublishAt = scheduledPublishDate(issue.periodStartDate);
+      if (Number.isNaN(plannedPublishAt.getTime()) || plannedPublishAt.getTime() !== expectedPublishAt.getTime()) {
+        errors.push("计划发布时间必须是该周期前一个周日 15:00（上海时间）");
+      }
+
+      const dayMap = new Map(issue.days.map(day => [day.weekday, day]));
+      const missingDays = weekdays.filter(day => !dayMap.has(day));
+      if (issue.days.length !== 7 || missingDays.length) {
+        errors.push(`必须恰好提供周一至周日七天菜单${missingDays.length ? `，缺少${missingDays.map(day => weekdayNames[day]).join("、")}` : ""}`);
+      }
+      const issueRecipeIds = new Set<number>();
+      let recipeCount = 0;
+      for (const day of issue.days) {
+        if (!day.items.length) errors.push(`${weekdayNames[day.weekday]}至少需要一道菜`);
+        const orders = new Set<number>();
+        for (const item of day.items) {
+          recipeCount += 1;
+          if (orders.has(item.sortOrder)) errors.push(`${weekdayNames[day.weekday]}存在重复菜序`);
+          orders.add(item.sortOrder);
+          if (issueRecipeIds.has(item.recipeId)) errors.push(`本期菜谱 ID ${item.recipeId} 重复`);
+          issueRecipeIds.add(item.recipeId);
+          if (seenRecipeIds.has(item.recipeId)) errors.push(`批次中菜谱 ID ${item.recipeId} 重复`);
+          seenRecipeIds.add(item.recipeId);
+          const currentVersionId = recipeById.get(item.recipeId);
+          if (currentVersionId === undefined) errors.push(`菜谱 ID ${item.recipeId} 当前不是可公开的系统灵感菜谱`);
+          else if (currentVersionId !== item.sourceVersionId) errors.push(`菜谱 ID ${item.recipeId} 的固定版本已变化，请重新搜索`);
+        }
+      }
+      if (recipeCount > 200) errors.push("每期菜单最多包含 200 道菜");
+      results.push({
+        issueIndex: index + 1,
+        periodStartDate: periodDate,
+        periodEndDate: isoDate(periodEnd),
+        plannedPublishAt: Number.isNaN(plannedPublishAt.getTime()) ? issue.plannedPublishAt : plannedPublishAt.toISOString(),
+        title: issue.title,
+        themeRationale: issue.themeRationale,
+        recipeCount,
+        valid: errors.length === 0,
+        errors: [...new Set(errors)],
+        conflictingTopicId: existingTopicId
+      });
+    }
+
+    const issueResults = results.map(result => ({ ...result, errors: result.errors }));
+    return {
+      statsSnapshotId: body.statsSnapshotId,
+      currentSnapshotId: currentSnapshot?.snapshotId ?? null,
+      valid: issueResults.length > 0 && issueResults.every(issue => issue.valid),
+      issues: issueResults
+    };
+  }
+
   private async loadAdminTopic(db: TopicDb, topicId: UUID) {
     const topic = await this.loadTopic(db, topicId);
     return this.toAdminTopic(topic);
@@ -972,7 +1242,7 @@ export class HomeTopicService {
     };
   }
 
-  private toSearchRecipe(recipe: RecipeRow, sort: number): HomeTopicRecipeSearchItem {
+  private toSearchRecipe(recipe: SearchRecipeRow, sort: number): HomeTopicRecipeSearchItem {
     const category = recipe.inspirationCategory;
     return {
       id: recipe.id,
@@ -992,7 +1262,11 @@ export class HomeTopicService {
         iconKey: category!.iconKey ?? null
       },
       collectCount: recipe.collectCount,
-      updatedAt: toIso(recipe.updatedAt)
+      updatedAt: toIso(recipe.updatedAt),
+      ingredients: readIngredientNames(recipe.currentVersion.ingredientsJson),
+      tags: recipe.currentVersion.versionTags
+        .filter(tag => tag.status === "CONFIRMED")
+        .map(tag => ({ code: tag.tagCode, value: tag.tagValue }))
     };
   }
 

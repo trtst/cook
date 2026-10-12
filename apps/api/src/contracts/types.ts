@@ -540,7 +540,20 @@ export interface HomeTopicRecipeItem {
   updatedAt: IsoDateTime;
 }
 
-export interface HomeTopicRecipeSearchItem extends Omit<HomeTopicRecipeItem, "weekday" | "publiclyAvailable"> {}
+export type HomeTopicRecipeTagCode =
+  | "CUISINE"
+  | "DISH_STYLE"
+  | "DISH_ROLE"
+  | "MEAL_TYPE"
+  | "MAIN_PROTEIN_TYPE"
+  | "PRIMARY_INGREDIENT"
+  | "FLAVOR_PROFILE"
+  | "SPICE_LEVEL";
+
+export interface HomeTopicRecipeSearchItem extends Omit<HomeTopicRecipeItem, "weekday" | "publiclyAvailable"> {
+  ingredients: string[];
+  tags: Array<{ code: HomeTopicRecipeTagCode; value: string }>;
+}
 
 export interface HomeTopicHistoryItem {
   id: UUID;
@@ -667,10 +680,115 @@ export interface DeleteHomeTopicRequest {
 
 export interface HomeTopicRecipeQuery {
   keyword?: string;
+  ingredient?: string;
+  cuisine?: string;
+  dishStyle?: string;
+  page: number;
+  pageSize: number;
 }
 
-export interface HomeTopicRecipeSearchResponse {
-  items: HomeTopicRecipeSearchItem[];
+export interface HomeTopicRecipeSearchResponse extends PageResult<HomeTopicRecipeSearchItem> {}
+
+export interface HomeTopicRecipeStatsFacet {
+  value: string;
+  count: number;
+}
+
+export interface HomeTopicRecipeStatsCoverage {
+  ingredients: number;
+  primaryIngredients: number;
+  cuisines: number;
+  dishStyles: number;
+  dishRoles: number;
+  proteins: number;
+  difficulties: number;
+  durations: number;
+}
+
+export interface HomeTopicRecipeStatsSnapshot {
+  snapshotId: string;
+  generatedAt: IsoDateTime;
+  eligibleRecipeCount: number;
+  coverage: HomeTopicRecipeStatsCoverage;
+  facets: {
+    allIngredients: HomeTopicRecipeStatsFacet[];
+    primaryIngredients: HomeTopicRecipeStatsFacet[];
+    cuisines: HomeTopicRecipeStatsFacet[];
+    dishStyles: HomeTopicRecipeStatsFacet[];
+    dishRoles: HomeTopicRecipeStatsFacet[];
+    proteins: HomeTopicRecipeStatsFacet[];
+    difficulties: HomeTopicRecipeStatsFacet[];
+    durations: HomeTopicRecipeStatsFacet[];
+  };
+}
+
+export interface HomeTopicRecipeStatsResponse {
+  snapshot: HomeTopicRecipeStatsSnapshot | null;
+}
+
+export interface HomeTopicBatchRecipeInput {
+  recipeId: UUID;
+  sourceVersionId: UUID;
+  sortOrder: number;
+  recommendNote: string | null;
+}
+
+export interface HomeTopicBatchDayInput {
+  weekday: HomeTopicWeekday;
+  items: HomeTopicBatchRecipeInput[];
+}
+
+export interface HomeTopicBatchIssueInput {
+  periodStartDate: IsoDate;
+  plannedPublishAt: IsoDateTime;
+  title: string;
+  subTitle: string | null;
+  recType: HomeTopicType;
+  description: string;
+  themeRationale: string;
+  days: HomeTopicBatchDayInput[];
+}
+
+export interface HomeTopicBatchImportInput {
+  schemaVersion: 1;
+  statsSnapshotId: string;
+  generatedAt: IsoDateTime;
+  issues: HomeTopicBatchIssueInput[];
+}
+
+export interface HomeTopicBatchIssuePreview {
+  issueIndex: number;
+  periodStartDate: IsoDate;
+  periodEndDate: IsoDate;
+  plannedPublishAt: IsoDateTime;
+  title: string;
+  themeRationale: string;
+  recipeCount: number;
+  valid: boolean;
+  errors: string[];
+  conflictingTopicId: UUID | null;
+}
+
+export interface HomeTopicBatchPreviewResponse {
+  statsSnapshotId: string;
+  currentSnapshotId: string | null;
+  valid: boolean;
+  issues: HomeTopicBatchIssuePreview[];
+}
+
+export interface HomeTopicBatchImportIssueResult {
+  issueIndex: number;
+  status: "IMPORTED" | "REJECTED";
+  topic: AdminHomeTopicItem | null;
+  errors: string[];
+}
+
+export interface HomeTopicBatchImportResponse {
+  issues: HomeTopicBatchImportIssueResult[];
+}
+
+export interface RebuildHomeTopicRecipeStatsResponse {
+  snapshot: HomeTopicRecipeStatsSnapshot;
 }
 
 export interface UpdateCurrentUserRequest {

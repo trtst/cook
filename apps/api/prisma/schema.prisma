@@ -572,6 +572,7 @@ model AdminAccount {
   ingredientImportJobs IngredientImportJob[]
   imageGenerationCandidates AdminImageGenerationCandidate[]
   updatedImageGenerationSettings AdminImageGenerationSettings[]
+  updatedHomeTopicRecipeStats HomeTopicRecipeStatsSnapshot[]
 
   @@map("admin_accounts")
 }
@@ -790,6 +791,20 @@ model HomeTopicItem {
   @@index([topicId, sortOrder, id])
   @@index([sourceVersionId])
   @@map("home_topic_items")
+}
+
+model HomeTopicRecipeStatsSnapshot {
+  id                   Int      @id @default(autoincrement())
+  scope                String   @unique @default("PUBLIC_INSPIRATION") @db.VarChar(32)
+  snapshotId           String   @unique @map("snapshot_id") @db.Uuid
+  eligibleRecipeCount  Int      @map("eligible_recipe_count")
+  statsJson            Json     @map("stats_json")
+  generatedAt          DateTime @default(now()) @map("generated_at") @db.Timestamptz(3)
+  updatedByAdminId     Int?     @map("updated_by_admin_id")
+
+  updatedByAdmin AdminAccount? @relation(fields: [updatedByAdminId], references: [id], onDelete: SetNull)
+
+  @@map("home_topic_recipe_stats_snapshots")
 }
 
 model TableTopic {

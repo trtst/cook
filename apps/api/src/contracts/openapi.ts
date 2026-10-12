@@ -843,6 +843,12 @@ export class HomeTopicRecipeItemModel {
   @ApiProperty(dateTime) updatedAt!: string;
 }
 
+export class HomeTopicRecipeSearchTagModel {
+  @ApiProperty({ type: String, enum: ["CUISINE", "DISH_STYLE", "DISH_ROLE", "MEAL_TYPE", "MAIN_PROTEIN_TYPE", "PRIMARY_INGREDIENT", "FLAVOR_PROFILE", "SPICE_LEVEL"] })
+  code!: string;
+  @ApiProperty({ type: String }) value!: string;
+}
+
 export class HomeTopicRecipeSearchItemModel {
   @ApiProperty(uuid) id!: string;
   @ApiProperty(uuid) sourceVersionId!: string;
@@ -858,6 +864,8 @@ export class HomeTopicRecipeSearchItemModel {
   @ApiProperty({ type: InspirationCategoryModel }) category!: InspirationCategoryModel;
   @ApiProperty({ type: Number, minimum: 0 }) collectCount!: number;
   @ApiProperty(dateTime) updatedAt!: string;
+  @ApiProperty({ type: [String] }) ingredients!: string[];
+  @ApiProperty({ type: [HomeTopicRecipeSearchTagModel] }) tags!: HomeTopicRecipeSearchTagModel[];
 }
 
 export class HomeTopicHistoryItemModel {
@@ -906,6 +914,84 @@ export class HomeTopicDetailResponseModel {
 
 export class HomeTopicRecipeSearchResponseModel {
   @ApiProperty({ type: [HomeTopicRecipeSearchItemModel] }) items!: HomeTopicRecipeSearchItemModel[];
+  @ApiProperty({ type: Number, minimum: 1 }) page!: number;
+  @ApiProperty({ type: Number, minimum: 1, maximum: 100 }) pageSize!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) total!: number;
+  @ApiProperty({ type: Boolean }) hasNext!: boolean;
+}
+
+export class HomeTopicRecipeStatsFacetModel {
+  @ApiProperty({ type: String }) value!: string;
+  @ApiProperty({ type: Number, minimum: 0 }) count!: number;
+}
+
+export class HomeTopicRecipeStatsCoverageModel {
+  @ApiProperty({ type: Number, minimum: 0 }) ingredients!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) primaryIngredients!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) cuisines!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) dishStyles!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) dishRoles!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) proteins!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) difficulties!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) durations!: number;
+}
+
+export class HomeTopicRecipeStatsFacetsModel {
+  @ApiProperty({ type: [HomeTopicRecipeStatsFacetModel] }) allIngredients!: HomeTopicRecipeStatsFacetModel[];
+  @ApiProperty({ type: [HomeTopicRecipeStatsFacetModel] }) primaryIngredients!: HomeTopicRecipeStatsFacetModel[];
+  @ApiProperty({ type: [HomeTopicRecipeStatsFacetModel] }) cuisines!: HomeTopicRecipeStatsFacetModel[];
+  @ApiProperty({ type: [HomeTopicRecipeStatsFacetModel] }) dishStyles!: HomeTopicRecipeStatsFacetModel[];
+  @ApiProperty({ type: [HomeTopicRecipeStatsFacetModel] }) dishRoles!: HomeTopicRecipeStatsFacetModel[];
+  @ApiProperty({ type: [HomeTopicRecipeStatsFacetModel] }) proteins!: HomeTopicRecipeStatsFacetModel[];
+  @ApiProperty({ type: [HomeTopicRecipeStatsFacetModel] }) difficulties!: HomeTopicRecipeStatsFacetModel[];
+  @ApiProperty({ type: [HomeTopicRecipeStatsFacetModel] }) durations!: HomeTopicRecipeStatsFacetModel[];
+}
+
+export class HomeTopicRecipeStatsSnapshotModel {
+  @ApiProperty({ type: String, format: "uuid" }) snapshotId!: string;
+  @ApiProperty(dateTime) generatedAt!: string;
+  @ApiProperty({ type: Number, minimum: 0 }) eligibleRecipeCount!: number;
+  @ApiProperty({ type: HomeTopicRecipeStatsCoverageModel }) coverage!: HomeTopicRecipeStatsCoverageModel;
+  @ApiProperty({ type: HomeTopicRecipeStatsFacetsModel }) facets!: HomeTopicRecipeStatsFacetsModel;
+}
+
+export class HomeTopicRecipeStatsResponseModel {
+  @ApiProperty({ type: HomeTopicRecipeStatsSnapshotModel, nullable: true }) snapshot!: HomeTopicRecipeStatsSnapshotModel | null;
+}
+
+export class RebuildHomeTopicRecipeStatsResponseModel {
+  @ApiProperty({ type: HomeTopicRecipeStatsSnapshotModel }) snapshot!: HomeTopicRecipeStatsSnapshotModel;
+}
+
+export class HomeTopicBatchIssuePreviewModel {
+  @ApiProperty({ type: Number, minimum: 1 }) issueIndex!: number;
+  @ApiProperty({ type: String, format: "date" }) periodStartDate!: string;
+  @ApiProperty({ type: String, format: "date" }) periodEndDate!: string;
+  @ApiProperty(dateTime) plannedPublishAt!: string;
+  @ApiProperty({ type: String }) title!: string;
+  @ApiProperty({ type: String }) themeRationale!: string;
+  @ApiProperty({ type: Number, minimum: 0 }) recipeCount!: number;
+  @ApiProperty({ type: Boolean }) valid!: boolean;
+  @ApiProperty({ type: [String] }) errors!: string[];
+  @ApiProperty({ ...uuid, nullable: true }) conflictingTopicId!: number | null;
+}
+
+export class HomeTopicBatchPreviewResponseModel {
+  @ApiProperty({ type: String, format: "uuid" }) statsSnapshotId!: string;
+  @ApiProperty({ type: String, format: "uuid", nullable: true }) currentSnapshotId!: string | null;
+  @ApiProperty({ type: Boolean }) valid!: boolean;
+  @ApiProperty({ type: [HomeTopicBatchIssuePreviewModel] }) issues!: HomeTopicBatchIssuePreviewModel[];
+}
+
+export class HomeTopicBatchImportIssueResultModel {
+  @ApiProperty({ type: Number, minimum: 1 }) issueIndex!: number;
+  @ApiProperty({ type: String, enum: ["IMPORTED", "REJECTED"] }) status!: string;
+  @ApiProperty({ type: () => AdminHomeTopicItemModel, nullable: true }) topic!: AdminHomeTopicItemModel | null;
+  @ApiProperty({ type: [String] }) errors!: string[];
+}
+
+export class HomeTopicBatchImportResponseModel {
+  @ApiProperty({ type: [HomeTopicBatchImportIssueResultModel] }) issues!: HomeTopicBatchImportIssueResultModel[];
 }
 
 export class AdminHomeTopicRecipeItemModel extends HomeTopicRecipeItemModel {

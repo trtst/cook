@@ -14,6 +14,7 @@ import {
   IsISO8601,
   IsOptional,
   IsString,
+  IsUUID,
   IsUrl,
   Matches,
   Max,
@@ -772,6 +773,161 @@ export class HomeTopicRecipeQueryDto {
   @IsString()
   @MaxLength(40)
   keyword?: string;
+
+  @ApiPropertyOptional({ maxLength: 40 })
+  @IsOptional()
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @MaxLength(40)
+  ingredient?: string;
+
+  @ApiPropertyOptional({ maxLength: 64 })
+  @IsOptional()
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @MaxLength(64)
+  cuisine?: string;
+
+  @ApiPropertyOptional({ maxLength: 64 })
+  @IsOptional()
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @MaxLength(64)
+  dishStyle?: string;
+
+  @ApiPropertyOptional({ minimum: 1, default: 1 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page = 1;
+
+  @ApiPropertyOptional({ minimum: 1, maximum: 100, default: 20 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  pageSize = 20;
+}
+
+export class HomeTopicBatchRecipeDto {
+  @ApiProperty({ minimum: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  recipeId!: number;
+
+  @ApiProperty({ minimum: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  sourceVersionId!: number;
+
+  @ApiProperty({ minimum: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  sortOrder!: number;
+
+  @ApiProperty({ nullable: true, maxLength: 60 })
+  @Transform(({ value }) => trimString(value))
+  @IsDefined()
+  @ValidateIf((_object, value) => value !== null)
+  @IsString()
+  @MaxLength(60)
+  recommendNote!: string | null;
+}
+
+export class HomeTopicBatchDayDto {
+  @ApiProperty({ enum: homeTopicWeekdayValues })
+  @IsIn(homeTopicWeekdayValues)
+  weekday!: (typeof homeTopicWeekdayValues)[number];
+
+  @ApiProperty({ type: [HomeTopicBatchRecipeDto], maxItems: 200 })
+  @IsArray()
+  @ArrayMaxSize(200)
+  @ArrayUnique((item: HomeTopicBatchRecipeDto) => item.recipeId)
+  @ValidateNested({ each: true })
+  @Type(() => HomeTopicBatchRecipeDto)
+  items!: HomeTopicBatchRecipeDto[];
+}
+
+export class HomeTopicBatchIssueDto {
+  @ApiProperty({ type: String, format: "date" })
+  @IsISO8601({ strict: true })
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  periodStartDate!: string;
+
+  @ApiProperty({ type: String, format: "date-time" })
+  @IsISO8601({ strict: true })
+  plannedPublishAt!: string;
+
+  @ApiProperty({ maxLength: 20 })
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(20)
+  title!: string;
+
+  @ApiProperty({ nullable: true, maxLength: 40 })
+  @Transform(({ value }) => trimString(value))
+  @IsDefined()
+  @ValidateIf((_object, value) => value !== null)
+  @IsString()
+  @MaxLength(40)
+  subTitle!: string | null;
+
+  @ApiProperty({ enum: ["WEEKEND_GATHERING", "QUICK_AFTER_WORK", "HOME_STYLE", "ONE_PERSON", "BREAKFAST", "LIGHT_DINNER"] })
+  @IsIn(["WEEKEND_GATHERING", "QUICK_AFTER_WORK", "HOME_STYLE", "ONE_PERSON", "BREAKFAST", "LIGHT_DINNER"])
+  recType!: "WEEKEND_GATHERING" | "QUICK_AFTER_WORK" | "HOME_STYLE" | "ONE_PERSON" | "BREAKFAST" | "LIGHT_DINNER";
+
+  @ApiProperty({ maxLength: 120 })
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(120)
+  description!: string;
+
+  @ApiProperty({ maxLength: 500 })
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(500)
+  themeRationale!: string;
+
+  @ApiProperty({ type: [HomeTopicBatchDayDto], minItems: 7, maxItems: 7 })
+  @IsArray()
+  @ArrayMinSize(7)
+  @ArrayMaxSize(7)
+  @ArrayUnique((item: HomeTopicBatchDayDto) => item.weekday)
+  @ValidateNested({ each: true })
+  @Type(() => HomeTopicBatchDayDto)
+  days!: HomeTopicBatchDayDto[];
+}
+
+export class HomeTopicBatchImportDto extends OperationDto {
+  @ApiProperty({ enum: [1] })
+  @Type(() => Number)
+  @IsInt()
+  @IsIn([1])
+  schemaVersion!: 1;
+
+  @ApiProperty({ format: "uuid" })
+  @IsUUID()
+  statsSnapshotId!: string;
+
+  @ApiProperty({ type: String, format: "date-time" })
+  @IsISO8601({ strict: true })
+  generatedAt!: string;
+
+  @ApiProperty({ type: [HomeTopicBatchIssueDto], minItems: 1, maxItems: 12 })
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(12)
+  @ValidateNested({ each: true })
+  @Type(() => HomeTopicBatchIssueDto)
+  issues!: HomeTopicBatchIssueDto[];
 }
 
 export class HomeTopicPickDto {

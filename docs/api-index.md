@@ -56,6 +56,10 @@
 | AdminHome | DELETE | `/admin/home-entries/{placement}/image` | 后台清空指定首页快捷入口图片 |
 | AdminHomeTopic | GET | `/admin/home-topics` | 后台读取本周灵感专题列表与类别选项 |
 | AdminHomeTopic | GET | `/admin/home-topics/recipes` | 后台搜索可加入专题的灵感菜谱 |
+| AdminHomeTopicStats | GET | `/admin/home-topics/statistics` | 读取共享周刊可用菜谱统计快照（SUPER_ADMIN） |
+| AdminHomeTopicStats | POST | `/admin/home-topics/statistics/rebuild` | 重建共享周刊统计快照（SUPER_ADMIN） |
+| AdminHomeTopic | POST | `/admin/home-topics/import/preview` | 校验周刊 JSON 批次，不写入（SUPER_ADMIN） |
+| AdminHomeTopic | POST | `/admin/home-topics/import` | 将 JSON 批次有效期逐期导入为草稿（SUPER_ADMIN） |
 | AdminHomeTopic | GET | `/admin/home-topics/todos` | 分页读取失效共享周刊菜谱待办 |
 | AdminHomeTopic | POST | `/admin/home-topics` | 后台新建本周灵感专题 |
 | AdminHomeTopic | PUT | `/admin/home-topics/{topicId}` | 后台更新本周灵感专题 |
