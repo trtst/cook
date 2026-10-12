@@ -377,7 +377,7 @@ onMounted(() => {
 
       <section class="surface-panel stats-panel">
         <div class="todo-panel__head">
-          <div><h4>共享菜谱统计</h4><p>供运营和 Codex 选题参考；只统计当前可公开的系统灵感菜谱。</p></div>
+          <div><h4>共享菜谱统计</h4><p>供运营和 Codex 选题参考；核心食材仅统计已匹配的系统食材分类 5001–5004。</p></div>
           <el-button :icon="Refresh" :loading="statsBusy" @click="rebuildStats">重新统计</el-button>
         </div>
         <div v-if="stats" class="stats-summary">
@@ -388,7 +388,7 @@ onMounted(() => {
         <el-empty v-else description="尚无统计快照，请先重新统计" :image-size="48" />
         <div v-if="stats" class="stats-facets">
           <p><strong>主要食材</strong>{{ formatFacetRows(stats.facets.primaryIngredients) || "暂无确认数据" }} · 覆盖 {{ stats.coverage.primaryIngredients }} 道</p>
-          <p><strong>全部食材</strong>{{ formatFacetRows(stats.facets.allIngredients) || "暂无数据" }} · 覆盖 {{ stats.coverage.ingredients }} 道</p>
+          <p><strong>核心食材</strong>{{ formatFacetRows(stats.facets.allIngredients) || "暂无数据" }} · 覆盖 {{ stats.coverage.ingredients }} 道</p>
           <p><strong>菜系</strong>{{ formatFacetRows(stats.facets.cuisines) || "暂无确认数据" }} · 覆盖 {{ stats.coverage.cuisines }} 道</p>
           <p><strong>菜式/做法</strong>{{ formatFacetRows(stats.facets.dishStyles) || "暂无确认数据" }} · 覆盖 {{ stats.coverage.dishStyles }} 道</p>
           <p><strong>菜品角色</strong>{{ formatFacetRows(stats.facets.dishRoles) || "暂无确认数据" }} · 蛋白 {{ formatFacetRows(stats.facets.proteins) || "暂无确认数据" }}</p>
