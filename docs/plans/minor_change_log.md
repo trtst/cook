@@ -2,6 +2,8 @@
 
 | 2026-10-12 | 实现共享周刊按日菜单：新增周期/星期/预约与待办忽略数据迁移、服务端周期开算和七天发布校验、预约 Worker、Admin 逐日编排/待办处理与首页计数、小程序逐日浏览/历史日期/朋友分享，并同步 API 文档和验收脚本。 | `apps/api/prisma/schema.prisma`、`apps/api/prisma/migrations/20261012120000_shared_weekly_day_menu/migration.sql`、`apps/api/src/modules/home/`、`apps/worker/src/main.ts`、`apps/admin/src/pages/HomeTopicEditorPage.vue`、`apps/client/src/pages_home/topic/index.vue`、`docs/superpowers/plans/2026-10-12-shared-weekly-day-menu.md` 及关联契约文件 | API/Admin/Client/Worker type-check 通过；API 4 项定向测试通过；OpenAPI 351 operations/318 response schemas；Prisma validate/generate、Admin build、Client mp-weixin build、Worker build、脚本语法检查和 `git diff --check` 通过。Worker 全开关关闭启动正常。本地 PostgreSQL 不可连接，因此历史周期冲突盘点、migration 实跑、真实 API/Admin 与 Worker 到期联调、微信 DevTools/真机验收未完成；未部署、未提交。 |
 
+| 2026-10-12 | 修复共享周刊 migration 的历史周期冲突：目标库中已下架专题 ID 2、3 都映射到 2026-10-12；按确认规则合并到较小 ID，移动并保留菜谱项、按原专题和排序重排；对未下架专题冲突及合并后重复菜谱项继续 fail-fast。 | `apps/api/prisma/migrations/20261012120000_shared_weekly_day_menu/migration.sql`、共享周刊设计与实施文档、专题执行单 | SQL 静态审阅与 `git diff --check`；未连接或修改目标数据库，未重跑 migration。 |
+
 | 2026-10-12 | 确认共享周刊未预约草稿周期（创建时分配下周、改预约重算、取消保留）、待办忽略的持久审计记录，以及旧专题菜谱统一归周一并仅展示有菜日期的规则；历史周期按既有完整自然周规则回填。同步更新设计稿、实施计划和专题执行单。 | `docs/superpowers/specs/2026-10-12-shared-weekly-day-menu-design.md`、`docs/superpowers/plans/2026-10-12-shared-weekly-day-menu.md`、`docs/plans/home-weekly-topic-execution.md`、`docs/plans/minor_change_log.md` | 产品规则已确认；旧周期冲突仍待只读数据库盘点。 |
 | 2026-10-12 | 启动共享周刊按日菜单实施：在现有专题执行单补齐七天编排、周期默认日期、文章式状态流转、朋友分享、失效菜谱待办及验收边界。初步审查确认工作区干净、Client 相关改动已在提交历史中；本地 PostgreSQL 未运行，旧专题数据映射及两个产品门禁尚未确认。 | `docs/plans/home-weekly-topic-execution.md`、`docs/superpowers/plans/2026-10-12-shared-weekly-day-menu.md`、`docs/plans/minor_change_log.md` | 文档审阅与本地状态检查；未改业务代码、未运行测试、未提交。 |
 

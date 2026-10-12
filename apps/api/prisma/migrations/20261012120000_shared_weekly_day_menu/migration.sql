@@ -40,22 +40,58 @@ UPDATE "home_topics" AS "topic"
 
 DO $$
 DECLARE
-  "conflicts" text;
+  "activeConflicts" text;
+  "duplicateRecipes" text;
 BEGIN
   SELECT string_agg(
            "period_start_date"::text || ' => [' || array_to_string("topic_ids", ',') || ']',
            '; '
          )
-    INTO "conflicts"
+    INTO "activeConflicts"
     FROM (
-      SELECT "period_start_date", array_agg("id" ORDER BY "id") AS "topic_ids"
+      SELECT
+        "period_start_date",
+        array_agg("id" ORDER BY "id") AS "topic_ids",
+        bool_and("status"::text = 'UNLISTED') AS "allUnlisted"
         FROM "home_topics"
        GROUP BY "period_start_date"
       HAVING COUNT(*) > 1
-    ) AS "duplicate_periods";
+    ) AS "duplicate_periods"
+   WHERE NOT "allUnlisted";
 
-  IF "conflicts" IS NOT NULL THEN
-    RAISE EXCEPTION 'HomeTopic period mapping conflict; review topic IDs before migrating: %', "conflicts";
+  IF "activeConflicts" IS NOT NULL THEN
+    RAISE EXCEPTION 'HomeTopic period mapping conflict outside unlisted legacy topics; review topic IDs before migrating: %', "activeConflicts";
+  END IF;
+
+  WITH "duplicate_periods" AS (
+    SELECT "period_start_date"
+      FROM "home_topics"
+     GROUP BY "period_start_date"
+    HAVING COUNT(*) > 1
+       AND bool_and("status"::text = 'UNLISTED')
+  )
+  SELECT string_agg(
+           "duplicate_items"."period_start_date"::text || ' recipe_id=' || "duplicate_items"."recipe_id"::text
+             || ' topic_ids=[' || array_to_string("duplicate_items"."topic_ids", ',') || ']',
+           '; '
+         )
+    INTO "duplicateRecipes"
+    FROM (
+      SELECT
+        "duplicate_periods"."period_start_date",
+        "items"."recipe_id",
+        array_agg(DISTINCT "items"."topic_id" ORDER BY "items"."topic_id") AS "topic_ids"
+        FROM "duplicate_periods"
+        JOIN "home_topics" AS "topics"
+          ON "topics"."period_start_date" = "duplicate_periods"."period_start_date"
+        JOIN "home_topic_items" AS "items"
+          ON "items"."topic_id" = "topics"."id"
+       GROUP BY "duplicate_periods"."period_start_date", "items"."recipe_id"
+      HAVING COUNT(DISTINCT "items"."topic_id") > 1
+    ) AS "duplicate_items";
+
+  IF "duplicateRecipes" IS NOT NULL THEN
+    RAISE EXCEPTION 'Cannot merge unlisted legacy HomeTopics without dropping duplicate recipe items; review period, recipe, and topic IDs: %', "duplicateRecipes";
   END IF;
 END $$;
 
@@ -85,6 +121,58 @@ UPDATE "home_topics"
 
 DROP INDEX "home_topics_status_published_at_id_idx";
 DROP INDEX "home_topic_items_topic_id_sort_order_key";
+
+CREATE TEMP TABLE "home_topic_legacy_merge_map" ON COMMIT DROP AS
+WITH "duplicate_periods" AS (
+  SELECT "period_start_date"
+    FROM "home_topics"
+   GROUP BY "period_start_date"
+  HAVING COUNT(*) > 1
+     AND bool_and("status"::text = 'UNLISTED')
+),
+"topic_targets" AS (
+  SELECT
+    "topics"."id" AS "source_topic_id",
+    first_value("topics"."id") OVER (
+      PARTITION BY "topics"."period_start_date"
+      ORDER BY "topics"."id"
+    ) AS "target_topic_id"
+    FROM "home_topics" AS "topics"
+    JOIN "duplicate_periods"
+      ON "duplicate_periods"."period_start_date" = "topics"."period_start_date"
+)
+SELECT "source_topic_id", "target_topic_id"
+  FROM "topic_targets"
+ WHERE "source_topic_id" <> "target_topic_id";
+
+WITH "merge_topics" AS (
+  SELECT "source_topic_id" AS "topic_id", "target_topic_id"
+    FROM "home_topic_legacy_merge_map"
+  UNION ALL
+  SELECT DISTINCT "target_topic_id" AS "topic_id", "target_topic_id"
+    FROM "home_topic_legacy_merge_map"
+),
+"ordered_items" AS (
+  SELECT
+    "items"."id",
+    "merge_topics"."target_topic_id",
+    row_number() OVER (
+      PARTITION BY "merge_topics"."target_topic_id"
+      ORDER BY "merge_topics"."topic_id", "items"."sort_order", "items"."id"
+    )::integer AS "sort_order"
+    FROM "merge_topics"
+    JOIN "home_topic_items" AS "items"
+      ON "items"."topic_id" = "merge_topics"."topic_id"
+)
+UPDATE "home_topic_items" AS "items"
+   SET "topic_id" = "ordered_items"."target_topic_id",
+       "sort_order" = "ordered_items"."sort_order"
+  FROM "ordered_items"
+ WHERE "items"."id" = "ordered_items"."id";
+
+DELETE FROM "home_topics" AS "topics"
+ USING "home_topic_legacy_merge_map" AS "merge_map"
+ WHERE "topics"."id" = "merge_map"."source_topic_id";
 
 CREATE UNIQUE INDEX "home_topics_period_start_date_key"
   ON "home_topics"("period_start_date");
