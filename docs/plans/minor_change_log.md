@@ -1,5 +1,13 @@
 # 项目变更记录
 
+| 2026-10-12 | 拆分共享周刊按日菜单的实施计划：加入遗留专题周期/星期映射门禁，定义 HomeTopic 周期与状态迁移、独立预约 Worker、后台按日编排和失效菜谱待办、小程序日期浏览与分享、契约同步和跨端验收；显式保留用户当前 Client 手动修改，并列出写代码前需确认的草稿周期来源与待办忽略存储方式。 | `docs/superpowers/plans/2026-10-12-shared-weekly-day-menu.md`、`docs/plans/minor_change_log.md` | `git diff --check` 通过；仅创建计划文档，未改业务代码、未运行测试、未提交。 |
+
+| 2026-10-12 | 补充个人周刊分享态的页面范围：会员通过分享链接只看本次分享的当期周刊，隐藏底部历史周刊列表与“查看更多”，不能由分享页访问分享者的其他期数。 | `docs/superpowers/specs/2026-10-12-shared-weekly-day-menu-design.md`、`docs/plans/minor_change_log.md` | `git diff --check` 通过；未改业务代码、未运行测试、未提交。 |
+
+| 2026-10-12 | 在共享周刊设计稿中记录后续个人周刊分享权限方向：会员接收者可通过分享链接只读查看分享者明确分享的一期完整周刊，不获得其他个人周刊或个人资料访问权；免费接收者仅可查看周一；不影响接收者自己的个人周刊。后台个人周刊列表与运营查看权限仍未确认，且本能力不纳入当前共享周刊阶段。 | `docs/superpowers/specs/2026-10-12-shared-weekly-day-menu-design.md`、`docs/plans/minor_change_log.md` | `git diff --check` 通过；未改业务代码、未运行测试、未提交。 |
+
+| 2026-10-12 | 根据逐项确认更新共享周刊讨论稿，补充免费访问、按日菜单及菜谱项星期归属、自然周唯一一期、周期周一持久化且唯一并由服务端计算周日、七天菜单齐全后可立即/预约发布、预约/立即发布时间推算下一周及延迟保留周期、文章式发布/下架/预约流转、本期和往期默认日期、分享封面 Logo 回退、失效菜谱隐藏及后台首页可替换/忽略待办、加入计划和已发布期编辑/草稿删除规则；已确认下架期转回草稿后可删除，讨论稿仍需整体审阅，不作为实施依据。 | `docs/superpowers/specs/2026-10-12-shared-weekly-day-menu-design.md`、`docs/plans/minor_change_log.md` | `git diff --check` 通过；未改业务代码、未运行测试、未提交。 |
+
 | 2026-10-12 | 周刊详情无 `topicId` 时继续展示最新一期，有 ID 时读取指定期；往期周刊列表新增分页 API，详情预览限制为最近 5 期，列表和详情跳转保留历史浏览导航状态。修正历史浏览 query 静态契约断言和点击重试的事件类型。 | `apps/api/src/contracts/dtos.ts`、`apps/api/src/contracts/openapi.ts`、`apps/api/src/modules/home/home-topic.controller.ts`、`apps/api/src/modules/home/home-topic.service.ts`、`apps/api/src/modules/home/home-topic-history.service.test.ts`、`apps/client/src/apis/home.ts`、`apps/client/src/pages_home/topic-list/index.vue`、`apps/client/src/pages_home/topic-list/index.test.ts`、`apps/client/src/pages_home/topic/index.vue`、`apps/client/src/pages.json`、`docs/api-contract.md`、`docs/api-index.md`、`docs/plans/home-weekly-topic-execution.md`、`docs/plans/minor_change_log.md` | API 分页服务测试、Client 静态路由与接口契约、API/Client type-check、API build、Client mp-weixin build、`git diff --check` 通过；完整 `pnpm gate:ci` 被无关图片迁移目标测试阻断，未做微信开发者工具/真机验收。 |
 
 | 2026-10-11 | 封面快照修复命令增加显式 `--skip-conflicts`，允许跳过冲突项并执行其余可修复项；命令输出冲突数量和跳过明细。 | `apps/api/scripts/repair-recipe-cover-snapshots.ts`、`docs/api-contract.md`、`docs/plans/minor_change_log.md` | `git diff --check` 通过；未运行自动化测试。 |
