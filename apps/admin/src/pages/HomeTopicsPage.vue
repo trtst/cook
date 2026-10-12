@@ -3,7 +3,7 @@ import { computed, onMounted, ref } from "vue";
 import { Delete, Plus } from "@element-plus/icons-vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { useRouter } from "vue-router";
-import { homeTopicsApi, type AdminHomeTopicItem, type AdminHomeTopicsResponse, type HomeTopicStatus } from "@/apis/home-topics";
+import { homeTopicsApi, type AdminHomeTopicItem, type AdminHomeTopicsResponse, type HomeTopicStatus, type HomeTopicTodosResponse, type HomeTopicRecipeItem } from "@/apis/home-topics";
 import { adminAppConfig } from "@/apis/config";
 import { useAdminHeaderRefresh } from "@/composables/useAdminHeader";
 import { formatDateTime } from "@/utils/date";
@@ -13,6 +13,12 @@ const loading = ref(true);
 const statusBusyId = ref<number | null>(null);
 const deleteBusyId = ref<number | null>(null);
 const topics = ref<AdminHomeTopicItem[]>([]);
+const todos = ref<HomeTopicTodosResponse["items"]>([]);
+const todoTotal = ref(0);
+const todoCandidates = ref<HomeTopicRecipeItem[]>([]);
+const todoSearch = ref("");
+const todoTarget = ref<HomeTopicTodosResponse["items"][number] | null>(null);
+const todoBusyId = ref<number | null>(null);
 const router = useRouter();
 const apiOrigin = resolveApiOrigin();
 const hasTopics = computed(() => topics.value.length > 0);
@@ -31,16 +37,17 @@ function resolveApiOrigin() {
 
 function sortTopics(items: AdminHomeTopicItem[]) {
   const order = {
-    LISTED: 0,
-    UNLISTED: 1
+    DRAFT: 0,
+    PUBLISHED: 1,
+    UNLISTED: 2
   } satisfies Record<HomeTopicStatus, number>;
 
   return [...items].sort((left, right) => {
     const statusDiff = order[left.status] - order[right.status];
     if (statusDiff !== 0) return statusDiff;
 
-    const publishedDiff = new Date(right.publishedAt).getTime() - new Date(left.publishedAt).getTime();
-    if (publishedDiff !== 0) return publishedDiff;
+    const periodDiff = right.periodStartDate.localeCompare(left.periodStartDate);
+    if (periodDiff !== 0) return periodDiff;
     return right.id - left.id;
   });
 }
@@ -63,23 +70,64 @@ function getTopicCover(item: { coverImageUrl: string | null; version: number }) 
 }
 
 function topicStatusText(status: HomeTopicStatus) {
-  return status === "LISTED" ? "已上架" : "未上架";
+  return status === "DRAFT" ? "草稿" : status === "PUBLISHED" ? "已发布" : "已下架";
 }
 
 function topicActionText(status: HomeTopicStatus) {
-  return status === "LISTED" ? "下架" : "上架";
+  return status === "DRAFT" ? "发布" : status === "PUBLISHED" ? "下架" : "转为草稿";
 }
 
 async function loadPage() {
   loading.value = true;
   try {
-    const result = await homeTopicsApi.getTopics();
+    const [result, todoResult] = await Promise.all([homeTopicsApi.getTopics(), homeTopicsApi.getTodos()]);
     assignResponse(result);
+    todos.value = todoResult.items;
+    todoTotal.value = todoResult.total;
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : "加载本周灵感失败");
   } finally {
     loading.value = false;
   }
+}
+
+async function searchTodoReplacement(todo: HomeTopicTodosResponse["items"][number]) {
+  todoTarget.value = todo;
+  try {
+    const result = await homeTopicsApi.searchRecipes(todoSearch.value.trim() || undefined);
+    todoCandidates.value = result.items;
+  } catch (error) { ElMessage.error(error instanceof Error ? error.message : "搜索替代菜失败"); }
+}
+
+async function replaceTodo(todo: HomeTopicTodosResponse["items"][number], recipe: HomeTopicRecipeItem) {
+  todoBusyId.value = todo.itemId;
+  try {
+    await homeTopicsApi.replaceItem(todo.itemId, recipe.id, todo.topicVersion, createOperationId());
+    todos.value = todos.value.filter(item => item.itemId !== todo.itemId);
+    todoTarget.value = null;
+    ElMessage.success("已替换失效菜谱");
+    await loadPage();
+  } catch (error) { ElMessage.error(error instanceof Error ? error.message : "替换失败"); }
+  finally { todoBusyId.value = null; }
+}
+
+async function dismissTodo(todo: HomeTopicTodosResponse["items"][number]) {
+  try {
+    await ElMessageBox.confirm(`忽略后会保存处置记录，《${todo.topicTitle}》${todo.weekday}的失效菜将不再出现在待办中。`, "忽略待办", { type: "warning" });
+  } catch { return; }
+  todoBusyId.value = todo.itemId;
+  try {
+    const updatedTopic = await homeTopicsApi.dismissTodo(todo.itemId, todo.topicVersion, createOperationId());
+    patchTopic(updatedTopic);
+    todos.value = todos.value.filter(item => item.itemId !== todo.itemId);
+    todoTotal.value = Math.max(0, todoTotal.value - 1);
+    ElMessage.success("已忽略并记录");
+  } catch (error) { ElMessage.error(error instanceof Error ? error.message : "忽略失败"); }
+  finally { todoBusyId.value = null; }
+}
+
+function weekdayLabel(value: string) {
+  return ({ MONDAY: "周一", TUESDAY: "周二", WEDNESDAY: "周三", THURSDAY: "周四", FRIDAY: "周五", SATURDAY: "周六", SUNDAY: "周日" } as Record<string, string>)[value] ?? value;
 }
 
 function openCreate() {
@@ -94,7 +142,7 @@ function openEdit(topicId: number) {
 }
 
 async function toggleTopicStatus(item: AdminHomeTopicItem) {
-  const nextStatus: HomeTopicStatus = item.status === "LISTED" ? "UNLISTED" : "LISTED";
+  const nextStatus: HomeTopicStatus = item.status === "DRAFT" ? "PUBLISHED" : item.status === "PUBLISHED" ? "UNLISTED" : "DRAFT";
   if (nextStatus === "UNLISTED") {
     try {
       await ElMessageBox.confirm(`下架后，前台“本周灵感”与往期列表都不会再显示《${item.title}》。`, "确认下架", {
@@ -118,7 +166,7 @@ async function toggleTopicStatus(item: AdminHomeTopicItem) {
       createOperationId()
     );
     patchTopic(result);
-    ElMessage.success(result.status === "LISTED" ? "专题已上架" : "专题已下架");
+    ElMessage.success(topicStatusText(result.status));
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : "切换专题状态失败");
   } finally {
@@ -127,8 +175,8 @@ async function toggleTopicStatus(item: AdminHomeTopicItem) {
 }
 
 async function deleteTopic(item: AdminHomeTopicItem) {
-  if (item.status === "LISTED") {
-    ElMessage.warning("请先下架专题再删除");
+  if (item.status !== "DRAFT") {
+    ElMessage.warning("只有草稿周刊可以删除，请先转为草稿");
     return;
   }
 
@@ -177,6 +225,33 @@ onMounted(() => {
         <el-button type="primary" :icon="Plus" @click="openCreate">新建专题</el-button>
       </div>
 
+      <section class="surface-panel todo-panel">
+        <div class="todo-panel__head"><div><h4>失效菜谱待办</h4><p>忽略后会保留操作者与菜谱项记录。</p></div><strong>{{ todoTotal }}</strong></div>
+        <div v-if="todos.length" class="todo-list">
+          <article v-for="todo in todos" :key="todo.itemId" class="todo-row">
+            <div><strong>{{ todo.topicTitle }} · {{ weekdayLabel(todo.weekday) }}</strong><p>第 {{ todo.issueNo }} 期 · {{ todo.periodStartDate }} · {{ todo.recipeName }}</p></div>
+            <div class="todo-row__actions">
+              <el-button size="small" @click="openEdit(todo.topicId)">查看周刊</el-button>
+              <el-button size="small" type="primary" @click="searchTodoReplacement(todo)">替换菜谱</el-button>
+              <el-button size="small" :loading="todoBusyId === todo.itemId" @click="dismissTodo(todo)">忽略并记录</el-button>
+            </div>
+          </article>
+        </div>
+        <el-empty v-else description="暂无待处理的失效菜谱" :image-size="56" />
+      </section>
+
+      <el-dialog :model-value="Boolean(todoTarget)" title="选择替代菜谱" width="620px" @close="todoTarget = null" @closed="todoCandidates = []">
+        <p v-if="todoTarget" class="todo-dialog__summary">{{ todoTarget.topicTitle }} · {{ todoTarget.weekday }} · {{ todoTarget.recipeName }}</p>
+        <div class="todo-dialog__search"><el-input v-model="todoSearch" placeholder="菜名、食材或菜谱 ID" @keyup.enter="todoTarget && searchTodoReplacement(todoTarget)" /><el-button @click="todoTarget && searchTodoReplacement(todoTarget)">搜索</el-button></div>
+        <div class="todo-candidates">
+          <article v-for="recipe in todoCandidates" :key="recipe.id" class="todo-candidate">
+            <span>{{ recipe.title }}</span>
+            <el-button size="small" type="primary" :loading="todoTarget ? todoBusyId === todoTarget.itemId : false" @click="todoTarget && replaceTodo(todoTarget, recipe)">替换</el-button>
+          </article>
+          <el-empty v-if="!todoCandidates.length" description="搜索可公开菜谱后选择替代项" :image-size="48" />
+        </div>
+      </el-dialog>
+
       <section v-if="hasTopics" class="surface-panel topic-list">
         <article v-for="item in topics" :key="item.id" class="topic-row">
           <img v-if="getTopicCover(item)" :src="getTopicCover(item)" alt="专题封面" class="topic-row__cover" />
@@ -185,13 +260,15 @@ onMounted(() => {
           <div class="topic-row__main">
             <div class="topic-row__head">
               <h4>{{ item.title }}</h4>
-              <span class="topic-row__status" :class="{ 'topic-row__status--listed': item.status === 'LISTED' }">
+              <span class="topic-row__status" :class="{ 'topic-row__status--listed': item.status === 'PUBLISHED' }">
                 {{ topicStatusText(item.status) }}
               </span>
             </div>
             <p v-if="item.subTitle" class="topic-row__sub">{{ item.subTitle }}</p>
             <p class="topic-row__meta">
-              第 {{ item.issueNo }} 期 · {{ item.recTypeText }} · {{ item.items.length }} 道菜 · 更新于 {{ formatDateTime(item.updatedAt) }}
+              第 {{ item.issueNo }} 期 · {{ item.recTypeText }} · {{ item.periodStartDate }} ～ {{ item.periodEndDate }} · {{ item.items.length }} 道可公开菜
+              <span v-if="item.scheduledPublishAt"> · 预约 {{ formatDateTime(item.scheduledPublishAt) }}</span>
+              <span v-else-if="item.publishedAt"> · 发布于 {{ formatDateTime(item.publishedAt) }}</span>
             </p>
           </div>
 
@@ -205,7 +282,7 @@ onMounted(() => {
               type="danger"
               :icon="Delete"
               :loading="deleteBusyId === item.id"
-              :disabled="item.status === 'LISTED'"
+              :disabled="item.status !== 'DRAFT'"
               @click="deleteTopic(item)"
             >
               删除

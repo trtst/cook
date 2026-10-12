@@ -4,6 +4,7 @@ import { useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
 import { dashboardApi, type AdminDashboardTrendPoint, type AdminDashboardTrendsResponse, type AdminDashboardSummary } from "@/apis/dashboard";
 import { useAdminHeaderRefresh } from "@/composables/useAdminHeader";
+import { homeTopicsApi } from "@/apis/home-topics";
 
 type TrendRange = "7D" | "30D";
 
@@ -12,6 +13,7 @@ const loading = ref(false);
 const summary = ref<AdminDashboardSummary | null>(null);
 const trends = ref<AdminDashboardTrendsResponse | null>(null);
 const activeRange = ref<TrendRange>("7D");
+const weeklyTodoCount = ref(0);
 
 useAdminHeaderRefresh(() => {
   void loadDashboard();
@@ -54,9 +56,10 @@ function seriesValues(points: AdminDashboardTrendPoint[], key: keyof AdminDashbo
 async function loadDashboard() {
   loading.value = true;
   try {
-    const [summaryResult, trendResult] = await Promise.all([dashboardApi.getSummary(), dashboardApi.getTrends(activeRange.value)]);
+    const [summaryResult, trendResult, weeklyTodos] = await Promise.all([dashboardApi.getSummary(), dashboardApi.getTrends(activeRange.value), homeTopicsApi.getTodos()]);
     summary.value = summaryResult;
     trends.value = trendResult;
+    weeklyTodoCount.value = weeklyTodos.total;
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : "加载运营看板失败");
   } finally {
@@ -150,6 +153,9 @@ onMounted(() => {
   <section class="page-stack">
     <div v-loading="loading" class="page-stack">
       <div class="dashboard-top-grid">
+        <button type="button" class="metric-panel metric-panel--link dashboard-top-card" @click="open('/operations/weekly-topic')">
+          <span class="metric-label">失效周刊菜谱待办</span><strong>{{ formatCount(weeklyTodoCount) }}</strong><span class="metric-meta">需要替换或忽略并记录</span>
+        </button>
         <button v-for="card in overviewCards" :key="card.label" type="button" class="metric-panel metric-panel--link dashboard-top-card" @click="open(card.path)">
           <span class="metric-label">{{ card.label }}</span>
           <strong>{{ formatCount(card.value) }}</strong>

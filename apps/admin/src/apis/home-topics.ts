@@ -7,7 +7,12 @@ export type HomeTopicType =
   | "ONE_PERSON"
   | "BREAKFAST"
   | "LIGHT_DINNER";
-export type HomeTopicStatus = "LISTED" | "UNLISTED";
+export type HomeTopicStatus = "DRAFT" | "PUBLISHED" | "UNLISTED";
+export type HomeTopicWeekday = "MONDAY" | "TUESDAY" | "WEDNESDAY" | "THURSDAY" | "FRIDAY" | "SATURDAY" | "SUNDAY";
+export const homeTopicWeekdays: Array<{ value: HomeTopicWeekday; label: string }> = [
+  { value: "MONDAY", label: "周一" }, { value: "TUESDAY", label: "周二" }, { value: "WEDNESDAY", label: "周三" },
+  { value: "THURSDAY", label: "周四" }, { value: "FRIDAY", label: "周五" }, { value: "SATURDAY", label: "周六" }, { value: "SUNDAY", label: "周日" }
+];
 
 export interface HomeTopicTypeOption {
   label: string;
@@ -16,6 +21,8 @@ export interface HomeTopicTypeOption {
 
 export interface HomeTopicRecipeItem {
   id: UUID;
+  weekday?: HomeTopicWeekday;
+  publiclyAvailable?: boolean;
   sort: number;
   title: string;
   coverImageUrl: string | null;
@@ -41,10 +48,13 @@ export interface AdminHomeTopicItem {
   recTypeText: string;
   status: HomeTopicStatus;
   issueNo: number;
+  periodStartDate: string;
+  periodEndDate: string;
+  scheduledPublishAt: string | null;
   description: string;
   coverImageUrl: string | null;
   recipeCount: number;
-  publishedAt: string;
+  publishedAt: string | null;
   updatedAt: string;
   items: HomeTopicRecipeItem[];
   version: number;
@@ -61,6 +71,8 @@ export interface HomeTopicRecipeSearchResponse {
 
 export interface HomeTopicPickInput {
   recipeId: UUID;
+  weekday: HomeTopicWeekday;
+  sortOrder: number;
   recommendNote: string | null;
 }
 
@@ -80,6 +92,19 @@ export interface UpdateHomeTopicRequest extends CreateHomeTopicRequest {
 export interface SetHomeTopicStatusRequest {
   status: HomeTopicStatus;
   expectedVersion: number;
+}
+
+export interface SetHomeTopicScheduleRequest {
+  scheduledPublishAt: string | null;
+  expectedVersion: number;
+}
+
+export interface HomeTopicTodosResponse {
+  items: Array<{
+    itemId: UUID; topicId: UUID; topicTitle: string; issueNo: number; periodStartDate: string;
+    topicVersion: number; weekday: HomeTopicWeekday; recipeId: UUID; recipeName: string; sourceVersionId: UUID;
+  }>;
+  page: number; pageSize: number; total: number; hasNext: boolean;
 }
 
 export interface DeleteHomeTopicRequest {
@@ -114,6 +139,24 @@ export const homeTopicsApi = {
       method: "POST",
       body,
       idempotencyKey: operationId
+    });
+  },
+  setTopicSchedule(topicId: UUID, body: SetHomeTopicScheduleRequest, operationId: OperationId) {
+    return requestData<AdminHomeTopicItem>(`/admin/home-topics/${encodeURIComponent(String(topicId))}/schedule`, {
+      method: "POST", body, idempotencyKey: operationId
+    });
+  },
+  getTodos() {
+    return requestData<HomeTopicTodosResponse>("/admin/home-topics/todos", { query: { page: 1, pageSize: 100 } });
+  },
+  replaceItem(itemId: UUID, replacementRecipeId: UUID, expectedVersion: number, operationId: OperationId) {
+    return requestData<AdminHomeTopicItem>(`/admin/home-topics/items/${encodeURIComponent(String(itemId))}/replace`, {
+      method: "POST", body: { replacementRecipeId, expectedVersion }, idempotencyKey: operationId
+    });
+  },
+  dismissTodo(itemId: UUID, expectedVersion: number, operationId: OperationId) {
+    return requestData<AdminHomeTopicItem>(`/admin/home-topics/items/${encodeURIComponent(String(itemId))}/dismiss`, {
+      method: "POST", body: { expectedVersion }, idempotencyKey: operationId
     });
   },
   deleteTopic(topicId: UUID, body: DeleteHomeTopicRequest, operationId: OperationId) {

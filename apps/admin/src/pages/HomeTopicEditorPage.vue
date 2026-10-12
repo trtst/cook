@@ -10,8 +10,10 @@ import {
   type CreateHomeTopicRequest,
   type HomeTopicRecipeItem,
   type HomeTopicStatus,
+  type HomeTopicWeekday,
   type HomeTopicType,
-  type HomeTopicTypeOption
+  type HomeTopicTypeOption,
+  homeTopicWeekdays
 } from "@/apis/home-topics";
 import { adminAppConfig } from "@/apis/config";
 import RecipePreviewDrawer from "@/components/RecipePreviewDrawer.vue";
@@ -26,6 +28,8 @@ type TopicForm = {
   recType: HomeTopicType;
   status: HomeTopicStatus;
   issueNo: number;
+  periodStartDate: string;
+  scheduledPublishAt: string | null;
   description: string;
   coverImageUrl: string;
   items: HomeTopicRecipeItem[];
@@ -37,6 +41,8 @@ const imageBusy = ref(false);
 const searchBusy = ref(false);
 const searchReady = ref(false);
 const statusBusy = ref(false);
+const selectedWeekday = ref<HomeTopicWeekday>("MONDAY");
+const scheduleInput = ref("");
 const previewVisible = ref(false);
 const previewRecipeId = ref<number | null>(null);
 const fileInput = ref<HTMLInputElement | null>(null);
@@ -57,6 +63,10 @@ const editorRecTypeLabel = computed(() => {
   if (!current) return "";
   return recTypes.value.find(item => item.value === current.recType)?.label || current.recType;
 });
+const groupedItems = computed(() => homeTopicWeekdays.map(day => ({
+  ...day,
+  items: (form.value?.items ?? []).filter(item => item.weekday === day.value).sort((left, right) => left.sort - right.sort)
+})));
 
 useAdminHeaderRefresh(() => {
   void loadPage();
@@ -87,16 +97,17 @@ function parseTopicId(value: unknown) {
 
 function sortTopics(items: AdminHomeTopicItem[]) {
   const order = {
-    LISTED: 0,
-    UNLISTED: 1
+    DRAFT: 0,
+    PUBLISHED: 1,
+    UNLISTED: 2
   } satisfies Record<HomeTopicStatus, number>;
 
   return [...items].sort((left, right) => {
     const statusDiff = order[left.status] - order[right.status];
     if (statusDiff !== 0) return statusDiff;
 
-    const publishedDiff = new Date(right.publishedAt).getTime() - new Date(left.publishedAt).getTime();
-    if (publishedDiff !== 0) return publishedDiff;
+    const periodDiff = right.periodStartDate.localeCompare(left.periodStartDate);
+    if (periodDiff !== 0) return periodDiff;
     return right.id - left.id;
   });
 }
@@ -110,6 +121,8 @@ function toForm(item: AdminHomeTopicItem): TopicForm {
     recType: item.recType,
     status: item.status,
     issueNo: item.issueNo,
+    periodStartDate: item.periodStartDate,
+    scheduledPublishAt: item.scheduledPublishAt,
     description: item.description,
     coverImageUrl: item.coverImageUrl || "",
     items: item.items.map(recipe => ({ ...recipe }))
@@ -123,12 +136,21 @@ function createForm(): TopicForm {
     title: "",
     subTitle: "",
     recType: recTypes.value[0]?.value ?? "WEEKEND_GATHERING",
-    status: "UNLISTED",
+    status: "DRAFT",
     issueNo: nextIssueNo(),
+    periodStartDate: "",
+    scheduledPublishAt: null,
     description: "",
     coverImageUrl: "",
     items: []
   };
+}
+
+function toDateTimeInput(value: string | null) {
+  if (!value) return "";
+  const date = new Date(value);
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 19).replace("T", " ");
 }
 
 function nextIssueNo() {
@@ -143,6 +165,7 @@ function syncFormFromRoute() {
   const topicId = parseTopicId(route.query.topicId);
   if (!topicId) {
     form.value = createForm();
+    scheduleInput.value = "";
     searchReady.value = false;
     searchItems.value = [];
     closeRecipePreview();
@@ -157,6 +180,7 @@ function syncFormFromRoute() {
   }
 
   form.value = toForm(current);
+  scheduleInput.value = toDateTimeInput(current.scheduledPublishAt);
   searchReady.value = false;
   searchItems.value = [];
   closeRecipePreview();
@@ -182,11 +206,11 @@ function getCoverUrl(item: { coverImageUrl: string; version: number }) {
 }
 
 function topicStatusText(status: HomeTopicStatus) {
-  return status === "LISTED" ? "已上架" : "未上架";
+  return status === "DRAFT" ? "草稿" : status === "PUBLISHED" ? "已发布" : "已下架";
 }
 
 function topicActionText(status: HomeTopicStatus) {
-  return status === "LISTED" ? "下架" : "上架";
+  return status === "PUBLISHED" ? "下架" : status === "UNLISTED" ? "转为草稿" : "立即发布";
 }
 
 async function loadPage() {
@@ -214,7 +238,6 @@ function validateForm() {
   if (!current.description.trim()) throw new Error("专题描述不能为空");
   if (current.description.trim().length > 120) throw new Error("专题描述最多 120 个字");
   if (current.issueNo < 1) throw new Error("期数至少从 1 开始");
-  if (current.items.length < 3) throw new Error("本期推荐至少选择 3 道菜");
 }
 
 function saveBody(): CreateHomeTopicRequest {
@@ -227,6 +250,8 @@ function saveBody(): CreateHomeTopicRequest {
     description: current.description.trim(),
     items: current.items.map(item => ({
       recipeId: item.id,
+      weekday: item.weekday ?? "MONDAY",
+      sortOrder: item.sort,
       recommendNote: item.recommendNote?.trim() || null
     }))
   };
@@ -280,7 +305,7 @@ async function toggleTopicStatus() {
   const current = form.value;
   if (!current?.id) return;
 
-  const nextStatus: HomeTopicStatus = current.status === "LISTED" ? "UNLISTED" : "LISTED";
+  const nextStatus: HomeTopicStatus = current.status === "DRAFT" ? "PUBLISHED" : current.status === "PUBLISHED" ? "UNLISTED" : "DRAFT";
   if (nextStatus === "UNLISTED") {
     try {
       await ElMessageBox.confirm(`下架后，前台“本周灵感”与往期列表都不会再显示《${current.title || `第 ${current.issueNo} 期`}》。`, "确认下架", {
@@ -306,7 +331,7 @@ async function toggleTopicStatus() {
     patchTopic(result);
     current.status = result.status;
     current.version = result.version;
-    ElMessage.success(result.status === "LISTED" ? "专题已上架" : "专题已下架");
+    ElMessage.success(topicStatusText(result.status));
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : "切换专题状态失败");
   } finally {
@@ -352,7 +377,8 @@ function addRecipe(item: HomeTopicRecipeItem) {
   }
   current.items.push({
     ...item,
-    sort: current.items.length + 1,
+    weekday: selectedWeekday.value,
+    sort: current.items.filter(entry => entry.weekday === selectedWeekday.value).length + 1,
     recommendNote: item.recommendNote ?? null
   });
 }
@@ -370,16 +396,41 @@ function removeRecipe(recipeId: number) {
   syncSort(current.items);
 }
 
-function moveRecipe(index: number, offset: number) {
+function moveRecipeToWeekday(recipeId: number, weekday: HomeTopicWeekday) {
+  const current = form.value;
+  const item = current?.items.find(entry => entry.id === recipeId);
+  if (!current || !item || item.publiclyAvailable === false || item.weekday === weekday) return;
+  item.weekday = weekday;
+  item.sort = current.items.filter(entry => entry.id !== recipeId && entry.weekday === weekday).length + 1;
+}
+
+function moveRecipe(weekday: HomeTopicWeekday, index: number, offset: number) {
   const current = form.value;
   if (!current) return;
+  const items = current.items.filter(item => item.weekday === weekday).sort((left, right) => left.sort - right.sort);
   const nextIndex = index + offset;
-  if (nextIndex < 0 || nextIndex >= current.items.length) return;
-  const items = [...current.items];
+  if (nextIndex < 0 || nextIndex >= items.length) return;
   const [item] = items.splice(index, 1);
   items.splice(nextIndex, 0, item);
   syncSort(items);
-  current.items = items;
+  const orders = new Map(items.map((item, order) => [item.id, order + 1]));
+  current.items.forEach(item => { if (orders.has(item.id)) item.sort = orders.get(item.id)!; });
+}
+
+async function saveSchedule() {
+  const current = form.value;
+  if (!current?.id) return;
+  const scheduledPublishAt = scheduleInput.value ? new Date(scheduleInput.value).toISOString() : null;
+  statusBusy.value = true;
+  try {
+    const result = await homeTopicsApi.setTopicSchedule(current.id, { scheduledPublishAt, expectedVersion: current.version }, createOperationId());
+    patchTopic(result);
+    Object.assign(current, toForm(result));
+    scheduleInput.value = toDateTimeInput(result.scheduledPublishAt);
+    ElMessage.success(scheduledPublishAt ? "预约发布已保存" : "预约发布已取消，周期保持不变");
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : "保存预约失败");
+  } finally { statusBusy.value = false; }
 }
 
 function openImagePicker() {
@@ -453,7 +504,7 @@ onMounted(() => {
         <div>
           <h3>{{ isCreateMode ? "新建专题" : "编辑专题" }}</h3>
           <p class="section-panel__hint">
-            {{ isCreateMode ? "创建页和列表页已经拆开。新专题默认未上架，保存后再决定是否上架。" : "当前是独立编辑页。列表、上架状态和编辑内容分开管理。" }}
+            {{ isCreateMode ? "先保存为草稿，再按周一至周日编排菜单并发布或预约发布。" : "按北京时间自然周维护共享菜单；发布前需覆盖七天。" }}
           </p>
         </div>
         <div class="header-actions">
@@ -481,9 +532,10 @@ onMounted(() => {
               <div class="topic-hero__meta">
                 <span class="topic-hero__chip">{{ editorIssueText }}</span>
                 <span class="topic-hero__chip topic-hero__chip--plain">{{ editorRecTypeLabel }}</span>
-                <span class="topic-hero__chip" :class="{ 'topic-hero__chip--listed': form.status === 'LISTED' }">
+                <span class="topic-hero__chip" :class="{ 'topic-hero__chip--listed': form.status === 'PUBLISHED' }">
                   {{ topicStatusText(form.status) }}
                 </span>
+                <span class="topic-hero__chip topic-hero__chip--plain">周期周一 {{ form.periodStartDate || "保存后分配" }}</span>
               </div>
               <h4>{{ form.title || "未填写专题标题" }}</h4>
               <p>{{ form.description || "这里展示专题寄语和本期推荐方向。" }}</p>
@@ -520,6 +572,13 @@ onMounted(() => {
             <el-form-item label="专题寄语">
               <el-input v-model="form.description" type="textarea" :rows="4" maxlength="120" show-word-limit />
             </el-form-item>
+            <div v-if="form.id && form.status === 'DRAFT'" class="schedule-row">
+              <label>预约发布时间</label>
+              <el-date-picker v-model="scheduleInput" type="datetime" value-format="YYYY-MM-DD HH:mm:ss" placeholder="选择预约时间" />
+              <el-button :loading="statusBusy" @click="saveSchedule">{{ form.scheduledPublishAt ? "更新预约" : "设置预约" }}</el-button>
+              <el-button v-if="form.scheduledPublishAt" :loading="statusBusy" @click="scheduleInput = ''; saveSchedule()">取消预约</el-button>
+              <span v-if="form.scheduledPublishAt" class="schedule-row__hint">当前预约：{{ form.scheduledPublishAt }}</span>
+            </div>
           </el-form>
 
           <section class="recipe-panel">
@@ -527,8 +586,15 @@ onMounted(() => {
               <div class="recipe-search__head">
                 <div>
                   <h6>添加菜谱</h6>
-                  <p>支持按菜名、食材、风格或菜谱 ID 搜索。没有搜索前，不展示候选列表。</p>
+                  <p>先选择归属日期，再从搜索结果中加入菜单；同一天内可调整顺序。</p>
                 </div>
+              </div>
+
+              <div class="weekday-pick">
+                <span>加入到</span>
+                <el-select v-model="selectedWeekday" style="width: 130px">
+                  <el-option v-for="day in homeTopicWeekdays" :key="day.value" :label="day.label" :value="day.value" />
+                </el-select>
               </div>
 
               <div class="recipe-search__row">
@@ -568,47 +634,37 @@ onMounted(() => {
             <div class="recipe-panel__header">
               <div>
                 <h6>本期推荐</h6>
-                <p>当前顺序就是前台展示顺序。每道菜可选填一条推荐说明，前台有值才显示。</p>
+                <p>每天菜品数量可不同；发布或预约前七天都需至少一道可公开菜谱。</p>
               </div>
               <span>{{ form.items.length }} 道</span>
             </div>
 
-            <div v-if="form.items.length" class="picked-strip">
-              <article
-                v-for="(item, index) in form.items"
-                :key="item.id"
-                class="picked-tile picked-tile--clickable"
-                @click="openRecipePreview(item.id)"
-              >
-                <div class="picked-tile__media">
-                  <img v-if="item.coverImageUrl" :src="item.coverImageUrl" alt="" class="picked-tile__cover" />
-                  <div v-else class="picked-tile__cover picked-tile__cover--empty">封面</div>
-                  <span class="picked-tile__order">0{{ item.sort }}</span>
-                  <el-button circle class="picked-tile__delete" :icon="Delete" @click.stop="removeRecipe(item.id)" />
+            <div v-if="form.items.length" class="picked-days">
+              <section v-for="day in groupedItems" :key="day.value" class="picked-day">
+                <h6>{{ day.label }} <span>{{ day.items.length }} 道</span></h6>
+                <div v-if="day.items.length" class="picked-strip">
+                  <article v-for="(item, index) in day.items" :key="item.id" class="picked-tile picked-tile--clickable" @click="openRecipePreview(item.id)">
+                    <div class="picked-tile__media">
+                      <img v-if="item.coverImageUrl" :src="item.coverImageUrl" alt="" class="picked-tile__cover" />
+                      <div v-else class="picked-tile__cover picked-tile__cover--empty">封面</div>
+                      <span class="picked-tile__order">0{{ item.sort }}</span>
+                      <el-button circle class="picked-tile__delete" :icon="Delete" :disabled="item.publiclyAvailable === false" @click.stop="removeRecipe(item.id)" />
+                    </div>
+                    <div class="picked-tile__body">
+                      <span class="picked-tile__title">{{ item.title }} <small v-if="item.publiclyAvailable === false" class="unavailable-label">待替换或忽略</small></span>
+                      <el-select :model-value="item.weekday" size="small" :disabled="item.publiclyAvailable === false" @change="moveRecipeToWeekday(item.id, $event)">
+                        <el-option v-for="option in homeTopicWeekdays" :key="option.value" :label="option.label" :value="option.value" />
+                      </el-select>
+                      <el-input v-model="item.recommendNote" type="textarea" :rows="3" maxlength="60" resize="none" placeholder="推荐说明（选填）" :disabled="item.publiclyAvailable === false" @click.stop />
+                      <div class="picked-tile__sort">
+                        <el-button circle size="small" :icon="ArrowLeft" :disabled="item.publiclyAvailable === false || index === 0" @click.stop="moveRecipe(day.value, index, -1)" />
+                        <el-button circle size="small" :icon="ArrowRight" :disabled="item.publiclyAvailable === false || index === day.items.length - 1" @click.stop="moveRecipe(day.value, index, 1)" />
+                      </div>
+                    </div>
+                  </article>
                 </div>
-                <div class="picked-tile__body">
-                  <span class="picked-tile__title">{{ item.title }}</span>
-                  <el-input
-                    v-model="item.recommendNote"
-                    type="textarea"
-                    :rows="3"
-                    maxlength="60"
-                    resize="none"
-                    placeholder="推荐说明（选填）"
-                    @click.stop
-                  />
-                  <div class="picked-tile__sort">
-                    <el-button circle size="small" :icon="ArrowLeft" :disabled="index === 0" @click.stop="moveRecipe(index, -1)" />
-                    <el-button
-                      circle
-                      size="small"
-                      :icon="ArrowRight"
-                      :disabled="index === form.items.length - 1"
-                      @click.stop="moveRecipe(index, 1)"
-                    />
-                  </div>
-                </div>
-              </article>
+                <p v-else class="picked-day__empty">当天菜单暂为空</p>
+              </section>
             </div>
 
             <div v-else class="picked-empty">先从上方搜索结果里挑菜放进本期推荐。</div>
@@ -665,6 +721,16 @@ onMounted(() => {
   gap: 12px;
   flex-wrap: wrap;
 }
+
+.schedule-row, .weekday-pick { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.schedule-row { padding: 12px 14px; border-radius: 12px; background: #f8fafc; }
+.schedule-row__hint, .picked-day h6 span { color: #6b7280; font-size: 12px; }
+.picked-days { display: flex; flex-direction: column; gap: 18px; }
+.picked-day { padding: 14px; border: 1px solid #edf0f4; border-radius: 16px; }
+.picked-day h6 { margin: 0 0 12px; font-size: 15px; }
+.picked-day h6 span { margin-left: 8px; font-weight: 400; }
+.picked-day__empty { margin: 0; color: #9ca3af; font-size: 13px; }
+.unavailable-label { color: #b45309; font-size: 11px; font-weight: 500; }
 
 .surface-panel {
   display: flex;
