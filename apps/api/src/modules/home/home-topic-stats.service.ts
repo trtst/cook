@@ -18,6 +18,7 @@ import { publicInspirationRecipeWhere } from "../recipe/public-content-user-pool
 const scope = "PUBLIC_INSPIRATION";
 const operationType = "admin-home-topic-stats:rebuild";
 const pageSize = 500;
+const coreIngredientCategoryIds = [5001, 5002, 5003, 5004];
 const tagFacetMap: Partial<Record<RecipeVersionTagCode, keyof HomeTopicRecipeStatsSnapshot["facets"]>> = {
   CUISINE: "cuisines",
   DISH_STYLE: "dishStyles",
@@ -27,15 +28,16 @@ const tagFacetMap: Partial<Record<RecipeVersionTagCode, keyof HomeTopicRecipeSta
 
 type IngredientRow = { ingredientId?: unknown; ingredientName?: unknown; name?: unknown };
 
-function ingredientNames(value: Prisma.JsonValue) {
+function ingredientRows(value: Prisma.JsonValue) {
   if (!Array.isArray(value)) return [];
-  const names = new Set<string>();
-  for (const item of value as IngredientRow[]) {
+  return value.flatMap(rawItem => {
+    if (typeof rawItem !== "object" || rawItem === null || Array.isArray(rawItem)) return [];
+    const item = rawItem as IngredientRow;
+    const ingredientId = Number(item.ingredientId);
     const name = typeof item.ingredientName === "string" ? item.ingredientName : typeof item.name === "string" ? item.name : "";
     const trimmed = name.trim();
-    if (trimmed) names.add(trimmed);
-  }
-  return [...names];
+    return Number.isInteger(ingredientId) && ingredientId > 0 && trimmed ? [{ ingredientId, name: trimmed }] : [];
+  });
 }
 
 function buildFacetRows(values: Map<string, number>): HomeTopicRecipeStatsFacet[] {
@@ -186,8 +188,26 @@ export class HomeTopicStatsService {
       eligibleRecipeCount += recipes.length;
       cursorId = recipes[recipes.length - 1]!.id;
 
-      for (const recipe of recipes) {
-        const ingredients = ingredientNames(recipe.currentVersion.ingredientsJson);
+      const recipeIngredientRows = recipes.map(recipe => ingredientRows(recipe.currentVersion.ingredientsJson));
+      const ingredientIds = [...new Set(recipeIngredientRows.flatMap(rows => rows.map(item => item.ingredientId)))];
+      const coreIngredientIds = new Set<number>();
+      if (ingredientIds.length) {
+        const coreIngredients = await db.ingredient.findMany({
+          where: {
+            id: { in: ingredientIds },
+            ownerId: null,
+            status: "ACTIVE",
+            categoryId: { in: coreIngredientCategoryIds }
+          },
+          select: { id: true }
+        });
+        for (const ingredient of coreIngredients) coreIngredientIds.add(ingredient.id);
+      }
+
+      for (const [index, recipe] of recipes.entries()) {
+        const rows = recipeIngredientRows[index] ?? [];
+        const coreRows = rows.filter(item => coreIngredientIds.has(item.ingredientId));
+        const ingredients = [...new Set(coreRows.map(item => item.name))];
         if (ingredients.length) coverage.ingredients += 1;
         for (const name of ingredients) addCount(counts.allIngredients, name);
 
@@ -195,12 +215,9 @@ export class HomeTopicStatsService {
         const primaryNames = new Set<string>();
         for (const tag of primaryTags) {
           const id = Number(tag.tagValue);
-          const ingredientsJson = recipe.currentVersion.ingredientsJson;
-          const linkedName = Array.isArray(ingredientsJson)
-            ? (ingredientsJson as unknown as IngredientRow[]).find(item => Number(item.ingredientId) === id)
-            : undefined;
-          const name = linkedName && typeof linkedName.ingredientName === "string" ? linkedName.ingredientName : tag.tagValue;
-          primaryNames.add(name.trim());
+          if (!coreIngredientIds.has(id)) continue;
+          const linkedIngredient = coreRows.find(item => item.ingredientId === id);
+          if (linkedIngredient) primaryNames.add(linkedIngredient.name);
         }
         if (primaryNames.size) coverage.primaryIngredients += 1;
         for (const name of primaryNames) addCount(counts.primaryIngredients, name);

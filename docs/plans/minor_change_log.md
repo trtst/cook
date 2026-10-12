@@ -1,5 +1,7 @@
 # 项目变更记录
 
+| 2026-10-13 | 收窄共享周刊食材统计口径：核心食材和已确认主要食材仅统计匹配到 ACTIVE 系统食材分类 5001–5004 的条目；后台标签改为“核心食材”，注明分类范围。统计重建按分页批量查询食材分类，不改变菜谱候选搜索。 | `apps/api/src/modules/home/home-topic-stats.service.ts`、`apps/admin/src/pages/HomeTopicsPage.vue`、`docs/api-contract.md`、`docs/superpowers/specs/2026-10-12-shared-weekly-day-menu-design.md`、`docs/plans/minor_change_log.md` | API/Admin type-check、`git diff --check` 通过；未运行测试，未调用接口重建已保存快照。 |
+
 | 2026-10-13 | 用户审核通过测试环境共享周刊第 2 期版本 4。按反馈润色副标题、专题寄语和 16 道菜推荐说明，保留菜单与日期；草稿保持未预约、未上架。 | `docs/superpowers/plans/2026-10-12-shared-weekly-day-menu.md`、`docs/plans/minor_change_log.md`；TEST 后台专题 ID 6 | 后台保存提示成功；刷新后确认版本 4、16 道菜及 16/16 封面正常加载；无预约或发布操作。 |
 
 | 2026-10-13 | 修复批量导入预览与用户编辑文本的竞态；批次写入增加专题表并发锁和逐期 savepoint，使周期/关联冲突只拒绝对应期；补充 Admin 静态契约，并为新增 UUID 响应字段显式声明 OpenAPI 类型。 | `apps/admin/src/pages/HomeTopicsPage.vue`、`apps/admin/src/pages/home-topics-page.test.js`、`apps/api/src/modules/home/home-topic.service.ts`、`apps/api/src/contracts/openapi.ts`、`docs/plans/minor_change_log.md` | Admin 静态契约 2/2、API type-check/build、Admin build、Prisma validate、OpenAPI verify（355 operations / 329 response schemas）、权限/异常测试 7/7、`git diff --check` 通过。未执行 migration；逐期 savepoint/并发行为尚未在真实 PostgreSQL 中验收，未部署。 |
