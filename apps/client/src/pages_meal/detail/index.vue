@@ -51,7 +51,6 @@
               <ImageField
                 v-if="canUpdateCover"
                 class="meal-hero__cover-field"
-                :style="{ height: '100%' }"
                 variant="cover"
                 :image-src="heroCoverUrl || ''"
                 :title="eventCoverTitle"
@@ -980,7 +979,7 @@ import {
   buildDefaultShoppingListName,
   buildMealShoppingListName,
   buildShoppingListDetailPath,
-  hasActiveShoppingListLink
+  hasShoppingListLink
 } from "../utils/shopping";
 import { formatDateOnly } from "@/utils/date";
 import { formatDateTimeMinute } from "../utils/date";
@@ -1270,16 +1269,19 @@ const currentPlanShoppingCount = computed(() => (eventDetail.value ? 0 : planGap
 const shoppingLinkTarget = computed(() => eventDetail.value ?? planDetail.value ?? null);
 const linkedShoppingListId = computed(() => shoppingLinkTarget.value?.shoppingListId ?? null);
 const linkedShoppingListName = computed(() => shoppingLinkTarget.value?.shoppingListName?.trim() || "");
-const hasLinkedShoppingList = computed(() => hasActiveShoppingListLink(shoppingLinkTarget.value));
+const hasLinkedShoppingList = computed(() => (
+  hasShoppingListLink(shoppingLinkTarget.value) && shoppingLinkTarget.value?.shoppingListStatus !== "VOIDED"
+));
+const shoppingPurchaseComplete = computed(() => shoppingLinkTarget.value?.shoppingListStatus === "COMPLETED");
 const shoppingActionVisible = computed(() => (
   eventDetail.value
-    ? eventDetail.value.status === "CONFIRMED"
-    : Boolean(planDetail.value?.menuLocked && (currentPlanShoppingCount.value > 0 || hasLinkedShoppingList.value))
+    ? eventDetail.value.status === "CONFIRMED" && (hasLinkedShoppingList.value || (currentEventPendingCount.value > 0 && !shoppingPurchaseComplete.value))
+    : Boolean(planDetail.value?.menuLocked && (hasLinkedShoppingList.value || (currentPlanShoppingCount.value > 0 && !shoppingPurchaseComplete.value)))
 ));
 const shoppingActionDisabled = computed(() => shoppingWriting.value || (!hasLinkedShoppingList.value && (shoppingListLoading.value || gapLoading.value)));
 const shoppingActionText = computed(() => {
   if (shoppingWriting.value && planDetail.value && !eventDetail.value && hasLinkedShoppingList.value) return "同步中...";
-  if (hasLinkedShoppingList.value) return "查看清单";
+  if (hasLinkedShoppingList.value) return "查看采购清单";
   if (gapLoading.value) return "计算中";
   if (shoppingListLoading.value) return "清单加载中...";
   if (shoppingWriting.value) return "写入中";
@@ -1733,10 +1735,14 @@ const footerPrimaryAction = computed<FooterAction | null>(() => {
   if (footerStage.value === "READY_TO_START") {
     if (eventDetail.value && isEventOrganizer.value) {
       if (currentEventPendingCount.value > 0) {
+        if (hasLinkedShoppingList.value) {
+          return { key: "shopping", label: "查看采购清单", disabled: shoppingWriting.value };
+        }
+        if (shoppingPurchaseComplete.value) return null;
         return {
           key: "shopping",
-          label: hasLinkedShoppingList.value ? "查看采购清单" : "去采购",
-          disabled: hasLinkedShoppingList.value ? false : shoppingWriting.value
+          label: "去采购",
+          disabled: shoppingWriting.value
         };
       }
       if (!eventGapReady.value) return null;
@@ -1745,9 +1751,13 @@ const footerPrimaryAction = computed<FooterAction | null>(() => {
       return null;
     }
     if (!eventDetail.value && currentPlanShoppingCount.value > 0) {
+      if (hasLinkedShoppingList.value) {
+        return { key: "shopping", label: "查看采购清单", disabled: shoppingWriting.value };
+      }
+      if (shoppingPurchaseComplete.value) return null;
       return {
         key: "shopping",
-        label: shoppingWriting.value && hasLinkedShoppingList.value ? "同步中..." : hasLinkedShoppingList.value ? "查看采购清单" : "去采购",
+        label: "去采购",
         disabled: shoppingWriting.value
       };
     }
@@ -3685,7 +3695,7 @@ function buildShoppingDraftName() {
 async function openLinkedShoppingList() {
   const listId = linkedShoppingListId.value;
   if (!listId || shoppingWriting.value) return;
-  if (planDetail.value && !eventDetail.value) {
+  if (planDetail.value && !eventDetail.value && shoppingLinkTarget.value?.shoppingListStatus === "ACTIVE") {
     shoppingWriting.value = true;
     try {
       await shoppingApi.addPlanToList(listId, {
@@ -4051,7 +4061,13 @@ function clearFocusedSection() {
 
 .meal-hero__cover-field {
   display: block;
-  height: 100%;
+  width: 100%;
+}
+
+.meal-hero__cover-field.image-field--cover.image-field--empty,
+.meal-hero__cover-field.image-field--cover.image-field--filled {
+  height: auto;
+  aspect-ratio: 4 / 3;
 }
 
 .meal-hero__cover-static {

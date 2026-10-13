@@ -119,16 +119,7 @@ function handleFieldClick() {
 }
 
 .image-field--cover.image-field--empty {
-  height: 133.3333vw;
-  min-height: 0;
-  max-height: none;
   background: var(--page-cover-fresh-shell-bg);
-}
-
-.image-field--cover.image-field--filled {
-  height: 133.3333vw;
-  min-height: 0;
-  max-height: none;
 }
 
 .image-field--cover .image-field__preview {

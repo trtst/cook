@@ -288,7 +288,7 @@ import {
   buildDefaultShoppingListName,
   buildMealShoppingListName,
   buildShoppingListDetailPath,
-  hasActiveShoppingListLink
+  hasShoppingListLink
 } from "../utils/shopping";
 import {
   appendMealSlotToMark,
@@ -877,7 +877,7 @@ function handleShoppingSheetAfterClose() {
 
 function planShoppingActionText(plan: MealPlanSummary) {
   if (shoppingSubmitting.value && shoppingPlan.value?.id === plan.id) return "同步中...";
-  if (hasActiveShoppingListLink(plan)) return "查看采购清单";
+  if (hasViewableShoppingList(plan)) return "查看采购清单";
   if (shoppingListLoading.value && shoppingPlan.value?.id === plan.id) return "清单加载中...";
   return shoppingSubmitting.value && shoppingPlan.value?.id === plan.id ? "加入中..." : "加入采购清单";
 }
@@ -887,10 +887,12 @@ async function openLinkedShoppingList(plan: MealPlanSummary) {
   shoppingPlan.value = plan;
   shoppingSubmitting.value = true;
   try {
-    await shoppingListApi.addPlanToList(plan.shoppingListId, {
-      operationId: createOperationId(),
-      planItemId: plan.id
-    });
+    if (plan.shoppingListStatus === "ACTIVE") {
+      await shoppingListApi.addPlanToList(plan.shoppingListId, {
+        operationId: createOperationId(),
+        planItemId: plan.id
+      });
+    }
     void uniPlatform.navigation.navigateTo(buildShoppingListDetailPath(plan.shoppingListId));
   } catch (error) {
     await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "采购清单同步失败", icon: "none" });
@@ -900,7 +902,7 @@ async function openLinkedShoppingList(plan: MealPlanSummary) {
 }
 
 function handlePlanShoppingAction(plan: MealPlanSummary) {
-  if (hasActiveShoppingListLink(plan)) {
+  if (hasViewableShoppingList(plan)) {
     void openLinkedShoppingList(plan);
     return;
   }
@@ -1007,7 +1009,13 @@ function hasPlanShoppingRecipes(plan: MealPlanSummary) {
 }
 
 function canShowShoppingAction(plan: MealPlanSummary) {
-  return !isPlanExpired(plan, nowMs.value) && plan.status === "PLANNED" && plan.menuLocked;
+  if (isPlanExpired(plan, nowMs.value) || plan.status !== "PLANNED" || !plan.menuLocked) return false;
+  if (plan.shoppingListStatus === "COMPLETED") return hasShoppingListLink(plan);
+  return true;
+}
+
+function hasViewableShoppingList(plan: MealPlanSummary) {
+  return hasShoppingListLink(plan) && plan.shoppingListStatus !== "VOIDED";
 }
 
 function resolvePlanDeadlineMs(plan: Pick<MealPlanSummary, "planDate" | "mealSlot">) {

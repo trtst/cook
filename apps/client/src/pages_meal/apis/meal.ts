@@ -515,14 +515,19 @@ export const mealApi = {
         expectedVersion: body.expectedVersion
       }
     });
-    if (typeof result.body !== "object" || result.body === null || !("code" in result.body) || !("message" in result.body) || !("data" in result.body)) {
-      throw new Error("饭局封面上传响应格式不正确");
+    const bodyValue = result.body;
+    if (typeof bodyValue === "object" && bodyValue !== null && "code" in bodyValue && "message" in bodyValue) {
+      const payload = bodyValue as { code: number; message?: string; data?: unknown };
+      if (result.status < 200 || result.status >= 300 || payload.code !== 0) {
+        throw new Error(payload.message || `饭局封面上传失败（HTTP ${result.status}）`);
+      }
+      if (!("data" in bodyValue)) throw new Error("饭局封面上传响应缺少数据");
+      return payload.data as DiningEventSummary;
     }
-    const payload = result.body as { code: number; message?: string; data: unknown };
-    if (result.status < 200 || result.status >= 300 || payload.code !== 0) {
-      throw new Error(payload.message || "饭局封面上传失败");
+    if (result.status < 200 || result.status >= 300) {
+      throw new Error(`饭局封面上传失败（HTTP ${result.status}）`);
     }
-    return payload.data as DiningEventSummary;
+    throw new Error("饭局封面上传响应格式不正确");
   },
   completeDiningEvent(eventId: UUID, operationId: OperationId) {
     return post<DiningEventSummary>(

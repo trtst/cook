@@ -6,11 +6,11 @@ import test from "node:test";
 const planSource = readFileSync(resolve(__dirname, "plan/index.vue"), "utf8");
 const detailSource = readFileSync(resolve(__dirname, "detail/index.vue"), "utf8");
 
-test("meal shopping actions only treat ACTIVE lists as the current writable binding", () => {
-  assert.match(planSource, /hasActiveShoppingListLink/);
-  assert.match(detailSource, /hasActiveShoppingListLink/);
-  assert.doesNotMatch(planSource, /hasShoppingListLink\(plan\)/);
-  assert.doesNotMatch(detailSource, /hasShoppingListLink\(shoppingLinkTarget\.value\)/);
+test("meal shopping actions can view completed lists without writing to them", () => {
+  assert.match(planSource, /hasShoppingListLink\(plan\)/);
+  assert.match(detailSource, /hasShoppingListLink\(shoppingLinkTarget\.value\)/);
+  assert.match(planSource, /plan\.shoppingListStatus === "ACTIVE"/);
+  assert.match(detailSource, /shoppingLinkTarget\.value\?\.shoppingListStatus === "ACTIVE"/);
 });
 
 test("plan and meal detail let the user choose an active shopping list", () => {
