@@ -1,3 +1,19 @@
+@font-face {
+  font-family: "SC-Medium";
+  font-display: swap;
+  src: url("https://static.trtst.com/O/fonts/chuihuoji_Medium.ttf?v=20261011-cors1") format("truetype");
+  font-weight: 500;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "CHJ-Kai";
+  font-display: swap;
+  src: url("https://static.trtst.com/O/fonts/chuihuoji_han.ttf?v=20261011-cors1") format("truetype");
+  font-weight: 500;
+  font-style: normal;
+}
+
 :root {
   --el-color-primary: #c89b38;
   --el-color-primary-light-3: #d4ad57;

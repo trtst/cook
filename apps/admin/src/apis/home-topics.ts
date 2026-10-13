@@ -1,23 +1,11 @@
 import { requestData, uploadForm, type OperationId, type UUID } from "./http";
 
-export type HomeTopicType =
-  | "WEEKEND_GATHERING"
-  | "QUICK_AFTER_WORK"
-  | "HOME_STYLE"
-  | "ONE_PERSON"
-  | "BREAKFAST"
-  | "LIGHT_DINNER";
 export type HomeTopicStatus = "DRAFT" | "PUBLISHED" | "UNLISTED";
 export type HomeTopicWeekday = "MONDAY" | "TUESDAY" | "WEDNESDAY" | "THURSDAY" | "FRIDAY" | "SATURDAY" | "SUNDAY";
 export const homeTopicWeekdays: Array<{ value: HomeTopicWeekday; label: string }> = [
   { value: "MONDAY", label: "周一" }, { value: "TUESDAY", label: "周二" }, { value: "WEDNESDAY", label: "周三" },
   { value: "THURSDAY", label: "周四" }, { value: "FRIDAY", label: "周五" }, { value: "SATURDAY", label: "周六" }, { value: "SUNDAY", label: "周日" }
 ];
-
-export interface HomeTopicTypeOption {
-  label: string;
-  value: HomeTopicType;
-}
 
 export interface HomeTopicRecipeItem {
   id: UUID;
@@ -46,8 +34,6 @@ export interface AdminHomeTopicItem {
   id: UUID;
   title: string;
   subTitle: string | null;
-  recType: HomeTopicType;
-  recTypeText: string;
   status: HomeTopicStatus;
   issueNo: number;
   periodStartDate: string;
@@ -64,7 +50,10 @@ export interface AdminHomeTopicItem {
 
 export interface AdminHomeTopicsResponse {
   topics: AdminHomeTopicItem[];
-  recTypes: HomeTopicTypeOption[];
+}
+
+export interface AdminHomeTopicMiniCodeResponse {
+  miniCodeDataUrl: string;
 }
 
 export interface HomeTopicRecipeSearchResponse {
@@ -144,7 +133,7 @@ export interface HomeTopicRecipeSearchQuery {
 }
 
 export interface HomeTopicBatchImportInput {
-  schemaVersion: 1;
+  schemaVersion: 2;
   statsSnapshotId: string;
   generatedAt: string;
   issues: Array<{
@@ -152,7 +141,6 @@ export interface HomeTopicBatchImportInput {
     plannedPublishAt: string;
     title: string;
     subTitle: string | null;
-    recType: HomeTopicType;
     description: string;
     themeRationale: string;
     days: Array<{
@@ -172,7 +160,6 @@ export interface HomeTopicPickInput {
 export interface CreateHomeTopicRequest {
   title: string;
   subTitle: string | null;
-  recType: HomeTopicType;
   issueNo: number;
   description: string;
   items: HomeTopicPickInput[];
@@ -207,6 +194,9 @@ export interface DeleteHomeTopicRequest {
 export const homeTopicsApi = {
   getTopics() {
     return requestData<AdminHomeTopicsResponse>("/admin/home-topics");
+  },
+  getTopicMiniCode(topicId: UUID) {
+    return requestData<AdminHomeTopicMiniCodeResponse>(`/admin/home-topics/${encodeURIComponent(String(topicId))}/mini-code`);
   },
   getRecipeStats() {
     return requestData<HomeTopicRecipeStatsResponse>("/admin/home-topics/statistics");

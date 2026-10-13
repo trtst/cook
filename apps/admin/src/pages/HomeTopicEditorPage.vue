@@ -11,8 +11,6 @@ import {
   type HomeTopicRecipeItem,
   type HomeTopicStatus,
   type HomeTopicWeekday,
-  type HomeTopicType,
-  type HomeTopicTypeOption,
   homeTopicWeekdays
 } from "@/apis/home-topics";
 import { adminAppConfig } from "@/apis/config";
@@ -20,15 +18,16 @@ import RecipePreviewDrawer from "@/components/RecipePreviewDrawer.vue";
 import { useAdminHeaderRefresh } from "@/composables/useAdminHeader";
 import { createOperationId } from "@/utils/operation-id";
 import { difficultyText, durationText } from "@/utils/recipe-meta";
+import { createHomeTopicCover } from "@/utils/home-topic-cover";
 type TopicForm = {
   id: number | null;
   version: number;
   title: string;
   subTitle: string;
-  recType: HomeTopicType;
   status: HomeTopicStatus;
   issueNo: number;
   periodStartDate: string;
+  periodEndDate: string;
   scheduledPublishAt: string | null;
   description: string;
   coverImageUrl: string;
@@ -49,7 +48,6 @@ const previewRecipeId = ref<number | null>(null);
 const fileInput = ref<HTMLInputElement | null>(null);
 const searchKey = ref("");
 const topics = ref<AdminHomeTopicItem[]>([]);
-const recTypes = ref<HomeTopicTypeOption[]>([]);
 const searchItems = ref<HomeTopicRecipeItem[]>([]);
 const form = ref<TopicForm | null>(null);
 const route = useRoute();
@@ -59,11 +57,6 @@ const apiOrigin = resolveApiOrigin();
 const canSave = computed(() => Boolean(form.value) && !saveBusy.value && !imageBusy.value);
 const isCreateMode = computed(() => !form.value?.id);
 const editorIssueText = computed(() => (form.value ? `第 ${form.value.issueNo} 期` : ""));
-const editorRecTypeLabel = computed(() => {
-  const current = form.value;
-  if (!current) return "";
-  return recTypes.value.find(item => item.value === current.recType)?.label || current.recType;
-});
 const groupedItems = computed(() => homeTopicWeekdays.map(day => ({
   ...day,
   items: (form.value?.items ?? []).filter(item => item.weekday === day.value).sort((left, right) => left.sort - right.sort)
@@ -119,10 +112,10 @@ function toForm(item: AdminHomeTopicItem): TopicForm {
     version: item.version,
     title: item.title,
     subTitle: item.subTitle || "",
-    recType: item.recType,
     status: item.status,
     issueNo: item.issueNo,
     periodStartDate: item.periodStartDate,
+    periodEndDate: item.periodEndDate,
     scheduledPublishAt: item.scheduledPublishAt,
     description: item.description,
     coverImageUrl: item.coverImageUrl || "",
@@ -136,10 +129,10 @@ function createForm(): TopicForm {
     version: 1,
     title: "",
     subTitle: "",
-    recType: recTypes.value[0]?.value ?? "WEEKEND_GATHERING",
     status: "DRAFT",
     issueNo: nextIssueNo(),
     periodStartDate: "",
+    periodEndDate: "",
     scheduledPublishAt: null,
     description: "",
     coverImageUrl: "",
@@ -204,7 +197,6 @@ function syncFormFromRoute() {
 
 function assignResponse(result: AdminHomeTopicsResponse) {
   topics.value = sortTopics(result.topics);
-  recTypes.value = result.recTypes;
   syncFormFromRoute();
 }
 
@@ -261,7 +253,6 @@ function saveBody(): CreateHomeTopicRequest {
   return {
     title: current.title.trim(),
     subTitle: current.subTitle.trim() || null,
-    recType: current.recType,
     issueNo: current.issueNo,
     description: current.description.trim(),
     items: current.items.map(item => ({
@@ -499,6 +490,43 @@ async function handleFileChange(event: Event) {
   }
 }
 
+async function generateCover() {
+  const current = form.value;
+  if (!current?.id) {
+    ElMessage.warning("请先保存专题，再生成封面图");
+    return;
+  }
+  if (!current.title.trim()) {
+    ElMessage.warning("请先填写本期标题");
+    return;
+  }
+  if (!current.periodStartDate || !current.periodEndDate) {
+    ElMessage.warning("请先保存本期周刊周期");
+    return;
+  }
+
+  imageBusy.value = true;
+  try {
+    const miniCode = await homeTopicsApi.getTopicMiniCode(current.id);
+    const file = await createHomeTopicCover({
+      title: current.title,
+      periodStartDate: current.periodStartDate,
+      periodEndDate: current.periodEndDate,
+      miniCodeDataUrl: miniCode.miniCodeDataUrl
+    });
+    const result = await homeTopicsApi.uploadTopicImage(current.id, file, createOperationId(), current.version);
+    patchTopic(result);
+    current.coverImageUrl = result.coverImageUrl || "";
+    current.version = result.version;
+    current.status = result.status;
+    ElMessage.success("周刊封面已生成并更新");
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : "生成封面失败");
+  } finally {
+    imageBusy.value = false;
+  }
+}
+
 async function clearImage() {
   if (!form.value?.id) return;
   try {
@@ -558,25 +586,36 @@ onMounted(() => {
         <div class="topic-hero" :style="{ backgroundImage: getCoverUrl(form) ? `url(${getCoverUrl(form)})` : '' }">
           <div class="topic-hero__mask" />
           <div class="topic-hero__body">
-            <button class="topic-cover" type="button" @click="openImagePicker">
-              <img v-if="getCoverUrl(form)" :src="getCoverUrl(form)" alt="专题封面" class="topic-cover__image" />
-              <span v-else class="topic-cover__empty">
-                <el-icon size="24"><Picture /></el-icon>
-                <span>{{ imageBusy ? "上传中..." : "上传封面（3:4）" }}</span>
-              </span>
-            </button>
+            <div class="topic-cover-tools">
+              <button class="topic-cover" type="button" aria-label="点击上传或替换周刊封面" :disabled="imageBusy" @click="openImagePicker">
+                <img v-if="getCoverUrl(form)" :src="getCoverUrl(form)" alt="专题封面" class="topic-cover__image" />
+                <span v-else class="topic-cover__empty">
+                  <el-icon size="24"><Picture /></el-icon>
+                  <span>{{ imageBusy ? "处理中..." : "点击上传封面（4:3）" }}</span>
+                </span>
+              </button>
+              <el-button
+                class="topic-cover-generate"
+                type="primary"
+                plain
+                :loading="imageBusy"
+                :disabled="!form.id || !form.title.trim() || !form.periodStartDate || imageBusy"
+                @click="generateCover"
+              >
+                生成封面图
+              </el-button>
+            </div>
 
             <div class="topic-hero__main">
               <div class="topic-hero__meta">
                 <span class="topic-hero__chip">{{ editorIssueText }}</span>
-                <span class="topic-hero__chip topic-hero__chip--plain">{{ editorRecTypeLabel }}</span>
                 <span class="topic-hero__chip" :class="{ 'topic-hero__chip--listed': form.status === 'PUBLISHED' }">
                   {{ topicStatusText(form.status) }}
                 </span>
                 <span class="topic-hero__chip topic-hero__chip--plain">周期周一 {{ form.periodStartDate || "保存后分配" }}</span>
               </div>
               <h4>{{ form.title || "未填写专题标题" }}</h4>
-              <p>{{ form.description || "这里展示专题寄语和本期推荐方向。" }}</p>
+              <p>{{ form.description || "这里展示本期主题和编排方向。" }}</p>
               <div class="topic-hero__actions">
                 <span v-if="form.id" class="topic-hero__version">版本 {{ form.version }}</span>
                 <el-button v-if="form.coverImageUrl.trim()" text :icon="Delete" :disabled="imageBusy" @click="clearImage">删除封面</el-button>
@@ -596,16 +635,9 @@ onMounted(() => {
               </el-form-item>
             </div>
 
-            <div class="topic-form__row topic-form__row--half">
-              <el-form-item label="推荐类别">
-                <el-select v-model="form.recType">
-                  <el-option v-for="item in recTypes" :key="item.value" :label="item.label" :value="item.value" />
-                </el-select>
-              </el-form-item>
-              <el-form-item label="期数">
-                <el-input-number v-model="form.issueNo" :min="1" :step="1" controls-position="right" />
-              </el-form-item>
-            </div>
+            <el-form-item label="期数">
+              <el-input-number v-model="form.issueNo" :min="1" :step="1" controls-position="right" />
+            </el-form-item>
 
             <el-form-item label="专题寄语">
               <el-input v-model="form.description" type="textarea" :rows="4" maxlength="120" show-word-limit />
@@ -812,9 +844,16 @@ onMounted(() => {
 .topic-hero__body {
   position: relative;
   display: grid;
-  grid-template-columns: 168px minmax(0, 1fr);
+  grid-template-columns: 292px minmax(0, 1fr);
   gap: 20px;
   padding: 22px;
+}
+
+.topic-cover-tools {
+  display: grid;
+  grid-template-columns: 168px minmax(100px, 1fr);
+  align-items: center;
+  gap: 12px;
 }
 
 .topic-cover {
@@ -823,12 +862,22 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   width: 168px;
-  height: 224px;
+  height: 126px;
   min-height: 0;
   border: 1px dashed rgba(47, 111, 78, 0.28);
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.78);
   overflow: hidden;
+}
+
+.topic-cover:disabled {
+  cursor: wait;
+}
+
+.topic-cover-generate {
+  min-height: 42px;
+  white-space: normal;
+  line-height: 1.4;
 }
 
 .topic-cover__image {
@@ -1126,7 +1175,7 @@ onMounted(() => {
   }
 
   .topic-cover {
-    min-height: 220px;
+    min-height: 0;
   }
 
   .search-card__cover {

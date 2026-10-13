@@ -397,7 +397,7 @@ onMounted(() => {
       </section>
 
       <el-dialog v-model="importDialogOpen" title="导入共享周刊 JSON" width="820px" destroy-on-close>
-        <p class="import-help">粘贴 Codex 生成的 schemaVersion 1 JSON。预览会检查统计快照、日期、每日菜单、菜谱当前公开状态和固定版本；导入仅创建草稿，不会预约或上架。</p>
+        <p class="import-help">粘贴 Codex 生成的 schemaVersion 2 JSON。预览会检查统计快照、日期、每日菜单、菜谱当前公开状态和固定版本；导入仅创建草稿，不会预约或上架。</p>
         <el-input v-model="importJson" type="textarea" :rows="14" placeholder="粘贴完整 JSON 批次" spellcheck="false" />
         <div class="import-actions">
           <el-button :disabled="!importJson.trim() || importBusy" @click="previewBatchImport">校验并预览</el-button>
@@ -480,7 +480,7 @@ onMounted(() => {
             </div>
             <p v-if="item.subTitle" class="topic-row__sub">{{ item.subTitle }}</p>
             <p class="topic-row__meta">
-              第 {{ item.issueNo }} 期 · {{ item.recTypeText }} · {{ item.periodStartDate }} ～ {{ item.periodEndDate }} · {{ item.items.length }} 道可公开菜
+              第 {{ item.issueNo }} 期 · {{ item.periodStartDate }} ～ {{ item.periodEndDate }} · {{ item.items.length }} 道可公开菜
               <span v-if="item.scheduledPublishAt"> · 预约 {{ formatDateTime(item.scheduledPublishAt) }}</span>
               <span v-else-if="item.publishedAt"> · 发布于 {{ formatDateTime(item.publishedAt) }}</span>
             </p>
