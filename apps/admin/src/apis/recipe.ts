@@ -133,6 +133,7 @@ export type AdminRecipeWikiReplaceField =
   | "tips"
   | "keywords"
   | "ingredients"
+  | "ingredientRoles"
   | "tools"
   | "steps"
   | "tags"

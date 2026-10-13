@@ -44,6 +44,7 @@ interface RevisionEntry {
   title: string;
   schemaVersion: "recipe.import.v1" | "recipe.wiki.v1";
   recipe: Record<string, unknown> | null;
+  recipeContent: Record<string, unknown> | null;
   wiki: Record<string, unknown>;
 }
 
@@ -55,6 +56,7 @@ const replaceFieldOptions: Array<{ value: AdminRecipeWikiReplaceField; label: st
   { value: "tips", label: "小贴士" },
   { value: "keywords", label: "关键词" },
   { value: "ingredients", label: "食材" },
+  { value: "ingredientRoles", label: "食材角色" },
   { value: "tools", label: "工具" },
   { value: "steps", label: "菜谱步骤" },
   { value: "tags", label: "Wiki 标签" },
@@ -267,13 +269,14 @@ function readRevisionEntries(document: unknown): RevisionEntry[] {
     if (!isRecord(source)) throw new Error(`第 ${index + 1} 条数据格式错误`);
     const fullRecipe = schemaVersion === "recipe.import.v1" || schemaVersion === "recipe.import.batch.v1";
     const recipe = fullRecipe ? source.recipe : source;
-    const wiki = source.wiki;
-    if (!isRecord(recipe) || !isRecord(wiki)) throw new Error(`第 ${index + 1} 条缺少 recipe 或 wiki 对象`);
+    const wiki = isRecord(source.wiki) ? source.wiki : {};
+    if (!isRecord(recipe)) throw new Error(`第 ${index + 1} 条缺少 recipe 对象`);
     const recipeId = recipe.recipeId;
     const contentVersionId = recipe.contentVersionId;
     if (!Number.isInteger(recipeId) || !Number.isInteger(contentVersionId)) throw new Error(`第 ${index + 1} 条 recipeId 或 contentVersionId 无效`);
     const content = isRecord(recipe.content) ? recipe.content : null;
-    const title = typeof content?.name === "string" ? content.name : `菜谱 ${recipeId}`;
+    const recipeContent = isRecord(source.recipeContent) ? source.recipeContent : content;
+    const title = typeof recipeContent?.name === "string" ? recipeContent.name : `菜谱 ${recipeId}`;
     return {
       key: `${recipeId}-${index}`,
       recipeId: Number(recipeId),
@@ -281,6 +284,7 @@ function readRevisionEntries(document: unknown): RevisionEntry[] {
       title,
       schemaVersion: fullRecipe ? "recipe.import.v1" : "recipe.wiki.v1",
       recipe: fullRecipe ? recipe : null,
+      recipeContent,
       wiki
     };
   });
@@ -289,7 +293,7 @@ function readRevisionEntries(document: unknown): RevisionEntry[] {
 function hasRevisionField(item: RevisionEntry, field: AdminRecipeWikiReplaceField) {
   if (field === "tags") return Array.isArray(item.wiki.tags);
   if (field === "assistant.steps") return isRecord(item.wiki.assistant) && Array.isArray(item.wiki.assistant.steps);
-  const content = item.recipe && isRecord(item.recipe.content) ? item.recipe.content : null;
+  const content = item.recipeContent;
   return Boolean(content && Object.prototype.hasOwnProperty.call(content, field));
 }
 
@@ -301,9 +305,15 @@ function buildRevisionDocument(items: RevisionEntry[]) {
     };
   }
   if (items.some(item => item.recipe)) throw new Error("完整菜谱文件和 Wiki-only 文件不能混合批量替换");
+  const includesRecipeContent = selectedFields.value.some(field => field !== "tags" && field !== "assistant.steps");
   return {
     schemaVersion: "recipe.wiki.batch.v1",
-    recipes: items.map(item => ({ recipeId: item.recipeId, contentVersionId: item.contentVersionId, wiki: item.wiki }))
+    recipes: items.map(item => ({
+      recipeId: item.recipeId,
+      contentVersionId: item.contentVersionId,
+      ...(includesRecipeContent && item.recipeContent ? { recipeContent: item.recipeContent } : {}),
+      ...(Object.keys(item.wiki).length ? { wiki: item.wiki } : {})
+    }))
   };
 }
 
