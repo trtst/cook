@@ -103,7 +103,6 @@ async function createTopic(
       body: JSON.stringify({
         title: input.title,
         subTitle: input.subTitle,
-        recType: "HOME_STYLE",
         issueNo: input.issueNo,
         description: input.description,
         items: input.recipeIds.map((recipeId, index) => ({

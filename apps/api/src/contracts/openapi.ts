@@ -818,12 +818,6 @@ export class InspirationCategoryModel {
   @ApiProperty(nullableString) iconKey!: string | null;
 }
 
-export class HomeTopicTypeOptionModel {
-  @ApiProperty({ type: String }) label!: string;
-  @ApiProperty({ type: String, enum: ["WEEKEND_GATHERING", "QUICK_AFTER_WORK", "HOME_STYLE", "ONE_PERSON", "BREAKFAST", "LIGHT_DINNER"] })
-  value!: string;
-}
-
 export class HomeTopicRecipeItemModel {
   @ApiProperty(uuid) id!: string;
   @ApiProperty(uuid) sourceVersionId!: string;
@@ -872,9 +866,6 @@ export class HomeTopicHistoryItemModel {
   @ApiProperty(uuid) id!: string;
   @ApiProperty({ type: String }) title!: string;
   @ApiProperty(nullableString) subTitle!: string | null;
-  @ApiProperty({ type: String, enum: ["WEEKEND_GATHERING", "QUICK_AFTER_WORK", "HOME_STYLE", "ONE_PERSON", "BREAKFAST", "LIGHT_DINNER"] })
-  recType!: string;
-  @ApiProperty({ type: String }) recTypeText!: string;
   @ApiProperty({ type: Number, minimum: 1 }) issueNo!: number;
   @ApiProperty({ type: String, format: "date" }) periodStartDate!: string;
   @ApiProperty({ type: String, format: "date" }) periodEndDate!: string;
@@ -889,9 +880,6 @@ export class HomeTopicDetailModel {
   @ApiProperty(uuid) id!: string;
   @ApiProperty({ type: String }) title!: string;
   @ApiProperty(nullableString) subTitle!: string | null;
-  @ApiProperty({ type: String, enum: ["WEEKEND_GATHERING", "QUICK_AFTER_WORK", "HOME_STYLE", "ONE_PERSON", "BREAKFAST", "LIGHT_DINNER"] })
-  recType!: string;
-  @ApiProperty({ type: String }) recTypeText!: string;
   @ApiProperty({ type: Number, minimum: 1 }) issueNo!: number;
   @ApiProperty({ type: String }) description!: string;
   @ApiProperty(nullableString) coverImageUrl!: string | null;
@@ -1002,9 +990,6 @@ export class AdminHomeTopicItemModel {
   @ApiProperty(uuid) id!: string;
   @ApiProperty({ type: String }) title!: string;
   @ApiProperty(nullableString) subTitle!: string | null;
-  @ApiProperty({ type: String, enum: ["WEEKEND_GATHERING", "QUICK_AFTER_WORK", "HOME_STYLE", "ONE_PERSON", "BREAKFAST", "LIGHT_DINNER"] })
-  recType!: string;
-  @ApiProperty({ type: String }) recTypeText!: string;
   @ApiProperty({ type: String, enum: ["DRAFT", "PUBLISHED", "UNLISTED"] })
   status!: string;
   @ApiProperty({ type: Number, minimum: 1 }) issueNo!: number;
@@ -1020,9 +1005,12 @@ export class AdminHomeTopicItemModel {
   @ApiProperty({ type: Number, minimum: 1 }) version!: number;
 }
 
+export class AdminHomeTopicMiniCodeResponseModel {
+  @ApiProperty({ type: String, description: "可用于封面合成的小程序码 Data URL" }) miniCodeDataUrl!: string;
+}
+
 export class AdminHomeTopicsResponseModel {
   @ApiProperty({ type: [AdminHomeTopicItemModel] }) topics!: AdminHomeTopicItemModel[];
-  @ApiProperty({ type: [HomeTopicTypeOptionModel] }) recTypes!: HomeTopicTypeOptionModel[];
 }
 
 export class AdminHomeTopicTodoItemModel {

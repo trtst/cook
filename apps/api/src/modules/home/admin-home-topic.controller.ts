@@ -6,7 +6,7 @@ import type { RequestWithAdmin } from "../../common/auth-context";
 import { AdminAuthGuard } from "../../common/admin-auth.guard";
 import { ApiIdempotencyKey, ReadIdempotencyKey } from "../../common/idempotency-key";
 import { CreateHomeTopicDto, DeleteHomeTopicDto, DismissHomeTopicTodoDto, HomeTopicBatchImportDto, HomeTopicHistoryQueryDto, HomeTopicRecipeQueryDto, ReplaceHomeTopicItemDto, SetHomeTopicScheduleDto, SetHomeTopicStatusDto, UpdateHomeTopicDto, UpdateHomeTopicImageDto } from "../../contracts/dtos";
-import { AdminHomeTopicItemModel, AdminHomeTopicTodosPageModel, AdminHomeTopicsResponseModel, ApiOkModel, HomeTopicBatchImportResponseModel, HomeTopicBatchPreviewResponseModel, HomeTopicRecipeSearchResponseModel, HomeTopicRecipeStatsResponseModel, RebuildHomeTopicRecipeStatsResponseModel } from "../../contracts/openapi";
+import { AdminHomeTopicItemModel, AdminHomeTopicMiniCodeResponseModel, AdminHomeTopicTodosPageModel, AdminHomeTopicsResponseModel, ApiOkModel, HomeTopicBatchImportResponseModel, HomeTopicBatchPreviewResponseModel, HomeTopicRecipeSearchResponseModel, HomeTopicRecipeStatsResponseModel, RebuildHomeTopicRecipeStatsResponseModel } from "../../contracts/openapi";
 import { SuperAdminGuard } from "../../common/super-admin.guard";
 import { HomeTopicService } from "./home-topic.service";
 import { HomeTopicStatsService } from "./home-topic-stats.service";
@@ -40,6 +40,12 @@ export class AdminHomeTopicController {
   @ApiOkModel(AdminHomeTopicsResponseModel, "读取后台本周灵感专题配置")
   getTopics() {
     return this.homeTopicService.getAdminTopics().then(result => ok(result));
+  }
+
+  @Get(":topicId/mini-code")
+  @ApiOkModel(AdminHomeTopicMiniCodeResponseModel, "生成打开指定共享周刊的小程序码图片数据")
+  getTopicMiniCode(@Param("topicId", ParseIntPipe) topicId: number) {
+    return this.homeTopicService.createTopicMiniCode(topicId).then(result => ok(result));
   }
 
   @Get("recipes")

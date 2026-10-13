@@ -46,6 +46,37 @@ test("memory share mini code opens the existing memory page with the share token
   });
 });
 
+test("weekly topic mini code uses the weekly detail page and numeric topic id as scene", async () => {
+  process.env.WECHAT_APP_ID = "wx-app-id";
+  process.env.WECHAT_APP_SECRET = "wx-app-secret";
+  const requests: Array<{ url: string; body: string | null }> = [];
+  global.fetch = (async (input, init) => {
+    requests.push({ url: String(input), body: typeof init?.body === "string" ? init.body : null });
+    if (requests.length === 1) {
+      return new Response(JSON.stringify({ access_token: "access-token", expires_in: 7200 }), {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      });
+    }
+    return new Response(new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]), {
+      status: 200,
+      headers: { "content-type": "image/png" }
+    });
+  }) as typeof fetch;
+
+  const miniCode = await new WechatMiniCodeService().createHomeTopicCode(42);
+
+  assert.equal(miniCode.contentType, "image/png");
+  assert.deepEqual(JSON.parse(requests[1]?.body || "{}"), {
+    scene: "42",
+    page: "pages_home/topic/index",
+    check_path: false,
+    env_version: "release",
+    width: 430,
+    is_hyaline: true
+  });
+});
+
 test("memory share mini code uses the PNG signature when WeChat labels a transparent code as JPEG", async () => {
   process.env.WECHAT_APP_ID = "wx-app-id";
   process.env.WECHAT_APP_SECRET = "wx-app-secret";

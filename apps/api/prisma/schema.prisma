@@ -751,7 +751,8 @@ model HomeTopic {
   id            Int             @id @default(autoincrement())
   title         String          @db.VarChar(20)
   subTitle      String?         @map("sub_title") @db.VarChar(40)
-  recType       HomeTopicType   @map("rec_type")
+  // Legacy values remain for existing rows, but new shared weekly issues do not use a recommendation category.
+  recType       HomeTopicType?  @map("rec_type")
   status        HomeTopicStatus @default(DRAFT)
   issueNo       Int             @unique @map("issue_no")
   description   String          @db.VarChar(120)

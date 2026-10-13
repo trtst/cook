@@ -878,10 +878,6 @@ export class HomeTopicBatchIssueDto {
   @MaxLength(40)
   subTitle!: string | null;
 
-  @ApiProperty({ enum: ["WEEKEND_GATHERING", "QUICK_AFTER_WORK", "HOME_STYLE", "ONE_PERSON", "BREAKFAST", "LIGHT_DINNER"] })
-  @IsIn(["WEEKEND_GATHERING", "QUICK_AFTER_WORK", "HOME_STYLE", "ONE_PERSON", "BREAKFAST", "LIGHT_DINNER"])
-  recType!: "WEEKEND_GATHERING" | "QUICK_AFTER_WORK" | "HOME_STYLE" | "ONE_PERSON" | "BREAKFAST" | "LIGHT_DINNER";
-
   @ApiProperty({ maxLength: 120 })
   @Transform(({ value }) => trimString(value))
   @IsString()
@@ -907,11 +903,11 @@ export class HomeTopicBatchIssueDto {
 }
 
 export class HomeTopicBatchImportDto extends OperationDto {
-  @ApiProperty({ enum: [1] })
+  @ApiProperty({ enum: [2] })
   @Type(() => Number)
   @IsInt()
-  @IsIn([1])
-  schemaVersion!: 1;
+  @IsIn([2])
+  schemaVersion!: 2;
 
   @ApiProperty({ format: "uuid" })
   @IsUUID()
@@ -971,10 +967,6 @@ export class CreateHomeTopicDto extends OperationDto {
   @IsString()
   @MaxLength(40)
   subTitle!: string | null;
-
-  @ApiProperty({ enum: ["WEEKEND_GATHERING", "QUICK_AFTER_WORK", "HOME_STYLE", "ONE_PERSON", "BREAKFAST", "LIGHT_DINNER"] })
-  @IsIn(["WEEKEND_GATHERING", "QUICK_AFTER_WORK", "HOME_STYLE", "ONE_PERSON", "BREAKFAST", "LIGHT_DINNER"])
-  recType!: "WEEKEND_GATHERING" | "QUICK_AFTER_WORK" | "HOME_STYLE" | "ONE_PERSON" | "BREAKFAST" | "LIGHT_DINNER";
 
   @ApiProperty({ minimum: 1 })
   @Type(() => Number)

@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { AssetStorageService } from "../../common/asset-storage.service";
 import { SuperAdminGuard } from "../../common/super-admin.guard";
+import { WechatModule } from "../wechat/wechat.module";
 import { PantryModule } from "../pantry/pantry.module";
 import { AdminHomeController } from "./admin-home.controller";
 import { AdminHomeTopicController } from "./admin-home-topic.controller";
@@ -17,7 +18,7 @@ import { TableTopicImageService } from "./table-topic-image.service";
 import { TableTopicService } from "./table-topic.service";
 
 @Module({
-  imports: [PantryModule],
+  imports: [PantryModule, WechatModule],
   controllers: [
     HomeController,
     HomePublicAssetsController,

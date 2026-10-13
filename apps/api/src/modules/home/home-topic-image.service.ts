@@ -79,7 +79,7 @@ export class HomeTopicImageService {
     const image = await compressUploadedImage(file.buffer, {
       maxInputBytes: maxImageBytes,
       maxOutputBytes: maxImageBytes,
-      cropRatio: 3 / 4,
+      cropRatio: 4 / 3,
       inputSizeMessage: "图片大小不能超过 5 MB",
       outputSizeMessage: "专题封面图片无法处理，请更换图片"
     });

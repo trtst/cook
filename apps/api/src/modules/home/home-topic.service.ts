@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
-import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException } from "@nestjs/common";
-import { HomeTopicStatus as TopicStatus, HomeTopicType as TopicType, Prisma } from "@prisma/client";
-import { recipeDifficultyText, recipeDurationText, topicTypeOptions, topicTypeText } from "../../common/display-text";
+import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException, Optional, ServiceUnavailableException } from "@nestjs/common";
+import { HomeTopicStatus as TopicStatus, Prisma } from "@prisma/client";
+import { recipeDifficultyText, recipeDurationText } from "../../common/display-text";
 import { completeAdminIdempotentOperation, getAdminIdempotentResult, startAdminIdempotentOperation } from "../../common/idempotency";
 import { PrismaService } from "../../common/prisma.service";
 import { UserTokenService } from "../../common/security/user-token.service";
@@ -24,8 +24,6 @@ import type {
   HomeTopicBatchImportInput,
   HomeTopicBatchPreviewResponse,
   HomeTopicBatchImportResponse,
-  HomeTopicType,
-  HomeTopicTypeOption,
   HomeTopicWeekday,
   OperationId,
   RecipeDifficulty,
@@ -40,6 +38,7 @@ import type {
 import { HomeTopicImageService } from "./home-topic-image.service";
 import { beijingWeekEnd, isoDate, nextBeijingWeekStart } from "./home-topic-week";
 import { publicInspirationRecipeWhere } from "../recipe/public-content-user-pool";
+import { WechatMiniCodeService } from "../wechat/wechat-mini-code.service";
 
 type TopicDb = Prisma.TransactionClient | PrismaService;
 type RequestLike = {
@@ -79,7 +78,6 @@ type SearchRecipeRow = Prisma.RecipeGetPayload<{
   };
 }>;
 
-const topicTypes: HomeTopicTypeOption[] = topicTypeOptions;
 const activeOwnedRecipeStatus = "ACTIVE";
 const topicImagePath = /^(?:https?:\/\/[^/]+)?\/(?:static\/)?uploads\/home-topics\/\d+(?:\.(?:jpg|png|webp))?$/i;
 const recipeWhere: Prisma.RecipeWhereInput = publicInspirationRecipeWhere("ACTIVE");
@@ -97,7 +95,6 @@ const historyTopicSelect = {
   id: true,
   title: true,
   subTitle: true,
-  recType: true,
   issueNo: true,
   periodStartDate: true,
   description: true,
@@ -158,8 +155,18 @@ export class HomeTopicService {
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(HomeTopicImageService) private readonly imageService: HomeTopicImageService,
-    @Inject(UserTokenService) private readonly userTokenService: UserTokenService
+    @Inject(UserTokenService) private readonly userTokenService: UserTokenService,
+    @Optional() @Inject(WechatMiniCodeService) private readonly miniCodeService?: WechatMiniCodeService
   ) {}
+
+  async createTopicMiniCode(topicId: UUID) {
+    await this.requireTopic(this.prisma, topicId);
+    if (!this.miniCodeService) throw new ServiceUnavailableException("小程序码暂不可用");
+    const miniCode = await this.miniCodeService.createHomeTopicCode(topicId);
+    return {
+      miniCodeDataUrl: `data:${miniCode.contentType};base64,${miniCode.buffer.toString("base64")}`
+    };
+  }
 
   async getCurrentTopic(request: RequestLike): Promise<HomeTopicCurrentResponse> {
     const current = await this.prisma.homeTopic.findFirst({
@@ -206,8 +213,7 @@ export class HomeTopicService {
   async getAdminTopics(): Promise<AdminHomeTopicsResponse> {
     const topics = await this.listAdminTopics(this.prisma);
     return {
-      topics: topics.map(item => this.toAdminTopic(item)),
-      recTypes: topicTypes
+      topics: topics.map(item => this.toAdminTopic(item))
     };
   }
 
@@ -322,7 +328,6 @@ export class HomeTopicService {
             data: {
               title: issue.title,
               subTitle: cleanText(issue.subTitle),
-              recType: issue.recType as TopicType,
               status: "DRAFT",
               issueNo: nextIssueNo + 1,
               description: issue.description,
@@ -400,7 +405,6 @@ export class HomeTopicService {
           data: {
             title: data.title,
             subTitle: data.subTitle,
-            recType: data.recType as TopicType,
             status: "DRAFT",
             issueNo: data.issueNo,
             description: data.description,
@@ -785,7 +789,6 @@ export class HomeTopicService {
           data: {
             title: data.title,
             subTitle: data.subTitle,
-            recType: data.recType as TopicType,
             issueNo: data.issueNo,
             description: data.description,
             version: { increment: 1 },
@@ -924,8 +927,7 @@ export class HomeTopicService {
   private async getAdminTopicsFromTx(tx: TopicDb) {
     const topics = await this.listAdminTopics(tx);
     return {
-      topics: topics.map(item => this.toAdminTopic(item)),
-      recTypes: topicTypes
+      topics: topics.map(item => this.toAdminTopic(item))
     } satisfies AdminHomeTopicsResponse;
   }
 
@@ -1124,7 +1126,6 @@ export class HomeTopicService {
     return {
       title: body.title.trim(),
       subTitle: cleanText(body.subTitle),
-      recType: body.recType,
       issueNo: body.issueNo,
       description: body.description.trim(),
       items: body.items.map(item => ({
@@ -1159,8 +1160,6 @@ export class HomeTopicService {
       id: topic.id,
       title: topic.title,
       subTitle: topic.subTitle,
-      recType: topic.recType as HomeTopicType,
-      recTypeText: topicTypeText(topic.recType as HomeTopicType),
       issueNo: topic.issueNo,
       periodStartDate: isoDate(topic.periodStartDate),
       periodEndDate: isoDate(beijingWeekEnd(topic.periodStartDate)),
@@ -1181,8 +1180,6 @@ export class HomeTopicService {
       id: topic.id,
       title: topic.title,
       subTitle: topic.subTitle,
-      recType: topic.recType as HomeTopicType,
-      recTypeText: topicTypeText(topic.recType as HomeTopicType),
       status: topic.status as HomeTopicStatus,
       issueNo: topic.issueNo,
       periodStartDate: isoDate(topic.periodStartDate),
@@ -1203,8 +1200,6 @@ export class HomeTopicService {
       id: topic.id,
       title: topic.title,
       subTitle: topic.subTitle,
-      recType: topic.recType as HomeTopicType,
-      recTypeText: topicTypeText(topic.recType as HomeTopicType),
       issueNo: topic.issueNo,
       periodStartDate: isoDate(topic.periodStartDate),
       periodEndDate: isoDate(beijingWeekEnd(topic.periodStartDate)),

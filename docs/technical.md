@@ -235,15 +235,15 @@
 
 ### 长期 owner 规则
 
-1. 稳定领域档位、枚举和推荐类型的中文展示，不得继续散写在页面或组件中。
-2. `RecipeDifficulty`、`RecipeDuration`、`HomeTopicType` 这类稳定合同值，必须有明确 owner。
+1. 稳定领域档位和枚举的中文展示，不得继续散写在页面或组件中。
+2. `RecipeDifficulty`、`RecipeDuration` 这类稳定合同值，必须有明确 owner。
 3. 如果某个字段在多个页面、多个分包、或多个 app 中复用，它就不再属于单页私有逻辑。
 4. 纯展示读接口如果已经确认“文案由服务端统一 owner”，可以直接返回中文展示字段；需要选择、筛选、提交或校验的链路仍以稳定 `key` 为准。
 5. 同一 app 内的共享展示映射、选项列表和通用格式化能力必须集中收口，不能在不同页面重复声明。
 
 ### 页面内禁止项
 
-1. 禁止在页面或组件内重复声明稳定枚举的 `labelMap`、`formatDifficulty`、`formatDuration`、`recTypeText` 这类映射函数。
+1. 禁止在页面或组件内重复声明稳定枚举的 `labelMap`、`formatDifficulty`、`formatDuration` 这类映射函数。
 2. 禁止在多个页面各自维护同一组固定候选项，例如 `difficulties`、`durations`。
 3. 禁止把 `formatDate`、`formatDateTime`、`formatSort`、`todayText` 这类稳定纯格式化函数散写在多个页面。
 4. 禁止为了赶页面进度，新增一份“先在这里临时写一下”的重复映射；一旦复用已存在，必须先复用 owner。

@@ -506,20 +506,8 @@ export interface DeleteTableTopicRequest {
   expectedVersion: number;
 }
 
-export type HomeTopicType =
-  | "WEEKEND_GATHERING"
-  | "QUICK_AFTER_WORK"
-  | "HOME_STYLE"
-  | "ONE_PERSON"
-  | "BREAKFAST"
-  | "LIGHT_DINNER";
 export type HomeTopicStatus = "DRAFT" | "PUBLISHED" | "UNLISTED";
 export type HomeTopicWeekday = "MONDAY" | "TUESDAY" | "WEDNESDAY" | "THURSDAY" | "FRIDAY" | "SATURDAY" | "SUNDAY";
-
-export interface HomeTopicTypeOption {
-  label: string;
-  value: HomeTopicType;
-}
 
 export interface HomeTopicRecipeItem {
   id: UUID;
@@ -559,8 +547,6 @@ export interface HomeTopicHistoryItem {
   id: UUID;
   title: string;
   subTitle: string | null;
-  recType: HomeTopicType;
-  recTypeText: string;
   issueNo: number;
   periodStartDate: IsoDate;
   periodEndDate: IsoDate;
@@ -575,8 +561,6 @@ export interface HomeTopicDetail {
   id: UUID;
   title: string;
   subTitle: string | null;
-  recType: HomeTopicType;
-  recTypeText: string;
   issueNo: number;
   description: string;
   coverImageUrl: string | null;
@@ -601,8 +585,6 @@ export interface AdminHomeTopicItem {
   id: UUID;
   title: string;
   subTitle: string | null;
-  recType: HomeTopicType;
-  recTypeText: string;
   status: HomeTopicStatus;
   issueNo: number;
   periodStartDate: IsoDate;
@@ -619,7 +601,10 @@ export interface AdminHomeTopicItem {
 
 export interface AdminHomeTopicsResponse {
   topics: AdminHomeTopicItem[];
-  recTypes: HomeTopicTypeOption[];
+}
+
+export interface AdminHomeTopicMiniCodeResponse {
+  miniCodeDataUrl: string;
 }
 
 export interface HomeTopicPickInput {
@@ -632,7 +617,6 @@ export interface HomeTopicPickInput {
 export interface CreateHomeTopicRequest {
   title: string;
   subTitle: string | null;
-  recType: HomeTopicType;
   issueNo: number;
   description: string;
   items: HomeTopicPickInput[];
@@ -743,14 +727,13 @@ export interface HomeTopicBatchIssueInput {
   plannedPublishAt: IsoDateTime;
   title: string;
   subTitle: string | null;
-  recType: HomeTopicType;
   description: string;
   themeRationale: string;
   days: HomeTopicBatchDayInput[];
 }
 
 export interface HomeTopicBatchImportInput {
-  schemaVersion: 1;
+  schemaVersion: 2;
   statsSnapshotId: string;
   generatedAt: IsoDateTime;
   issues: HomeTopicBatchIssueInput[];

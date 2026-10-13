@@ -30,14 +30,25 @@ export class WechatMiniCodeService {
     if (!/^[A-Za-z0-9_-]{1,32}$/u.test(shareToken)) {
       throw new BadRequestException("分享标识无效");
     }
+    return this.createMiniCode(shareToken, "pages_share/memory/index");
+  }
+
+  async createHomeTopicCode(topicId: number) {
+    if (!Number.isSafeInteger(topicId) || topicId <= 0) {
+      throw new BadRequestException("周刊标识无效");
+    }
+    return this.createMiniCode(String(topicId), "pages_home/topic/index");
+  }
+
+  private async createMiniCode(scene: string, page: string) {
     const accessToken = await this.getAccessToken();
     const environment = this.miniCodeEnvironment();
     const response = await this.fetchWechat(`${WECHAT_MINI_CODE_URL}?access_token=${encodeURIComponent(accessToken)}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        scene: shareToken,
-        page: "pages_share/memory/index",
+        scene,
+        page,
         check_path: false,
         env_version: environment,
         width: 430,

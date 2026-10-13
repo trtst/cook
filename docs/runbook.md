@@ -158,7 +158,7 @@ WHERE id = <id>
 
 涉及前端页面、后台页面或组件时，提交前额外确认：
 
-1. 没有新增稳定枚举中文映射直接写在页面内，例如 `formatDifficulty`、`formatDuration`、`recTypeText`。
+1. 没有新增稳定枚举中文映射直接写在页面内，例如 `formatDifficulty`、`formatDuration`。
 2. 没有新增固定候选项数组直接写在多个页面内，例如 `difficulties`、`durations`。
 3. 没有新增重复的 `formatDate`、`formatDateTime`、`formatSort`、`todayText` 等稳定格式化函数。
 4. 如果本次确实新增了共享展示映射或共享格式化能力，必须说明 owner 放在哪里，以及为什么不是页面私有。

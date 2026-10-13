@@ -145,7 +145,7 @@
 - 复用并扩展现有后台周刊菜谱搜索能力，不另建重复的专题搜索体系。
 - 候选搜索需支持关键词及确认后的食材、菜系、菜式/做法筛选与分页，并只返回当前可公开的系统灵感菜谱。
 - 候选至少返回菜谱 ID、固定的当前 `sourceVersionId`、标题、食材、已确认标签、分类、难度和时长；未确认标签不得作为确定事实提供给选题推理。
-- 批次 JSON 使用 schemaVersion 1，包含 `statsSnapshotId`、生成时间及最多 12 个 `issues[]`。每期包含计划发布时间、周期周一、标题、副标题、周刊类别、描述、主题理由，以及周一至周日菜单；菜谱项包含 `recipeId`、`sourceVersionId`、日内顺序和简短推荐理由。
+- 批次 JSON 使用 schemaVersion 2，包含 `statsSnapshotId`、生成时间及最多 12 个 `issues[]`。每期包含计划发布时间、周期周一、标题、副标题、描述、主题理由，以及周一至周日菜单；不再包含旧版固定用途“推荐类别”。共享/个人表示周刊归属与访问范围，不是每期选题类别；个人周刊仍需单独设计。
 - 周期结束日、期号和草稿状态等派生/系统字段由后台验证或生成，不由导入 JSON 决定。字段和验证规则以本节的已确认接口契约为准。
 
 ### 导入与安全边界
@@ -160,10 +160,10 @@
 - `GET /admin/home-topics/statistics` 读取当前统计快照；`POST /admin/home-topics/statistics/rebuild` 全量重建并切换当前快照，重建失败保留旧快照。
 - 两个统计接口、扩展后的 `GET /admin/home-topics/recipes`、以及 `POST /admin/home-topics/import/preview` 和 `/admin/home-topics/import` 都要求 `Authorization: Bearer <admin-token>`、有效后台账号和 `SUPER_ADMIN` 角色。无效/缺失 token 返回 401；有效但无该角色返回 403。前端限制不能替代服务端鉴权。
 - 候选搜索参数为 `keyword / ingredient / cuisine / dishStyle / page / pageSize`；分页最大 100。响应返回候选菜谱、原料名称、已确认标签、难度/时长和分页元数据；菜谱 ID 与固定版本 ID 使用正整数。
-- JSON 批次 schema 版本为 1，一次最多 12 期；每期用周期周一 `periodStartDate` 标识，包含上一个周日 15:00（Asia/Shanghai）的 `plannedPublishAt`、标题、副标题、周刊类别、描述、主题理由和周一至周日菜单。主题理由仅用于导入预览；每日菜谱理由写入现有菜单项 `recommendNote`。
+- JSON 批次 schema 版本为 2，一次最多 12 期；每期用周期周一 `periodStartDate` 标识，包含上一个周日 15:00（Asia/Shanghai）的 `plannedPublishAt`、标题、副标题、描述、主题理由和周一至周日菜单。每期主题由标题、描述和菜单表达，不要求归入固定推荐类别。主题理由仅用于导入预览；每日菜谱理由写入现有菜单项 `recommendNote`。
 - 预览接口逐期返回公开资格、固定版本、星期覆盖、周期冲突和批内菜谱重复的校验结果，不写入数据。正式导入要求数字字符串 `Idempotency-Key`，每期独立校验并创建为 `DRAFT`，不设置预约、不自动上架；冲突期不覆盖，其他有效期可成功导入。
 - Codex 在候选/统计读取后可能出现数据变化，因此预览及导入都会重新校验当前公开资格和 `sourceVersionId`；每期都必须七天至少一道菜，菜谱不得在同一周重复，批次各期之间不得重复菜谱 ID。
-- 周刊主题类别沿用现有 `HomeTopicType` 有界枚举；Admin 提供 JSON 文本导入、预览和逐期结果。导入后运营仍在现有编辑页检查并手动安排发布时间。
+- Admin 提供 JSON 文本导入、预览和逐期结果；编辑页以当期标题、描述和七日菜单呈现选题。导入后运营仍在现有编辑页检查并手动安排发布时间。
 
 实现已按上述契约落地。剩余工作是完成 API/OpenAPI 构建检查、真实认证的线上候选查询与首期草稿导入，以及后台人工审核；不得在 Codex、后台页面或 API 日志中保存/回显 token。
 
