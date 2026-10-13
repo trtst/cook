@@ -72,13 +72,6 @@
           <button class="theme-footer__button" @click="confirmThemeSelection">使用当前主题</button>
         </view>
 
-        <view class="theme-page__preview">
-          <view class="theme-preview-note">
-            <text class="theme-preview-note__title">TabBar 预览</text>
-            <text class="theme-preview-note__text">仅预览当前底部导航，不可点击。</text>
-          </view>
-          <TabBar class="theme-page__preview-tabbar" current="me" :interactive="false" :fixed="false" />
-        </view>
       </view>
     </view>
   </Layout>
@@ -88,7 +81,6 @@
 import { onUnload } from "@dcloudio/uni-app";
 import { computed } from "vue";
 import Layout from "@/components/Layout/Layout.vue";
-import TabBar from "@/components/TabBar/TabBar.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { buildThemePageStyle } from "@/composables/theme-page-style";
 import { useSystemInfo } from "@/composables/useSystemInfo";
@@ -333,15 +325,11 @@ onUnload(() => {
   padding-bottom: var(--space-lg);
 }
 
-.theme-page__preview {
-  position: relative;
-  flex: 0 0 auto;
-  margin-top: var(--space-lg);
-}
-
 .theme-footer {
-  margin-top: var(--space-lg);
-  padding-bottom: 0;
+  flex: 0 0 auto;
+  margin-top: auto;
+  padding-top: var(--space-md);
+  padding-bottom: calc(var(--space-lg) + env(safe-area-inset-bottom));
 }
 
 .theme-footer__button {
@@ -476,26 +464,4 @@ onUnload(() => {
   font-weight: var(--font-weight-semibold);
 }
 
-.theme-preview-note {
-  padding: 0 2rpx 16rpx;
-}
-
-.theme-preview-note__title {
-  display: block;
-  color: var(--color-text);
-  font-size: var(--font-size-xl);
-  font-weight: var(--font-weight-bold);
-}
-
-.theme-preview-note__text {
-  display: block;
-  margin-top: 8rpx;
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-md);
-  line-height: 1.6;
-}
-
-.theme-page__preview-tabbar {
-  pointer-events: none;
-}
 </style>

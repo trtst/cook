@@ -43,7 +43,8 @@ describe("pages_me/theme/index", () => {
     expect(texts).toContain("主题");
     expect(texts).toContain("色系");
     expect(texts).toContain("模式");
-    expect(texts).toContain("TabBar 预览");
+    expect(texts).not.toContain("TabBar 预览");
+    expect(texts).not.toContain("仅预览当前底部导航，不可点击。");
 
     const sectionTitles = await collectTexts(await page.$$(".theme-card__section-title"));
     expect(sectionTitles).toEqual(["主题", "色系", "模式"]);
