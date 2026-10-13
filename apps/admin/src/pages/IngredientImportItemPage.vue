@@ -48,9 +48,10 @@ const proteinOptions = [
   { label: "牛肉", value: "BEEF" },
   { label: "羊肉", value: "LAMB" },
   { label: "鸭肉", value: "DUCK" },
+  { label: "鱼类", value: "FISH" },
   { label: "海鲜", value: "SEAFOOD" },
   { label: "鸡蛋", value: "EGG" },
-  { label: "豆腐", value: "TOFU" },
+  { label: "植物蛋白", value: "PLANT" },
   { label: "无主蛋白", value: "NONE" }
 ] as const;
 const matchTypeOptions: Array<{ label: string; value: IngredientImportMatchType }> = [

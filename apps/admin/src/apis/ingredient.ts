@@ -35,7 +35,7 @@ export interface AdminIngredientSummary {
   categoryName: string;
   defaultUnit: UnitSummary | null;
   mergedTo: Pick<AdminIngredientSummary, "id" | "name"> | null;
-  proteinType: "PORK" | "CHICKEN" | "BEEF" | "LAMB" | "DUCK" | "SEAFOOD" | "EGG" | "TOFU" | "NONE" | null;
+  proteinType: "PORK" | "CHICKEN" | "BEEF" | "LAMB" | "DUCK" | "FISH" | "SEAFOOD" | "EGG" | "PLANT" | "NONE" | null;
   isStaple: boolean;
   isSpicyIngredient: boolean;
   aliases: string[];

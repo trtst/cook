@@ -44,9 +44,10 @@ const proteinTypeLabelMap: Record<IngredientProteinType, string> = {
   BEEF: "牛肉",
   LAMB: "羊肉",
   DUCK: "鸭肉",
+  FISH: "鱼类",
   SEAFOOD: "海鲜",
   EGG: "鸡蛋",
-  TOFU: "豆腐",
+  PLANT: "植物蛋白",
   NONE: "无主蛋白"
 };
 const proteinTypeOptions: Array<{ label: string; value: IngredientProteinType | "" }> = [
@@ -56,9 +57,10 @@ const proteinTypeOptions: Array<{ label: string; value: IngredientProteinType | 
   { label: "牛肉", value: "BEEF" },
   { label: "羊肉", value: "LAMB" },
   { label: "鸭肉", value: "DUCK" },
+  { label: "鱼类", value: "FISH" },
   { label: "海鲜", value: "SEAFOOD" },
   { label: "鸡蛋", value: "EGG" },
-  { label: "豆腐", value: "TOFU" },
+  { label: "植物蛋白", value: "PLANT" },
   { label: "无主蛋白", value: "NONE" }
 ];
 
@@ -520,7 +522,7 @@ function inferIngredientTagGaps(row: AdminIngredientSummary) {
   const name = row.name.trim();
   if (!row.proteinType) {
     if (/(鸡蛋|鸭蛋|鹅蛋|鹌鹑蛋|皮蛋)/.test(name)) gaps.push("主蛋白");
-    else if (/(豆腐|豆干|豆皮|腐竹|千张|豆腐泡|豆腐乳)/.test(name)) gaps.push("主蛋白");
+    else if (/(素鸡|素火腿|素虾|素肉|素肠|豆腐|豆干|豆皮|腐竹|千张|豆腐泡|豆腐乳)/.test(name)) gaps.push("主蛋白");
     else if (/(猪肉|五花肉|排骨|里脊|猪蹄|猪肝|腊肠|肉末|肉丝|肉片)/.test(name)) gaps.push("主蛋白");
     else if (/(鸡肉|鸡腿|鸡翅|鸡胸|鸡爪|鸡丁|鸡胗)/.test(name)) gaps.push("主蛋白");
     else if (/(牛肉|牛腩|肥牛|牛排)/.test(name)) gaps.push("主蛋白");
