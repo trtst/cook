@@ -34,7 +34,6 @@
 
               <view class="topic-summary__main">
                 <view class="topic-summary__meta">
-                  <text class="topic-chip">{{ topic.recTypeText }}</text>
                   <text class="topic-chip topic-chip--soft">第 {{ topic.issueNo }} 期</text>
                 </view>
                 <text class="topic-summary__title">{{ topic.title }}</text>
@@ -261,7 +260,17 @@ const navTitleStyle = computed(() => ({
 }));
 
 onLoad(query => {
-  const rawTopicId = Array.isArray(query?.topicId) ? query.topicId[0] : query?.topicId;
+  const queryTopicId = Array.isArray(query?.topicId) ? query.topicId[0] : query?.topicId;
+  const rawScene = Array.isArray(query?.scene) ? query.scene[0] : query?.scene;
+  let sceneTopicId: string | undefined;
+  if (typeof rawScene === "string") {
+    try {
+      sceneTopicId = decodeURIComponent(rawScene);
+    } catch {
+      sceneTopicId = undefined;
+    }
+  }
+  const rawTopicId = queryTopicId ?? sceneTopicId;
   const rawHistoryBrowse = Array.isArray(query?.historyBrowse) ? query.historyBrowse[0] : query?.historyBrowse;
   topicId.value = Number.isInteger(Number(rawTopicId)) && Number(rawTopicId) > 0 ? Number(rawTopicId) : 0;
   historyBrowse.value = rawHistoryBrowse === "1";
@@ -562,8 +571,8 @@ function formatWeekRange(value: { periodStartDate: string; periodEndDate: string
 }
 
 .topic-summary__cover {
-  width: 200rpx;
-  height: 267rpx;
+  width: 267rpx;
+  height: 200rpx;
   flex: 0 0 auto;
   border-radius: var(--radius-xs);
   overflow: hidden;
@@ -931,7 +940,7 @@ function formatWeekRange(value: { periodStartDate: string; periodEndDate: string
 
 .history-card {
   position: relative;
-  width: 540rpx;
+  width: 400rpx;
   height: 300rpx;
   flex: 0 0 auto;
   overflow: hidden;
@@ -948,8 +957,11 @@ function formatWeekRange(value: { periodStartDate: string; periodEndDate: string
 }
 
 .history-card__cover {
+  position: absolute;
+  inset: 0;
   width: 100%;
-  aspect-ratio: 3 / 4;
+  height: 100%;
+  aspect-ratio: 4 / 3;
   background: var(--color-surface-muted);
 }
 

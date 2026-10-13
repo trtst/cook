@@ -108,14 +108,6 @@ export interface HomeFridgeRecipesResponse {
   hasNext: boolean;
 }
 
-export type HomeTopicType =
-  | "WEEKEND_GATHERING"
-  | "QUICK_AFTER_WORK"
-  | "HOME_STYLE"
-  | "ONE_PERSON"
-  | "BREAKFAST"
-  | "LIGHT_DINNER";
-
 export type HomeTopicWeekday = "MONDAY" | "TUESDAY" | "WEDNESDAY" | "THURSDAY" | "FRIDAY" | "SATURDAY" | "SUNDAY";
 
 export interface HomeTopicRecipeItem {
@@ -144,8 +136,6 @@ export interface HomeTopicHistoryItem {
   id: number;
   title: string;
   subTitle: string | null;
-  recType: HomeTopicType;
-  recTypeText: string;
   issueNo: number;
   periodStartDate: string;
   periodEndDate: string;
@@ -160,8 +150,6 @@ export interface HomeTopicDetail {
   id: number;
   title: string;
   subTitle: string | null;
-  recType: HomeTopicType;
-  recTypeText: string;
   issueNo: number;
   description: string;
   coverImageUrl: string | null;

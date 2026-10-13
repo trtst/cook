@@ -183,7 +183,6 @@ async function createTopicFixture() {
       body: JSON.stringify({
         title: currentTitle,
         subTitle: "用于验证本期推荐",
-        recType: "HOME_STYLE",
         issueNo: issueBase,
         description: "当前专题测试数据",
         items: recipeIds.map((recipeId, index) => ({

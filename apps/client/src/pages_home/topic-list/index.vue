@@ -27,7 +27,6 @@
             <view class="history-card__body">
               <view class="history-card__meta">
                 <text class="history-card__issue">第 {{ item.issueNo }} 期</text>
-                <text class="history-card__type">{{ item.recTypeText }}</text>
               </view>
               <text class="history-card__title">{{ item.title }}</text>
               <text v-if="item.subTitle" class="history-card__subtitle">{{ item.subTitle }}</text>
@@ -244,7 +243,7 @@ function formatDateLabel(value: string) {
 .history-card__cover {
   flex: none;
   width: 196rpx;
-  height: 156rpx;
+  height: 147rpx;
   border-radius: var(--radius-md);
   background: var(--color-surface-muted);
 }
@@ -277,7 +276,6 @@ function formatDateLabel(value: string) {
   font-weight: 700;
 }
 
-.history-card__type,
 .history-card__count {
   color: var(--color-text-tertiary);
   font-size: var(--font-size-xs);
