@@ -35,9 +35,7 @@ function weekdayForDate(value) {
 function visibleDay(topic) {
   const available = new Set(topic.items.map((item) => item.weekday));
   const today = beijingToday();
-  const expected = today >= topic.periodStartDate && today <= topic.periodEndDate
-    ? weekdayForDate(today)
-    : "MONDAY";
+  const expected = weekdayForDate(today);
   const weekday = available.has(expected)
     ? expected
     : available.has("MONDAY")

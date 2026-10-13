@@ -388,8 +388,7 @@ function selectInitialWeekday(value: HomeTopicDetail) {
     selectedWeekday.value = "MONDAY";
     return;
   }
-  const today = beijingToday();
-  const currentWeekday = today >= value.periodStartDate && today <= value.periodEndDate ? weekdayForDate(today) : "MONDAY";
+  const currentWeekday = historyBrowse.value ? "MONDAY" : weekdayForDate(beijingToday());
   selectedWeekday.value = available.has(currentWeekday) ? currentWeekday : available.has("MONDAY") ? "MONDAY" : WEEKDAYS.find(day => available.has(day.weekday))!.weekday;
 }
 
