@@ -129,16 +129,4 @@
 
 ## 5. 线上系统食材存量修复
 
-线上执行前先发布支持当前食材枚举的 API 和数据库 migration，并确认生产数据库备份可恢复。使用 API 服务器仓库根目录下的包装脚本，先生成只读报告：
-
-```bash
-./apps/api/scripts/repair-system-ingredients-online.sh preview /tmp/ingredient-repair-online-preview.json
-```
-
-逐项审阅 `guessedChanges` 和冲突后，只有确认清单符合预期时，才将同一报告路径传给写入模式：
-
-```bash
-./apps/api/scripts/repair-system-ingredients-online.sh apply /tmp/ingredient-repair-online-preview.json --confirm-online-write
-```
-
-写入会重新计算候选并与已审阅清单逐项比对。目标环境、数据库指纹、食材总数、推测修改或精确营养候选任一不一致时，脚本拒绝写入。脚本本身不会创建数据库备份；执行前必须完成并确认备份。以上命令仅为操作说明，不代表已经连接或修改线上数据。
+2026-10-13 已在线上执行一次性存量修复：预览为 991 条系统食材、847 个字段变更和 4 条精确营养映射；按已审阅报告提交后，事务成功并创建 4 条营养映射。执行后的只读预览显示 `changedIngredientCount / changeCount / exactNutritionCandidates` 均为 0。执行报告与复核报告已归档到服务器 `/srv/cook/.run-logs/`。一次性维护脚本已从本地仓库和服务器移除。
