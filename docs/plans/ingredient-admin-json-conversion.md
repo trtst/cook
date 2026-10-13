@@ -127,6 +127,10 @@
 - 当前版本：`2026-08-22-primary-subset-v1`。
 - 项目数据文件：[food_composition_primary.csv](/Users/yangpenghui/personal/cook/apps/api/data/nutrition/food_composition_primary.csv)。
 
-## 5. 线上系统食材存量修复
+## 5. TEST 与线上系统食材存量修复
 
-2026-10-13 已在线上执行一次性存量修复：预览为 991 条系统食材、847 个字段变更和 4 条精确营养映射；按已审阅报告提交后，事务成功并创建 4 条营养映射。执行后的只读预览显示 `changedIngredientCount / changeCount / exactNutritionCandidates` 均为 0。执行报告与复核报告已归档到服务器 `/srv/cook/.run-logs/`。一次性维护脚本已从本地仓库和服务器移除。
+2026-10-13 已在线上执行一次性存量修复：预览为 991 条系统食材、847 个字段变更和 4 条精确营养映射；按已审阅报告提交后，事务成功并创建 4 条营养映射。执行后的只读预览显示 `changedIngredientCount / changeCount / exactNutritionCandidates` 均为 0。执行报告与复核报告已归档到服务器 `/srv/cook/.run-logs/`。
+
+同日恢复本机 TEST API 后，先执行只读复核：目标为 `SYSTEM_DATA_ENVIRONMENT=TEST`，共 996 条系统食材，属性回填 `changedIngredientCount / changeCount / exactNutritionCandidates` 均为 0，因此未重复执行属性写入。随后通过一次性事务脚本移除 17 个与其他系统食材正式名称冲突的别名，涉及 14 条 ACTIVE 食材；再将 7 组已有明确别名关系的重复 ACTIVE 食材软归并到保留营养映射或既有主档的一侧，并清理 6 条零引用 PENDING 与 3 条零引用 DISABLED 冲突记录。归并按领域规则保留来源身份、固定菜谱版本和营养映射，只迁移可变购物引用；所有写入递增版本并记录 SYSTEM 审计。最终 TEST 有 987 条系统食材：ACTIVE 914、MERGED 7、PENDING 64、DISABLED 2。全库规范化名称/别名冲突、记录内别名重复、自身名称混入别名、searchKey 不一致均为 0；ACTIVE 食材缺分类、缺默认单位、proteinType 未判断均为 0。剩余 64 条 PENDING 是无冲突、字段齐全的待审核记录，不自动转为 ACTIVE；2 条 DISABLED 保留为无冲突下架记录。一次性维护脚本已从本地仓库移除。
+
+同日完成线上名称/别名冲突治理：将 8 条重复 ACTIVE 系统食材按既定主档软归并（含“牛里脊肉”归并到“牛里脊”），删除 6 条零引用 PENDING 重复记录，并清理 14 条 ACTIVE 食材上的冲突/错误别名。最终线上共 985 条系统食材：ACTIVE 913、MERGED 8、PENDING 64、DISABLED 0；字段缺失和 searchKey 不一致均为 0，重复名称检查为空。审计仍报告 8 组历史名称碰撞，每组均为 MERGED 来源名称与 ACTIVE 主档保留的同名别名，符合“归并来源保留历史搜索入口”的规则，不属于待处理的 ACTIVE 重复。完整审计归档于服务器 `/srv/cook/.run-logs/ingredient-online-post-repair-20261013.json`，一次性线上审计和修复脚本已删除。
