@@ -911,36 +911,54 @@ export class HomeTopicRecipeSearchResponseModel {
 export class HomeTopicRecipeStatsFacetModel {
   @ApiProperty({ type: String }) value!: string;
   @ApiProperty({ type: Number, minimum: 0 }) count!: number;
+  @ApiProperty({ type: Number, minimum: 0, maximum: 1 }) shareOfTotal!: number;
+  @ApiProperty({ type: Number, minimum: 0, maximum: 1 }) shareOfConfirmed!: number;
 }
 
-export class HomeTopicRecipeStatsCoverageModel {
-  @ApiProperty({ type: Number, minimum: 0 }) ingredients!: number;
-  @ApiProperty({ type: Number, minimum: 0 }) primaryIngredients!: number;
-  @ApiProperty({ type: Number, minimum: 0 }) cuisines!: number;
-  @ApiProperty({ type: Number, minimum: 0 }) dishStyles!: number;
-  @ApiProperty({ type: Number, minimum: 0 }) dishRoles!: number;
-  @ApiProperty({ type: Number, minimum: 0 }) proteins!: number;
-  @ApiProperty({ type: Number, minimum: 0 }) difficulties!: number;
-  @ApiProperty({ type: Number, minimum: 0 }) durations!: number;
+export class HomeTopicRecipeStatsDimensionModel {
+  @ApiProperty({ type: Number, minimum: 0 }) confirmedCount!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) missingCount!: number;
+  @ApiProperty({ type: Number, minimum: 0, maximum: 1 }) coverageRate!: number;
+  @ApiProperty({ type: [HomeTopicRecipeStatsFacetModel] }) values!: HomeTopicRecipeStatsFacetModel[];
 }
 
 export class HomeTopicRecipeStatsFacetsModel {
-  @ApiProperty({ type: [HomeTopicRecipeStatsFacetModel] }) allIngredients!: HomeTopicRecipeStatsFacetModel[];
-  @ApiProperty({ type: [HomeTopicRecipeStatsFacetModel] }) primaryIngredients!: HomeTopicRecipeStatsFacetModel[];
-  @ApiProperty({ type: [HomeTopicRecipeStatsFacetModel] }) cuisines!: HomeTopicRecipeStatsFacetModel[];
-  @ApiProperty({ type: [HomeTopicRecipeStatsFacetModel] }) dishStyles!: HomeTopicRecipeStatsFacetModel[];
-  @ApiProperty({ type: [HomeTopicRecipeStatsFacetModel] }) dishRoles!: HomeTopicRecipeStatsFacetModel[];
-  @ApiProperty({ type: [HomeTopicRecipeStatsFacetModel] }) proteins!: HomeTopicRecipeStatsFacetModel[];
-  @ApiProperty({ type: [HomeTopicRecipeStatsFacetModel] }) difficulties!: HomeTopicRecipeStatsFacetModel[];
-  @ApiProperty({ type: [HomeTopicRecipeStatsFacetModel] }) durations!: HomeTopicRecipeStatsFacetModel[];
+  @ApiProperty({ type: HomeTopicRecipeStatsDimensionModel }) allIngredients!: HomeTopicRecipeStatsDimensionModel;
+  @ApiProperty({ type: HomeTopicRecipeStatsDimensionModel }) primaryIngredients!: HomeTopicRecipeStatsDimensionModel;
+  @ApiProperty({ type: HomeTopicRecipeStatsDimensionModel }) cuisines!: HomeTopicRecipeStatsDimensionModel;
+  @ApiProperty({ type: HomeTopicRecipeStatsDimensionModel }) dishStyles!: HomeTopicRecipeStatsDimensionModel;
+  @ApiProperty({ type: HomeTopicRecipeStatsDimensionModel }) dishRoles!: HomeTopicRecipeStatsDimensionModel;
+  @ApiProperty({ type: HomeTopicRecipeStatsDimensionModel }) proteins!: HomeTopicRecipeStatsDimensionModel;
+  @ApiProperty({ type: HomeTopicRecipeStatsDimensionModel }) difficulties!: HomeTopicRecipeStatsDimensionModel;
+  @ApiProperty({ type: HomeTopicRecipeStatsDimensionModel }) durations!: HomeTopicRecipeStatsDimensionModel;
+}
+
+export class HomeTopicRecipeStatsNutritionStatusesModel {
+  @ApiProperty({ type: Number, minimum: 0 }) COMPLETE!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) ESTIMATED!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) INSUFFICIENT!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) NONE!: number;
+}
+
+export class HomeTopicRecipeStatsNutritionCoverageModel {
+  @ApiProperty({ type: Number, minimum: 0 }) calories!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) protein!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) fat!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) carbohydrate!: number;
+}
+
+export class HomeTopicRecipeStatsNutritionModel {
+  @ApiProperty({ type: Number, minimum: 0 }) hasNutritionAnalysis!: number;
+  @ApiProperty({ type: () => HomeTopicRecipeStatsNutritionStatusesModel }) statusCounts!: HomeTopicRecipeStatsNutritionStatusesModel;
+  @ApiProperty({ type: () => HomeTopicRecipeStatsNutritionCoverageModel }) fieldCoverage!: HomeTopicRecipeStatsNutritionCoverageModel;
 }
 
 export class HomeTopicRecipeStatsSnapshotModel {
   @ApiProperty({ type: String, format: "uuid" }) snapshotId!: string;
   @ApiProperty(dateTime) generatedAt!: string;
-  @ApiProperty({ type: Number, minimum: 0 }) eligibleRecipeCount!: number;
-  @ApiProperty({ type: HomeTopicRecipeStatsCoverageModel }) coverage!: HomeTopicRecipeStatsCoverageModel;
+  @ApiProperty({ type: Number, minimum: 0 }) totalPublicRecipes!: number;
   @ApiProperty({ type: HomeTopicRecipeStatsFacetsModel }) facets!: HomeTopicRecipeStatsFacetsModel;
+  @ApiProperty({ type: HomeTopicRecipeStatsNutritionModel }) nutrition!: HomeTopicRecipeStatsNutritionModel;
 }
 
 export class HomeTopicRecipeStatsResponseModel {
@@ -949,6 +967,40 @@ export class HomeTopicRecipeStatsResponseModel {
 
 export class RebuildHomeTopicRecipeStatsResponseModel {
   @ApiProperty({ type: HomeTopicRecipeStatsSnapshotModel }) snapshot!: HomeTopicRecipeStatsSnapshotModel;
+}
+
+export class HomeTopicMenuCheckDayModel {
+  @ApiProperty({ type: String, enum: ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"] }) weekday!: string;
+  @ApiProperty({ type: Number, minimum: 0 }) recipeCount!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) uniqueRecipeCount!: number;
+  @ApiProperty({ type: HomeTopicRecipeStatsFacetsModel }) facets!: HomeTopicRecipeStatsFacetsModel;
+}
+
+export class HomeTopicMenuCheckWarningModel {
+  @ApiProperty({ type: String, enum: ["CONSECUTIVE_PRIMARY_INGREDIENT"] }) code!: string;
+  @ApiProperty({ type: Number, minimum: 1 }) ingredientId!: number;
+  @ApiProperty({ type: String }) ingredientName!: string;
+  @ApiProperty({ type: String, enum: ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"] }) fromWeekday!: string;
+  @ApiProperty({ type: String, enum: ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"] }) toWeekday!: string;
+}
+
+export class HomeTopicMenuCheckWeeklyModel {
+  @ApiProperty({ type: Number, minimum: 0 }) recipeCount!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) uniqueRecipeCount!: number;
+  @ApiProperty({ type: HomeTopicRecipeStatsFacetsModel }) facets!: HomeTopicRecipeStatsFacetsModel;
+}
+
+export class HomeTopicMenuCheckResponseModel {
+  @ApiProperty({ type: Number, minimum: 1 }) topicId!: number;
+  @ApiProperty({ type: Number, minimum: 1 }) topicVersion!: number;
+  @ApiProperty(dateTime) generatedAt!: string;
+  @ApiProperty({ type: Boolean }) stale!: boolean;
+  @ApiProperty({ type: Number, minimum: 0 }) totalRecipeCount!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) uniqueRecipeCount!: number;
+  @ApiProperty({ type: [Number] }) duplicateRecipeIds!: number[];
+  @ApiProperty({ type: [HomeTopicMenuCheckDayModel] }) days!: HomeTopicMenuCheckDayModel[];
+  @ApiProperty({ type: HomeTopicMenuCheckWeeklyModel }) weekly!: HomeTopicMenuCheckWeeklyModel;
+  @ApiProperty({ type: [HomeTopicMenuCheckWarningModel] }) warnings!: HomeTopicMenuCheckWarningModel[];
 }
 
 export class HomeTopicBatchIssuePreviewModel {
@@ -2124,7 +2176,7 @@ export class AdminIngredientModel {
   @ApiProperty({ type: String }) categoryName!: string;
   @ApiProperty({ type: UnitModel, nullable: true }) defaultUnit!: UnitModel | null;
   @ApiProperty({ type: AdminIngredientMergeTargetModel, nullable: true }) mergedTo!: AdminIngredientMergeTargetModel | null;
-  @ApiProperty({ type: String, nullable: true, enum: ["PORK", "CHICKEN", "BEEF", "LAMB", "DUCK", "SEAFOOD", "EGG", "TOFU", "NONE"] })
+  @ApiProperty({ type: String, nullable: true, enum: ["PORK", "CHICKEN", "BEEF", "LAMB", "DUCK", "FISH", "SEAFOOD", "EGG", "PLANT", "NONE"] })
   proteinType!: string | null;
   @ApiProperty({ type: Boolean }) isStaple!: boolean;
   @ApiProperty({ type: Boolean }) isSpicyIngredient!: boolean;
@@ -2554,7 +2606,7 @@ export class RandomMenuItemModel {
   @ApiProperty(nullableString) durationText!: string | null;
   @ApiProperty({ type: Number, nullable: true, minimum: 0 }) estimatedCalories!: number | null;
   @ApiProperty({ type: [String] }) flavorTags!: string[];
-  @ApiProperty({ type: String, nullable: true, enum: ["PORK", "CHICKEN", "BEEF", "LAMB", "DUCK", "FISH", "EGG", "NONE"] })
+  @ApiProperty({ type: String, nullable: true, enum: ["PORK", "CHICKEN", "BEEF", "LAMB", "DUCK", "FISH", "SEAFOOD", "EGG", "PLANT", "NONE"] })
   mainProteinType!: string | null;
   @ApiProperty({ type: String, enum: ["HIGH", "MEDIUM", "LOW", "UNKNOWN"] }) fridgeFit!: string;
   @ApiProperty({ type: [String] }) matchedIngredients!: string[];

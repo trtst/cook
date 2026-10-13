@@ -54,7 +54,7 @@ const medalCategoryValues = [
 ] as const;
 const medalStatusValues = ["DRAFT", "LISTED", "UNLISTED", "ARCHIVED"] as const;
 const editableMedalStatusValues = ["DRAFT", "LISTED", "UNLISTED"] as const;
-const ingredientProteinTypeValues = ["PORK", "CHICKEN", "BEEF", "LAMB", "DUCK", "SEAFOOD", "EGG", "TOFU", "NONE"] as const;
+const ingredientProteinTypeValues = ["PORK", "CHICKEN", "BEEF", "LAMB", "DUCK", "FISH", "SEAFOOD", "EGG", "PLANT", "NONE"] as const;
 const mealSlotValues = ["BREAKFAST", "LUNCH", "AFTERNOON_TEA", "DINNER", "LATE_NIGHT"] as const;
 const diningEventListRoleValues = ["ALL", "ORGANIZER", "PARTICIPANT"] as const;
 const diningEventListStageFilterValues = ["ALL", "TODO", "ACTIVE", "DONE"] as const;
@@ -4180,7 +4180,7 @@ export class AdminIngredientPayloadDto extends OperationDto {
   @IsOptional()
   @ValidateIf((_object, value) => value !== null)
   @IsIn(ingredientProteinTypeValues)
-  proteinType?: "PORK" | "CHICKEN" | "BEEF" | "LAMB" | "DUCK" | "SEAFOOD" | "EGG" | "TOFU" | "NONE" | null;
+  proteinType?: "PORK" | "CHICKEN" | "BEEF" | "LAMB" | "DUCK" | "FISH" | "SEAFOOD" | "EGG" | "PLANT" | "NONE" | null;
 
   @ApiProperty({ example: false })
   @IsBoolean()
@@ -4226,7 +4226,7 @@ export class UpdateAdminIngredientDto extends VersionedOperationDto {
   @IsOptional()
   @ValidateIf((_object, value) => value !== null)
   @IsIn(ingredientProteinTypeValues)
-  proteinType?: "PORK" | "CHICKEN" | "BEEF" | "LAMB" | "DUCK" | "SEAFOOD" | "EGG" | "TOFU" | "NONE" | null;
+  proteinType?: "PORK" | "CHICKEN" | "BEEF" | "LAMB" | "DUCK" | "FISH" | "SEAFOOD" | "EGG" | "PLANT" | "NONE" | null;
 
   @ApiProperty({ example: false })
   @IsBoolean()

@@ -40,10 +40,24 @@ function ingredientRows(value: Prisma.JsonValue) {
   });
 }
 
-function buildFacetRows(values: Map<string, number>): HomeTopicRecipeStatsFacet[] {
+function buildFacetRows(values: Map<string, number>, totalPublicRecipes: number, confirmedCount: number): HomeTopicRecipeStatsFacet[] {
   return [...values.entries()]
-    .map(([value, count]) => ({ value, count }))
+    .map(([value, count]) => ({
+      value,
+      count,
+      shareOfTotal: totalPublicRecipes ? count / totalPublicRecipes : 0,
+      shareOfConfirmed: confirmedCount ? count / confirmedCount : 0
+    }))
     .sort((left, right) => right.count - left.count || left.value.localeCompare(right.value, "zh-CN"));
+}
+
+function buildDimension(values: Map<string, number>, confirmedCount: number, totalPublicRecipes: number) {
+  return {
+    confirmedCount,
+    missingCount: totalPublicRecipes - confirmedCount,
+    coverageRate: totalPublicRecipes ? confirmedCount / totalPublicRecipes : 0,
+    values: buildFacetRows(values, totalPublicRecipes, confirmedCount)
+  };
 }
 
 function addCount(target: Map<string, number>, value: string) {
@@ -56,14 +70,15 @@ function toSnapshot(row: {
   generatedAt: Date;
   eligibleRecipeCount: number;
   statsJson: Prisma.JsonValue;
-}): HomeTopicRecipeStatsSnapshot {
-  const saved = row.statsJson as unknown as Omit<HomeTopicRecipeStatsSnapshot, "snapshotId" | "generatedAt" | "eligibleRecipeCount">;
+}): HomeTopicRecipeStatsSnapshot | null {
+  const saved = row.statsJson as unknown as Omit<HomeTopicRecipeStatsSnapshot, "snapshotId" | "generatedAt" | "totalPublicRecipes">;
+  if (!saved?.nutrition || !saved.facets?.allIngredients || !Array.isArray(saved.facets.allIngredients.values)) return null;
   return {
     snapshotId: row.snapshotId,
     generatedAt: row.generatedAt.toISOString(),
-    eligibleRecipeCount: row.eligibleRecipeCount,
-    coverage: saved.coverage,
-    facets: saved.facets
+    totalPublicRecipes: row.eligibleRecipeCount,
+    facets: saved.facets,
+    nutrition: saved.nutrition
   };
 }
 
@@ -90,9 +105,9 @@ export class HomeTopicStatsService {
     const resultSnapshot: HomeTopicRecipeStatsSnapshot = {
       snapshotId,
       generatedAt: generatedAt.toISOString(),
-      eligibleRecipeCount: computed.eligibleRecipeCount,
-      coverage: computed.coverage,
-      facets: computed.facets
+      totalPublicRecipes: computed.eligibleRecipeCount,
+      facets: computed.facets,
+      nutrition: computed.nutrition
     };
 
     return this.prisma.$transaction(async tx => {
@@ -112,14 +127,14 @@ export class HomeTopicStatsService {
           scope,
           snapshotId,
           eligibleRecipeCount: computed.eligibleRecipeCount,
-          statsJson: JSON.parse(JSON.stringify({ coverage: computed.coverage, facets: computed.facets })) as Prisma.InputJsonValue,
+          statsJson: JSON.parse(JSON.stringify({ facets: computed.facets, nutrition: computed.nutrition })) as Prisma.InputJsonValue,
           generatedAt,
           updatedByAdminId: adminId
         },
         update: {
           snapshotId,
           eligibleRecipeCount: computed.eligibleRecipeCount,
-          statsJson: JSON.parse(JSON.stringify({ coverage: computed.coverage, facets: computed.facets })) as Prisma.InputJsonValue,
+          statsJson: JSON.parse(JSON.stringify({ facets: computed.facets, nutrition: computed.nutrition })) as Prisma.InputJsonValue,
           generatedAt,
           updatedByAdminId: adminId
         }
@@ -131,7 +146,7 @@ export class HomeTopicStatsService {
           action: "HOME_TOPIC_RECIPE_STATS_REBUILT",
           objectType: "HOME_TOPIC_RECIPE_STATS",
           objectId: 1,
-          payload: { snapshotId, eligibleRecipeCount: computed.eligibleRecipeCount }
+          payload: { snapshotId, totalPublicRecipes: computed.eligibleRecipeCount }
         }
       });
       const result = { snapshot: resultSnapshot };
@@ -151,7 +166,7 @@ export class HomeTopicStatsService {
       difficulties: new Map<string, number>(),
       durations: new Map<string, number>()
     };
-    const coverage = {
+    const confirmed = {
       ingredients: 0,
       primaryIngredients: 0,
       cuisines: 0,
@@ -160,6 +175,15 @@ export class HomeTopicStatsService {
       proteins: 0,
       difficulties: 0,
       durations: 0
+    };
+    const nutritionSource = await db.nutrientSourceBatch.findFirst({
+      orderBy: [{ importedAt: "desc" }, { id: "desc" }],
+      select: { sourceVersion: true }
+    });
+    const nutrition = {
+      hasNutritionAnalysis: 0,
+      statusCounts: { COMPLETE: 0, ESTIMATED: 0, INSUFFICIENT: 0, NONE: 0 },
+      fieldCoverage: { calories: 0, protein: 0, fat: 0, carbohydrate: 0 }
     };
     let eligibleRecipeCount = 0;
     let cursorId = 0;
@@ -179,6 +203,11 @@ export class HomeTopicStatsService {
               versionTags: {
                 where: { status: "CONFIRMED" },
                 select: { tagCode: true, tagValue: true }
+              },
+              nutritionSnapshots: {
+                where: { sourceVersion: nutritionSource?.sourceVersion ?? "" },
+                take: 1,
+                select: { status: true, perServingJson: true }
               }
             }
           }
@@ -208,7 +237,7 @@ export class HomeTopicStatsService {
         const rows = recipeIngredientRows[index] ?? [];
         const coreRows = rows.filter(item => coreIngredientIds.has(item.ingredientId));
         const ingredients = [...new Set(coreRows.map(item => item.name))];
-        if (ingredients.length) coverage.ingredients += 1;
+        if (ingredients.length) confirmed.ingredients += 1;
         for (const name of ingredients) addCount(counts.allIngredients, name);
 
         const primaryTags = recipe.currentVersion.versionTags.filter(item => item.tagCode === "PRIMARY_INGREDIENT");
@@ -219,7 +248,7 @@ export class HomeTopicStatsService {
           const linkedIngredient = coreRows.find(item => item.ingredientId === id);
           if (linkedIngredient) primaryNames.add(linkedIngredient.name);
         }
-        if (primaryNames.size) coverage.primaryIngredients += 1;
+        if (primaryNames.size) confirmed.primaryIngredients += 1;
         for (const name of primaryNames) addCount(counts.primaryIngredients, name);
 
         const recipeFacets = new Map<keyof typeof counts, Set<string>>();
@@ -233,17 +262,28 @@ export class HomeTopicStatsService {
         for (const [facet, values] of recipeFacets) {
           for (const value of values) addCount(counts[facet], value);
         }
-        if (recipeFacets.has("cuisines")) coverage.cuisines += 1;
-        if (recipeFacets.has("dishStyles")) coverage.dishStyles += 1;
-        if (recipeFacets.has("dishRoles")) coverage.dishRoles += 1;
-        if (recipeFacets.has("proteins")) coverage.proteins += 1;
+        if (recipeFacets.has("cuisines")) confirmed.cuisines += 1;
+        if (recipeFacets.has("dishStyles")) confirmed.dishStyles += 1;
+        if (recipeFacets.has("dishRoles")) confirmed.dishRoles += 1;
+        if (recipeFacets.has("proteins")) confirmed.proteins += 1;
         if (recipe.currentVersion.difficulty) {
-          coverage.difficulties += 1;
+          confirmed.difficulties += 1;
           addCount(counts.difficulties, recipe.currentVersion.difficulty);
         }
         if (recipe.currentVersion.duration) {
-          coverage.durations += 1;
+          confirmed.durations += 1;
           addCount(counts.durations, recipe.currentVersion.duration);
+        }
+
+        const nutritionRow = recipe.currentVersion.nutritionSnapshots[0];
+        const status = nutritionRow?.status ?? "NONE";
+        nutrition.statusCounts[status] += 1;
+        if (status !== "NONE") nutrition.hasNutritionAnalysis += 1;
+        if (nutritionRow?.perServingJson && typeof nutritionRow.perServingJson === "object" && !Array.isArray(nutritionRow.perServingJson)) {
+          const values = nutritionRow.perServingJson as Record<string, unknown>;
+          for (const key of ["calories", "protein", "fat", "carbohydrate"] as const) {
+            if (typeof values[key] === "number" && Number.isFinite(values[key])) nutrition.fieldCoverage[key] += 1;
+          }
         }
       }
       if (recipes.length < pageSize) break;
@@ -251,17 +291,17 @@ export class HomeTopicStatsService {
 
     return {
       eligibleRecipeCount,
-      coverage,
       facets: {
-        allIngredients: buildFacetRows(counts.allIngredients),
-        primaryIngredients: buildFacetRows(counts.primaryIngredients),
-        cuisines: buildFacetRows(counts.cuisines),
-        dishStyles: buildFacetRows(counts.dishStyles),
-        dishRoles: buildFacetRows(counts.dishRoles),
-        proteins: buildFacetRows(counts.proteins),
-        difficulties: buildFacetRows(counts.difficulties),
-        durations: buildFacetRows(counts.durations)
-      }
+        allIngredients: buildDimension(counts.allIngredients, confirmed.ingredients, eligibleRecipeCount),
+        primaryIngredients: buildDimension(counts.primaryIngredients, confirmed.primaryIngredients, eligibleRecipeCount),
+        cuisines: buildDimension(counts.cuisines, confirmed.cuisines, eligibleRecipeCount),
+        dishStyles: buildDimension(counts.dishStyles, confirmed.dishStyles, eligibleRecipeCount),
+        dishRoles: buildDimension(counts.dishRoles, confirmed.dishRoles, eligibleRecipeCount),
+        proteins: buildDimension(counts.proteins, confirmed.proteins, eligibleRecipeCount),
+        difficulties: buildDimension(counts.difficulties, confirmed.difficulties, eligibleRecipeCount),
+        durations: buildDimension(counts.durations, confirmed.durations, eligibleRecipeCount)
+      },
+      nutrition
     };
   }
 }

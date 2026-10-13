@@ -10,6 +10,7 @@ import { HomeController, HomePublicAssetsController } from "./home.controller";
 import { HomeImageService } from "./home-image.service";
 import { HomeTopicController, HomeTopicPublicAssetsController } from "./home-topic.controller";
 import { HomeTopicImageService } from "./home-topic-image.service";
+import { HomeTopicMenuCheckService } from "./home-topic-menu-check.service";
 import { HomeTopicService } from "./home-topic.service";
 import { HomeTopicStatsService } from "./home-topic-stats.service";
 import { HomeService } from "./home.service";
@@ -30,7 +31,7 @@ import { TableTopicService } from "./table-topic.service";
     AdminHomeTopicController,
     AdminTableTopicController
   ],
-  providers: [HomeService, AssetStorageService, HomeImageService, HomeTopicService, HomeTopicStatsService, HomeTopicImageService, TableTopicService, TableTopicImageService, SuperAdminGuard],
+  providers: [HomeService, AssetStorageService, HomeImageService, HomeTopicService, HomeTopicStatsService, HomeTopicMenuCheckService, HomeTopicImageService, TableTopicService, TableTopicImageService, SuperAdminGuard],
   exports: [HomeService, HomeTopicService, TableTopicService]
 })
 export class HomeModule {}

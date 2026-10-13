@@ -676,38 +676,82 @@ export interface HomeTopicRecipeSearchResponse extends PageResult<HomeTopicRecip
 export interface HomeTopicRecipeStatsFacet {
   value: string;
   count: number;
+  shareOfTotal: number;
+  shareOfConfirmed: number;
 }
 
-export interface HomeTopicRecipeStatsCoverage {
-  ingredients: number;
-  primaryIngredients: number;
-  cuisines: number;
-  dishStyles: number;
-  dishRoles: number;
-  proteins: number;
-  difficulties: number;
-  durations: number;
+export interface HomeTopicRecipeStatsDimension {
+  confirmedCount: number;
+  missingCount: number;
+  coverageRate: number;
+  values: HomeTopicRecipeStatsFacet[];
+}
+
+export interface HomeTopicRecipeStatsNutrition {
+  hasNutritionAnalysis: number;
+  statusCounts: {
+    COMPLETE: number;
+    ESTIMATED: number;
+    INSUFFICIENT: number;
+    NONE: number;
+  };
+  fieldCoverage: {
+    calories: number;
+    protein: number;
+    fat: number;
+    carbohydrate: number;
+  };
 }
 
 export interface HomeTopicRecipeStatsSnapshot {
   snapshotId: string;
   generatedAt: IsoDateTime;
-  eligibleRecipeCount: number;
-  coverage: HomeTopicRecipeStatsCoverage;
+  totalPublicRecipes: number;
   facets: {
-    allIngredients: HomeTopicRecipeStatsFacet[];
-    primaryIngredients: HomeTopicRecipeStatsFacet[];
-    cuisines: HomeTopicRecipeStatsFacet[];
-    dishStyles: HomeTopicRecipeStatsFacet[];
-    dishRoles: HomeTopicRecipeStatsFacet[];
-    proteins: HomeTopicRecipeStatsFacet[];
-    difficulties: HomeTopicRecipeStatsFacet[];
-    durations: HomeTopicRecipeStatsFacet[];
+    allIngredients: HomeTopicRecipeStatsDimension;
+    primaryIngredients: HomeTopicRecipeStatsDimension;
+    cuisines: HomeTopicRecipeStatsDimension;
+    dishStyles: HomeTopicRecipeStatsDimension;
+    dishRoles: HomeTopicRecipeStatsDimension;
+    proteins: HomeTopicRecipeStatsDimension;
+    difficulties: HomeTopicRecipeStatsDimension;
+    durations: HomeTopicRecipeStatsDimension;
   };
+  nutrition: HomeTopicRecipeStatsNutrition;
 }
 
 export interface HomeTopicRecipeStatsResponse {
   snapshot: HomeTopicRecipeStatsSnapshot | null;
+}
+
+export interface HomeTopicMenuCheckWarning {
+  code: "CONSECUTIVE_PRIMARY_INGREDIENT";
+  ingredientId: UUID;
+  ingredientName: string;
+  fromWeekday: HomeTopicWeekday;
+  toWeekday: HomeTopicWeekday;
+}
+
+export interface HomeTopicMenuCheckResponse {
+  topicId: UUID;
+  topicVersion: number;
+  generatedAt: IsoDateTime;
+  stale: boolean;
+  totalRecipeCount: number;
+  uniqueRecipeCount: number;
+  duplicateRecipeIds: UUID[];
+  days: Array<{
+    weekday: HomeTopicWeekday;
+    recipeCount: number;
+    uniqueRecipeCount: number;
+    facets: HomeTopicRecipeStatsSnapshot["facets"];
+  }>;
+  weekly: {
+    recipeCount: number;
+    uniqueRecipeCount: number;
+    facets: HomeTopicRecipeStatsSnapshot["facets"];
+  };
+  warnings: HomeTopicMenuCheckWarning[];
 }
 
 export interface HomeTopicBatchRecipeInput {
@@ -1393,16 +1437,17 @@ export type RecipeSlotType =
   | "BREAKFAST_STAPLE"
   | "BREAKFAST_PROTEIN"
   | "BREAKFAST_SIDE";
-export type RecipeProteinType = "PORK" | "CHICKEN" | "BEEF" | "LAMB" | "DUCK" | "FISH" | "EGG" | "NONE";
+export type RecipeProteinType = "PORK" | "CHICKEN" | "BEEF" | "LAMB" | "DUCK" | "FISH" | "SEAFOOD" | "EGG" | "PLANT" | "NONE";
 export type IngredientProteinType =
   | "PORK"
   | "CHICKEN"
   | "BEEF"
   | "LAMB"
   | "DUCK"
+  | "FISH"
   | "SEAFOOD"
   | "EGG"
-  | "TOFU"
+  | "PLANT"
   | "NONE";
 export type MealPlanDishPurchaseState = "READY" | "PENDING";
 export type UnitType = "WEIGHT" | "VOLUME" | "COMMON" | "PACKAGE";

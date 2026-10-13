@@ -6,9 +6,10 @@ import type { RequestWithAdmin } from "../../common/auth-context";
 import { AdminAuthGuard } from "../../common/admin-auth.guard";
 import { ApiIdempotencyKey, ReadIdempotencyKey } from "../../common/idempotency-key";
 import { CreateHomeTopicDto, DeleteHomeTopicDto, DismissHomeTopicTodoDto, HomeTopicBatchImportDto, HomeTopicHistoryQueryDto, HomeTopicRecipeQueryDto, ReplaceHomeTopicItemDto, SetHomeTopicScheduleDto, SetHomeTopicStatusDto, UpdateHomeTopicDto, UpdateHomeTopicImageDto } from "../../contracts/dtos";
-import { AdminHomeTopicItemModel, AdminHomeTopicMiniCodeResponseModel, AdminHomeTopicTodosPageModel, AdminHomeTopicsResponseModel, ApiOkModel, HomeTopicBatchImportResponseModel, HomeTopicBatchPreviewResponseModel, HomeTopicRecipeSearchResponseModel, HomeTopicRecipeStatsResponseModel, RebuildHomeTopicRecipeStatsResponseModel } from "../../contracts/openapi";
+import { AdminHomeTopicItemModel, AdminHomeTopicMiniCodeResponseModel, AdminHomeTopicTodosPageModel, AdminHomeTopicsResponseModel, ApiOkModel, HomeTopicBatchImportResponseModel, HomeTopicBatchPreviewResponseModel, HomeTopicMenuCheckResponseModel, HomeTopicRecipeSearchResponseModel, HomeTopicRecipeStatsResponseModel, RebuildHomeTopicRecipeStatsResponseModel } from "../../contracts/openapi";
 import { SuperAdminGuard } from "../../common/super-admin.guard";
 import { HomeTopicService } from "./home-topic.service";
+import { HomeTopicMenuCheckService } from "./home-topic-menu-check.service";
 import { HomeTopicStatsService } from "./home-topic-stats.service";
 
 @ApiTags("admin-home-topics")
@@ -18,6 +19,7 @@ import { HomeTopicStatsService } from "./home-topic-stats.service";
 export class AdminHomeTopicController {
   constructor(
     @Inject(HomeTopicService) private readonly homeTopicService: HomeTopicService,
+    @Inject(HomeTopicMenuCheckService) private readonly menuCheckService: HomeTopicMenuCheckService,
     @Inject(HomeTopicStatsService) private readonly statsService: HomeTopicStatsService
   ) {}
 
@@ -34,6 +36,13 @@ export class AdminHomeTopicController {
   @ApiOkModel(RebuildHomeTopicRecipeStatsResponseModel, "重建共享周刊可用菜谱统计快照")
   rebuildRecipeStats(@Req() request: RequestWithAdmin, @ReadIdempotencyKey() operationId: string) {
     return this.statsService.rebuild(request.admin.adminId, operationId).then(result => ok(result));
+  }
+
+  @Get(":topicId/menu-check")
+  @UseGuards(SuperAdminGuard)
+  @ApiOkModel(HomeTopicMenuCheckResponseModel, "读取或生成指定周刊版本的菜单结构检查")
+  getMenuCheck(@Param("topicId", ParseIntPipe) topicId: number) {
+    return this.menuCheckService.getMenuCheck(topicId).then(result => ok(result));
   }
 
   @Get()

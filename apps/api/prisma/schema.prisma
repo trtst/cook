@@ -135,7 +135,9 @@ enum RecipeProteinType {
   LAMB
   DUCK
   FISH
+  SEAFOOD
   EGG
+  PLANT
   NONE
 }
 
@@ -150,9 +152,10 @@ enum IngredientProteinType {
   BEEF
   LAMB
   DUCK
+  FISH
   SEAFOOD
   EGG
-  TOFU
+  PLANT
   NONE
 }
 
@@ -765,10 +768,25 @@ model HomeTopic {
   updatedAt     DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   items HomeTopicItem[]
+  menuCheckSnapshot HomeTopicMenuCheckSnapshot?
 
   @@index([status, periodStartDate, issueNo])
   @@index([status, scheduledPublishAt])
   @@map("home_topics")
+}
+
+model HomeTopicMenuCheckSnapshot {
+  id           Int      @id @default(autoincrement())
+  topicId      Int      @unique @map("topic_id")
+  topicVersion Int      @map("topic_version")
+  generatedAt  DateTime @map("generated_at") @db.Timestamptz(3)
+  resultJson   Json     @map("result_json")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  topic HomeTopic @relation(fields: [topicId], references: [id], onDelete: Cascade)
+
+  @@map("home_topic_menu_check_snapshots")
 }
 
 model HomeTopicItem {
