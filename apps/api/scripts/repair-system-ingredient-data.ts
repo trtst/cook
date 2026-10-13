@@ -206,7 +206,10 @@ async function main() {
       targetFingerprint,
       generatedAt: new Date().toISOString(),
       totalSystemIngredients: rows.length,
-      statusCounts: Object.entries(Object.groupBy(rows, row => row.status)).map(([status, list]) => ({ status, count: list.length })),
+      statusCounts: [...rows.reduce((counts, row) => {
+        counts.set(row.status, (counts.get(row.status) ?? 0) + 1);
+        return counts;
+      }, new Map<string, number>())].map(([status, count]) => ({ status, count })),
       changedIngredientCount: proposed.size,
       changeCount: changes.length,
       guessedChanges: changes,
