@@ -143,8 +143,12 @@ const proteinLabel = computed(() => {
       return "鸭肉";
     case "FISH":
       return "鱼鲜";
+    case "SEAFOOD":
+      return "非鱼类水产";
     case "EGG":
       return "蛋类";
+    case "PLANT":
+      return "植物蛋白";
     default:
       return "素菜";
   }
