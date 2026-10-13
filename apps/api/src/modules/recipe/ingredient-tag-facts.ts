@@ -40,14 +40,15 @@ function dedupeAliases(name: string, values: string[]) {
 }
 
 function inferProteinType(name: string, categoryCode?: string | null): IngredientProteinType | null {
-  if (/(鸡蛋|鸭蛋|鹅蛋|鹌鹑蛋|皮蛋)/.test(name)) return "EGG";
-  if (/(豆腐|豆干|豆皮|腐竹|千张|豆腐泡|豆腐乳)/.test(name)) return "TOFU";
-  if (/(猪肉|五花肉|排骨|里脊|猪蹄|猪肝|腊肠|肉末|肉丝|肉片)/.test(name)) return "PORK";
-  if (/(鸡肉|鸡腿|鸡翅|鸡胸|鸡爪|鸡丁)/.test(name)) return "CHICKEN";
-  if (/(牛肉|牛腩|肥牛|牛排)/.test(name)) return "BEEF";
-  if (/(羊肉|羊排)/.test(name)) return "LAMB";
-  if (/(鸭肉|鸭腿|鸭翅|鸭血)/.test(name)) return "DUCK";
-  if (/(鱼|虾|虾仁|蟹|贝|蛤|蚝|鲍鱼|鱿鱼|墨鱼|三文鱼|海带|紫菜|海鲜)/.test(name)) return "SEAFOOD";
+  if (/(鸡蛋|鸭蛋|鹅蛋|鹌鹑蛋|皮蛋|蛋清)/.test(name)) return "EGG";
+  if (/(素鸡|素火腿|素虾|素肉|素肠|豆腐|豆干|豆皮|腐竹|千张|豆腐泡|豆腐乳)/.test(name)) return "PLANT";
+  if (/(牛肉|牛腩|肥牛|牛排|牛里脊|牛肉丸|牛肉末|黄牛肉|瘦牛肉|牛杂)/.test(name)) return "BEEF";
+  if (/(羊肉|羊排|羊蝎子)/.test(name)) return "LAMB";
+  if (/(鸡肉|鸡腿|鸡翅|鸡胸|鸡爪|凤爪|鸡丁|鸡杂|三黄鸡|仔鸡|鸡骨|鸡$)/.test(name)) return "CHICKEN";
+  if (/(鸭肉|鸭腿|鸭翅|鸭血|鸭子|腊鸭)/.test(name)) return "DUCK";
+  if (/(猪肉|五花肉|排骨|猪里脊|里脊肉|猪蹄|猪肝|腊肠|肉末|肉沫|肉丝|肉片|肉丸|猪尾|猪骨|肥肠|梅花肉|猪肋排|腊肉|火腿|培根|香肠)/.test(name)) return "PORK";
+  if (/(草鱼|鲤鱼|鲫鱼|带鱼|鲈鱼|三文鱼|鳕鱼|金枪鱼|罗非鱼|黄花鱼|黄鱼|秋刀鱼|鳗鱼|鳗鲡|鲳鱼|鲢鱼|鳊鱼|鳜鱼|鲶鱼|武昌鱼|巴沙鱼|多宝鱼|石斑鱼|鲅鱼|龙利鱼)/.test(name)) return "FISH";
+  if (/(虾|蟹|贝|蛤|蚝|鲍鱼|鱿鱼|墨鱼|海鲜)/.test(name)) return "SEAFOOD";
   if (categoryCode === "SEAFOOD") return "SEAFOOD";
   return null;
 }

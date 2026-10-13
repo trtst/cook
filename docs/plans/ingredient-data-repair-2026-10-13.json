@@ -1,0 +1,7303 @@
+{
+  "schemaVersion": "system-ingredient-repair.v1",
+  "mode": "apply",
+  "generatedAt": "2026-10-13T11:48:26.808Z",
+  "totalSystemIngredients": 996,
+  "statusCounts": [
+    {
+      "status": "ACTIVE",
+      "count": 921
+    },
+    {
+      "status": "DISABLED",
+      "count": 5
+    },
+    {
+      "status": "PENDING",
+      "count": 70
+    }
+  ],
+  "changedIngredientCount": 734,
+  "changeCount": 782,
+  "guessedChanges": [
+    {
+      "ingredientId": 10000045,
+      "ingredientName": "牛奶",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000046,
+      "ingredientName": "大米",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000049,
+      "ingredientName": "土豆",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000051,
+      "ingredientName": "西红柿",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000052,
+      "ingredientName": "黄瓜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000054,
+      "ingredientName": "食盐",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000055,
+      "ingredientName": "胡萝卜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000056,
+      "ingredientName": "白萝卜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000057,
+      "ingredientName": "大白菜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000058,
+      "ingredientName": "小白菜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000059,
+      "ingredientName": "菠菜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000060,
+      "ingredientName": "生菜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000061,
+      "ingredientName": "油麦菜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000062,
+      "ingredientName": "芹菜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000063,
+      "ingredientName": "韭菜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000064,
+      "ingredientName": "大蒜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000065,
+      "ingredientName": "姜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000066,
+      "ingredientName": "葱",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000067,
+      "ingredientName": "洋葱",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000068,
+      "ingredientName": "茄子",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000069,
+      "ingredientName": "青椒",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000069,
+      "ingredientName": "青椒",
+      "field": "isSpicyIngredient",
+      "before": true,
+      "after": false,
+      "certainty": "GUESSED",
+      "basis": "按名称判断是否主要提供辣、麻或辛辣刺激；普通青红椒、咖喱及复合酱料不默认算辣味驱动"
+    },
+    {
+      "ingredientId": 10000070,
+      "ingredientName": "西葫芦",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000071,
+      "ingredientName": "冬瓜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000072,
+      "ingredientName": "南瓜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000073,
+      "ingredientName": "苦瓜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000074,
+      "ingredientName": "丝瓜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000075,
+      "ingredientName": "西兰花",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000076,
+      "ingredientName": "菜花",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000077,
+      "ingredientName": "蘑菇",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000078,
+      "ingredientName": "香菇",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000079,
+      "ingredientName": "金针菇",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000080,
+      "ingredientName": "木耳",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000095,
+      "ingredientName": "鹅肉",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000106,
+      "ingredientName": "海带",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000107,
+      "ingredientName": "紫菜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000112,
+      "ingredientName": "酸奶",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000113,
+      "ingredientName": "奶酪",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000114,
+      "ingredientName": "小米",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000115,
+      "ingredientName": "面粉",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000116,
+      "ingredientName": "面条",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000117,
+      "ingredientName": "馒头",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000118,
+      "ingredientName": "玉米",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000119,
+      "ingredientName": "红薯",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000120,
+      "ingredientName": "山药",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000121,
+      "ingredientName": "芋头",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000122,
+      "ingredientName": "燕麦",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000123,
+      "ingredientName": "薏米",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000124,
+      "ingredientName": "糯米",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000125,
+      "ingredientName": "淀粉",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000125,
+      "ingredientName": "淀粉",
+      "field": "isStaple",
+      "before": true,
+      "after": false,
+      "certainty": "GUESSED",
+      "basis": "按日常主食定义和米面杂粮分类逐项判断；淀粉、粉圆等非主食排除"
+    },
+    {
+      "ingredientId": 10000126,
+      "ingredientName": "粉丝",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000127,
+      "ingredientName": "白糖",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000128,
+      "ingredientName": "生抽",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000129,
+      "ingredientName": "老抽",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000130,
+      "ingredientName": "醋",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000131,
+      "ingredientName": "料酒",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000132,
+      "ingredientName": "食用油",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000133,
+      "ingredientName": "香油",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000134,
+      "ingredientName": "蚝油",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000135,
+      "ingredientName": "辣椒油",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000136,
+      "ingredientName": "花椒",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000137,
+      "ingredientName": "八角",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000138,
+      "ingredientName": "胡椒",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000139,
+      "ingredientName": "孜然",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000141,
+      "ingredientName": "紫菜（干）",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000143,
+      "ingredientName": "橙子",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000144,
+      "ingredientName": "西瓜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000145,
+      "ingredientName": "梨",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000146,
+      "ingredientName": "葡萄",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000147,
+      "ingredientName": "草莓",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000148,
+      "ingredientName": "猕猴桃",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000151,
+      "ingredientName": "辣椒",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000152,
+      "ingredientName": "大葱",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000153,
+      "ingredientName": "蒜薹",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000154,
+      "ingredientName": "平菇",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000155,
+      "ingredientName": "杏鲍菇",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000156,
+      "ingredientName": "口蘑",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000157,
+      "ingredientName": "草菇",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000158,
+      "ingredientName": "香蕉",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000159,
+      "ingredientName": "苹果",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000160,
+      "ingredientName": "芥蓝",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000161,
+      "ingredientName": "菜心",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000162,
+      "ingredientName": "茼蒿",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000163,
+      "ingredientName": "空心菜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000164,
+      "ingredientName": "苋菜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000165,
+      "ingredientName": "荠菜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000166,
+      "ingredientName": "香菜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000167,
+      "ingredientName": "茴香",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000168,
+      "ingredientName": "莴笋",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000169,
+      "ingredientName": "芦笋",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000170,
+      "ingredientName": "竹笋",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000171,
+      "ingredientName": "莲藕",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000172,
+      "ingredientName": "荸荠",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000173,
+      "ingredientName": "菱角",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000174,
+      "ingredientName": "慈姑",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000175,
+      "ingredientName": "茭白",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000176,
+      "ingredientName": "百合",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000177,
+      "ingredientName": "黄花菜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000178,
+      "ingredientName": "香椿",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000179,
+      "ingredientName": "马齿苋",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000180,
+      "ingredientName": "蒲公英",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000181,
+      "ingredientName": "蕨菜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000182,
+      "ingredientName": "鱼腥草",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000183,
+      "ingredientName": "罗勒",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000184,
+      "ingredientName": "荆芥",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000185,
+      "ingredientName": "秋葵",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000186,
+      "ingredientName": "荷兰豆",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000187,
+      "ingredientName": "豌豆",
+      "field": "proteinType",
+      "before": null,
+      "after": "PLANT",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000188,
+      "ingredientName": "毛豆",
+      "field": "proteinType",
+      "before": null,
+      "after": "PLANT",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000189,
+      "ingredientName": "四季豆",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000190,
+      "ingredientName": "豇豆",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000191,
+      "ingredientName": "扁豆",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000192,
+      "ingredientName": "黄豆芽",
+      "field": "proteinType",
+      "before": null,
+      "after": "PLANT",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000193,
+      "ingredientName": "绿豆芽",
+      "field": "proteinType",
+      "before": null,
+      "after": "PLANT",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000194,
+      "ingredientName": "豌豆苗",
+      "field": "proteinType",
+      "before": null,
+      "after": "PLANT",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000195,
+      "ingredientName": "佛手瓜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000196,
+      "ingredientName": "葫芦",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000197,
+      "ingredientName": "樱桃番茄",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000198,
+      "ingredientName": "彩椒",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000199,
+      "ingredientName": "甜菜根",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000200,
+      "ingredientName": "苤蓝",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000201,
+      "ingredientName": "紫菜头",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000202,
+      "ingredientName": "洋姜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000203,
+      "ingredientName": "木薯",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000204,
+      "ingredientName": "豆瓣菜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000205,
+      "ingredientName": "莲子",
+      "field": "proteinType",
+      "before": null,
+      "after": "PLANT",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000207,
+      "ingredientName": "鸡枞",
+      "field": "proteinType",
+      "before": null,
+      "after": "CHICKEN",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000208,
+      "ingredientName": "榛蘑",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000209,
+      "ingredientName": "猴头菇",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000210,
+      "ingredientName": "核桃",
+      "field": "proteinType",
+      "before": null,
+      "after": "PLANT",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000211,
+      "ingredientName": "杏仁",
+      "field": "proteinType",
+      "before": null,
+      "after": "PLANT",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000212,
+      "ingredientName": "腰果",
+      "field": "proteinType",
+      "before": null,
+      "after": "PLANT",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000213,
+      "ingredientName": "开心果",
+      "field": "proteinType",
+      "before": null,
+      "after": "PLANT",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000214,
+      "ingredientName": "榛子",
+      "field": "proteinType",
+      "before": null,
+      "after": "PLANT",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000215,
+      "ingredientName": "松子仁",
+      "field": "proteinType",
+      "before": null,
+      "after": "PLANT",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000216,
+      "ingredientName": "花生仁",
+      "field": "proteinType",
+      "before": null,
+      "after": "PLANT",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000217,
+      "ingredientName": "芝麻",
+      "field": "proteinType",
+      "before": null,
+      "after": "PLANT",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000218,
+      "ingredientName": "红枣",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000219,
+      "ingredientName": "葡萄干",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000220,
+      "ingredientName": "桂圆干",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000221,
+      "ingredientName": "荔枝干",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000222,
+      "ingredientName": "柿饼",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000223,
+      "ingredientName": "无花果干",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000225,
+      "ingredientName": "黑米",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000226,
+      "ingredientName": "米饭",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000227,
+      "ingredientName": "粉条",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000228,
+      "ingredientName": "荞麦",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000229,
+      "ingredientName": "花生油",
+      "field": "proteinType",
+      "before": null,
+      "after": "PLANT",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000230,
+      "ingredientName": "菜籽油",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000231,
+      "ingredientName": "猪油",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000232,
+      "ingredientName": "豆油",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000233,
+      "ingredientName": "玉米油",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000234,
+      "ingredientName": "橄榄油",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000235,
+      "ingredientName": "葵花子油",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000236,
+      "ingredientName": "银耳",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000237,
+      "ingredientName": "茶树菇",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000238,
+      "ingredientName": "竹荪",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000239,
+      "ingredientName": "牛肝菌",
+      "field": "proteinType",
+      "before": null,
+      "after": "BEEF",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000240,
+      "ingredientName": "松茸",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000270,
+      "ingredientName": "胖头鱼",
+      "field": "aliases",
+      "before": [
+        "鳙鱼",
+        "花鲢鱼"
+      ],
+      "after": [
+        "鳙鱼",
+        "花鲢鱼",
+        "摆佳鱼"
+      ],
+      "certainty": "GUESSED",
+      "basis": "仅从已确认营养食品名的括号同名/别名提取，并排除与其他食材名称或别名冲突的候选"
+    },
+    {
+      "ingredientId": 10000275,
+      "ingredientName": "青鱼",
+      "field": "proteinType",
+      "before": "SEAFOOD",
+      "after": "FISH",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000276,
+      "ingredientName": "卷心菜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000277,
+      "ingredientName": "娃娃菜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000278,
+      "ingredientName": "油菜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000279,
+      "ingredientName": "番杏",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000280,
+      "ingredientName": "紫背天葵",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000281,
+      "ingredientName": "莴笋叶",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000282,
+      "ingredientName": "观达菜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000283,
+      "ingredientName": "球茎茴香",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000284,
+      "ingredientName": "菊苣",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000285,
+      "ingredientName": "穿心莲",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000286,
+      "ingredientName": "红薯叶",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000287,
+      "ingredientName": "南瓜藤",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000288,
+      "ingredientName": "冬寒菜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000289,
+      "ingredientName": "苦菜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000290,
+      "ingredientName": "萝卜缨",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000291,
+      "ingredientName": "芹菜叶",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000292,
+      "ingredientName": "甜菜叶",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000293,
+      "ingredientName": "春笋",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000294,
+      "ingredientName": "冬笋",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000295,
+      "ingredientName": "毛笋",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000296,
+      "ingredientName": "玉兰片",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000297,
+      "ingredientName": "红心萝卜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000298,
+      "ingredientName": "青萝卜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000299,
+      "ingredientName": "樱桃萝卜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000300,
+      "ingredientName": "根芹",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000301,
+      "ingredientName": "水芹菜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000302,
+      "ingredientName": "莼菜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000303,
+      "ingredientName": "蒲菜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000304,
+      "ingredientName": "菜瓜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000305,
+      "ingredientName": "节瓜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000306,
+      "ingredientName": "金瓜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000307,
+      "ingredientName": "金丝瓜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000308,
+      "ingredientName": "蛇瓜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000309,
+      "ingredientName": "笋瓜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000310,
+      "ingredientName": "飞碟瓜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000311,
+      "ingredientName": "迷你黄瓜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000312,
+      "ingredientName": "秋黄瓜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000313,
+      "ingredientName": "香瓜茄",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000314,
+      "ingredientName": "青蒜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000315,
+      "ingredientName": "蒜黄",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000316,
+      "ingredientName": "蒜苗",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000317,
+      "ingredientName": "韭黄",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000318,
+      "ingredientName": "芥菜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000319,
+      "ingredientName": "紫甘蓝",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000320,
+      "ingredientName": "抱子甘蓝",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000321,
+      "ingredientName": "羽衣甘蓝",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000322,
+      "ingredientName": "盖菜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000323,
+      "ingredientName": "苦苣菜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000324,
+      "ingredientName": "苜蓿",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000325,
+      "ingredientName": "枸杞叶",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000326,
+      "ingredientName": "木耳菜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000331,
+      "ingredientName": "桃子",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000332,
+      "ingredientName": "李子",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000333,
+      "ingredientName": "杏",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000334,
+      "ingredientName": "樱桃",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000335,
+      "ingredientName": "鲜枣",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000336,
+      "ingredientName": "柿子",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000337,
+      "ingredientName": "石榴",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000338,
+      "ingredientName": "桑葚",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000339,
+      "ingredientName": "杨梅",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000340,
+      "ingredientName": "枇杷",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000341,
+      "ingredientName": "芒果",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000342,
+      "ingredientName": "木瓜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000343,
+      "ingredientName": "菠萝",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000344,
+      "ingredientName": "榴莲",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000345,
+      "ingredientName": "火龙果",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000346,
+      "ingredientName": "柠檬",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000347,
+      "ingredientName": "柚子",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000348,
+      "ingredientName": "橘子",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000349,
+      "ingredientName": "哈密瓜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000350,
+      "ingredientName": "甜瓜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000351,
+      "ingredientName": "山楂",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000352,
+      "ingredientName": "沙果",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000353,
+      "ingredientName": "海棠果",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000354,
+      "ingredientName": "黄豆",
+      "field": "proteinType",
+      "before": null,
+      "after": "PLANT",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000355,
+      "ingredientName": "黑豆",
+      "field": "proteinType",
+      "before": null,
+      "after": "PLANT",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000356,
+      "ingredientName": "绿豆",
+      "field": "proteinType",
+      "before": null,
+      "after": "PLANT",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000357,
+      "ingredientName": "赤小豆",
+      "field": "proteinType",
+      "before": null,
+      "after": "PLANT",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000358,
+      "ingredientName": "蚕豆",
+      "field": "proteinType",
+      "before": null,
+      "after": "PLANT",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000359,
+      "ingredientName": "鳄梨",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000360,
+      "ingredientName": "菠萝蜜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000361,
+      "ingredientName": "番石榴",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000362,
+      "ingredientName": "红毛丹",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000363,
+      "ingredientName": "山竹",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000364,
+      "ingredientName": "杨桃",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000365,
+      "ingredientName": "椰子",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000366,
+      "ingredientName": "橄榄",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000367,
+      "ingredientName": "西梅",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000368,
+      "ingredientName": "青梅",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000369,
+      "ingredientName": "冬枣",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000370,
+      "ingredientName": "黑枣",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000371,
+      "ingredientName": "蜜枣",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000372,
+      "ingredientName": "酸枣",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000373,
+      "ingredientName": "刺梨",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000374,
+      "ingredientName": "人参果",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000375,
+      "ingredientName": "黄皮果",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000376,
+      "ingredientName": "余柑子",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000377,
+      "ingredientName": "酸木瓜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000378,
+      "ingredientName": "蒲桃",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000379,
+      "ingredientName": "芭蕉",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000380,
+      "ingredientName": "醋栗",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000381,
+      "ingredientName": "黑醋栗",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000382,
+      "ingredientName": "沙棘",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000404,
+      "ingredientName": "鹅肝",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000405,
+      "ingredientName": "鸽",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000406,
+      "ingredientName": "鹌鹑",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000407,
+      "ingredientName": "兔肉",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000408,
+      "ingredientName": "花生米",
+      "field": "proteinType",
+      "before": null,
+      "after": "PLANT",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000408,
+      "ingredientName": "花生米",
+      "field": "defaultUnit",
+      "before": null,
+      "after": "克",
+      "certainty": "GUESSED",
+      "basis": "按食材形态和常见计量习惯补默认单位"
+    },
+    {
+      "ingredientId": 10000409,
+      "ingredientName": "盐",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000409,
+      "ingredientName": "盐",
+      "field": "defaultUnit",
+      "before": null,
+      "after": "克",
+      "certainty": "GUESSED",
+      "basis": "按食材形态和常见计量习惯补默认单位"
+    },
+    {
+      "ingredientId": 10000410,
+      "ingredientName": "香醋",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000411,
+      "ingredientName": "蒜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000411,
+      "ingredientName": "蒜",
+      "field": "defaultUnit",
+      "before": null,
+      "after": "瓣",
+      "certainty": "GUESSED",
+      "basis": "按食材形态和常见计量习惯补默认单位"
+    },
+    {
+      "ingredientId": 10000412,
+      "ingredientName": "干辣椒",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000413,
+      "ingredientName": "生姜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000414,
+      "ingredientName": "小葱",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000415,
+      "ingredientName": "白胡椒粉",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000415,
+      "ingredientName": "白胡椒粉",
+      "field": "defaultUnit",
+      "before": null,
+      "after": "克",
+      "certainty": "GUESSED",
+      "basis": "按食材形态和常见计量习惯补默认单位"
+    },
+    {
+      "ingredientId": 10000416,
+      "ingredientName": "挂面",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000417,
+      "ingredientName": "年糕",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000418,
+      "ingredientName": "饺子皮",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000419,
+      "ingredientName": "馄饨皮",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000420,
+      "ingredientName": "米粉",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000421,
+      "ingredientName": "河粉",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000422,
+      "ingredientName": "油条",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000423,
+      "ingredientName": "花卷",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000424,
+      "ingredientName": "烙饼",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000425,
+      "ingredientName": "烧饼",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000426,
+      "ingredientName": "水面筋",
+      "field": "proteinType",
+      "before": null,
+      "after": "PLANT",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000426,
+      "ingredientName": "水面筋",
+      "field": "isStaple",
+      "before": true,
+      "after": false,
+      "certainty": "GUESSED",
+      "basis": "按日常主食定义和米面杂粮分类逐项判断；淀粉、粉圆等非主食排除"
+    },
+    {
+      "ingredientId": 10000427,
+      "ingredientName": "烤麸",
+      "field": "proteinType",
+      "before": null,
+      "after": "PLANT",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000434,
+      "ingredientName": "豆豉",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000435,
+      "ingredientName": "白醋",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000436,
+      "ingredientName": "米醋",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000437,
+      "ingredientName": "花椒油",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000438,
+      "ingredientName": "蒜蓉辣酱",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000439,
+      "ingredientName": "剁椒",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000440,
+      "ingredientName": "泡椒",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000441,
+      "ingredientName": "酸菜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000442,
+      "ingredientName": "梅干菜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000443,
+      "ingredientName": "榨菜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000444,
+      "ingredientName": "萝卜干",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000445,
+      "ingredientName": "酸豆角",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000455,
+      "ingredientName": "鱼丸",
+      "field": "proteinType",
+      "before": "SEAFOOD",
+      "after": "FISH",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000458,
+      "ingredientName": "鱼豆腐",
+      "field": "proteinType",
+      "before": "SEAFOOD",
+      "after": "FISH",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000459,
+      "ingredientName": "汤圆",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000460,
+      "ingredientName": "粽子",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000461,
+      "ingredientName": "糍粑",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000462,
+      "ingredientName": "干香菇",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000463,
+      "ingredientName": "红糖",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000464,
+      "ingredientName": "冰糖",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000465,
+      "ingredientName": "蜂蜜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000466,
+      "ingredientName": "甜面酱",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000467,
+      "ingredientName": "芝麻酱",
+      "field": "proteinType",
+      "before": null,
+      "after": "PLANT",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000468,
+      "ingredientName": "花生酱",
+      "field": "proteinType",
+      "before": null,
+      "after": "PLANT",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000469,
+      "ingredientName": "辣椒酱",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000470,
+      "ingredientName": "番茄酱",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000471,
+      "ingredientName": "桂皮",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000472,
+      "ingredientName": "香叶",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000473,
+      "ingredientName": "草果",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000474,
+      "ingredientName": "丁香",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000475,
+      "ingredientName": "十三香",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000476,
+      "ingredientName": "咖喱粉",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000476,
+      "ingredientName": "咖喱粉",
+      "field": "isSpicyIngredient",
+      "before": true,
+      "after": false,
+      "certainty": "GUESSED",
+      "basis": "按名称判断是否主要提供辣、麻或辛辣刺激；普通青红椒、咖喱及复合酱料不默认算辣味驱动"
+    },
+    {
+      "ingredientId": 10000477,
+      "ingredientName": "五香粉",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000478,
+      "ingredientName": "辣椒粉",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000479,
+      "ingredientName": "鸡精",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000480,
+      "ingredientName": "味精",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000481,
+      "ingredientName": "白酒",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000482,
+      "ingredientName": "啤酒",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000483,
+      "ingredientName": "红酒",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000484,
+      "ingredientName": "茶叶",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000485,
+      "ingredientName": "咖啡",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000486,
+      "ingredientName": "可乐",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000487,
+      "ingredientName": "雪碧",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000488,
+      "ingredientName": "橙汁",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000489,
+      "ingredientName": "苹果汁",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000490,
+      "ingredientName": "矿泉水",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000491,
+      "ingredientName": "苏打水",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000492,
+      "ingredientName": "椰汁",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000494,
+      "ingredientName": "酸梅汤",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000495,
+      "ingredientName": "凉茶",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000496,
+      "ingredientName": "菊花茶",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000497,
+      "ingredientName": "绿茶",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000498,
+      "ingredientName": "红茶",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000499,
+      "ingredientName": "乌龙茶",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000500,
+      "ingredientName": "普洱茶",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000501,
+      "ingredientName": "枸杞",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000502,
+      "ingredientName": "陈皮",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000503,
+      "ingredientName": "山楂干",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000504,
+      "ingredientName": "金橘",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000505,
+      "ingredientName": "西柚",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000506,
+      "ingredientName": "板栗",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000507,
+      "ingredientName": "葵花籽",
+      "field": "proteinType",
+      "before": null,
+      "after": "PLANT",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000508,
+      "ingredientName": "南瓜子",
+      "field": "proteinType",
+      "before": null,
+      "after": "PLANT",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000509,
+      "ingredientName": "西瓜子",
+      "field": "proteinType",
+      "before": null,
+      "after": "PLANT",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000510,
+      "ingredientName": "白果",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000511,
+      "ingredientName": "黄豆粉",
+      "field": "proteinType",
+      "before": null,
+      "after": "PLANT",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000512,
+      "ingredientName": "豆浆粉",
+      "field": "proteinType",
+      "before": null,
+      "after": "PLANT",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000513,
+      "ingredientName": "豆奶粉",
+      "field": "proteinType",
+      "before": null,
+      "after": "PLANT",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000514,
+      "ingredientName": "高粱米",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000515,
+      "ingredientName": "藜麦",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000516,
+      "ingredientName": "大麦",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000517,
+      "ingredientName": "青稞",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000518,
+      "ingredientName": "黄米",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000519,
+      "ingredientName": "小麦胚粉",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000520,
+      "ingredientName": "麸皮",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000521,
+      "ingredientName": "通心粉",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000522,
+      "ingredientName": "龙须面",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000523,
+      "ingredientName": "油饼",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000524,
+      "ingredientName": "油面筋",
+      "field": "proteinType",
+      "before": null,
+      "after": "PLANT",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000552,
+      "ingredientName": "奶片",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000553,
+      "ingredientName": "糙米",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000554,
+      "ingredientName": "粳米",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000555,
+      "ingredientName": "籼米",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000556,
+      "ingredientName": "香米",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000557,
+      "ingredientName": "紫红糯米",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000558,
+      "ingredientName": "玉米面",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000559,
+      "ingredientName": "玉米糁",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000560,
+      "ingredientName": "小米面",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000561,
+      "ingredientName": "荞麦面",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000562,
+      "ingredientName": "莜麦面",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000563,
+      "ingredientName": "高粱面",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000564,
+      "ingredientName": "刀豆",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000565,
+      "ingredientName": "豆角",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000566,
+      "ingredientName": "龙豆",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000567,
+      "ingredientName": "龙牙豆",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000568,
+      "ingredientName": "油豆角",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000569,
+      "ingredientName": "四棱豆",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000570,
+      "ingredientName": "甜脆荷兰豆",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000571,
+      "ingredientName": "发芽豆",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000572,
+      "ingredientName": "黑豆苗",
+      "field": "proteinType",
+      "before": null,
+      "after": "PLANT",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000579,
+      "ingredientName": "奶粉",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000580,
+      "ingredientName": "炼乳",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000581,
+      "ingredientName": "黄油",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000582,
+      "ingredientName": "奶油",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000583,
+      "ingredientName": "奶皮子",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000586,
+      "ingredientName": "鲮鱼",
+      "field": "proteinType",
+      "before": "SEAFOOD",
+      "after": "FISH",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000588,
+      "ingredientName": "鲟鱼",
+      "field": "proteinType",
+      "before": "SEAFOOD",
+      "after": "FISH",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000602,
+      "ingredientName": "茉莉花茶",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000603,
+      "ingredientName": "龙井茶",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000604,
+      "ingredientName": "铁观音",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000605,
+      "ingredientName": "碧螺春",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000606,
+      "ingredientName": "毛尖",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000607,
+      "ingredientName": "白茶",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000608,
+      "ingredientName": "黑茶",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000609,
+      "ingredientName": "花茶",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000610,
+      "ingredientName": "大麦茶",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000611,
+      "ingredientName": "苦荞茶",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000612,
+      "ingredientName": "薄荷茶",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000613,
+      "ingredientName": "玫瑰花茶",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000614,
+      "ingredientName": "金银花茶",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000615,
+      "ingredientName": "柠檬茶",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000616,
+      "ingredientName": "奶茶",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000617,
+      "ingredientName": "杏仁露",
+      "field": "proteinType",
+      "before": null,
+      "after": "PLANT",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000618,
+      "ingredientName": "核桃露",
+      "field": "proteinType",
+      "before": null,
+      "after": "PLANT",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000619,
+      "ingredientName": "花生露",
+      "field": "proteinType",
+      "before": null,
+      "after": "PLANT",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000620,
+      "ingredientName": "椰奶",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000621,
+      "ingredientName": "椰子水",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000622,
+      "ingredientName": "芒果汁",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000623,
+      "ingredientName": "葡萄汁",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000624,
+      "ingredientName": "桃汁",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000625,
+      "ingredientName": "菠萝汁",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000626,
+      "ingredientName": "番茄汁",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000627,
+      "ingredientName": "胡萝卜汁",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000628,
+      "ingredientName": "西瓜汁",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000629,
+      "ingredientName": "草莓汁",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000630,
+      "ingredientName": "蓝莓汁",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000631,
+      "ingredientName": "柠檬水",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000632,
+      "ingredientName": "蜂蜜水",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000633,
+      "ingredientName": "姜茶",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000634,
+      "ingredientName": "红糖姜茶",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000635,
+      "ingredientName": "运动饮料",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000636,
+      "ingredientName": "能量饮料",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000637,
+      "ingredientName": "气泡水",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000638,
+      "ingredientName": "柠檬汽水",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000639,
+      "ingredientName": "姜汁汽水",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000640,
+      "ingredientName": "汤力水",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000641,
+      "ingredientName": "干姜水",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000642,
+      "ingredientName": "米酒",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000643,
+      "ingredientName": "清酒",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000644,
+      "ingredientName": "威士忌",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000645,
+      "ingredientName": "伏特加",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000646,
+      "ingredientName": "朗姆酒",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000647,
+      "ingredientName": "白兰地",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000648,
+      "ingredientName": "香槟",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000649,
+      "ingredientName": "梅酒",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000650,
+      "ingredientName": "白葡萄酒",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000651,
+      "ingredientName": "酒酿",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000652,
+      "ingredientName": "鲶鱼",
+      "field": "aliases",
+      "before": [
+        "胡子鲇",
+        "鲇鱼"
+      ],
+      "after": [
+        "胡子鲇",
+        "鲇鱼",
+        "鲢胡",
+        "旺虾"
+      ],
+      "certainty": "GUESSED",
+      "basis": "仅从已确认营养食品名的括号同名/别名提取，并排除与其他食材名称或别名冲突的候选"
+    },
+    {
+      "ingredientId": 10000653,
+      "ingredientName": "黄颡鱼",
+      "field": "proteinType",
+      "before": "SEAFOOD",
+      "after": "FISH",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000654,
+      "ingredientName": "鳟鱼",
+      "field": "proteinType",
+      "before": "SEAFOOD",
+      "after": "FISH",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000655,
+      "ingredientName": "鲭鱼",
+      "field": "proteinType",
+      "before": "SEAFOOD",
+      "after": "FISH",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000656,
+      "ingredientName": "鲷鱼",
+      "field": "proteinType",
+      "before": "SEAFOOD",
+      "after": "FISH",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000657,
+      "ingredientName": "比目鱼",
+      "field": "proteinType",
+      "before": "SEAFOOD",
+      "after": "FISH",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000658,
+      "ingredientName": "龙利鱼",
+      "field": "aliases",
+      "before": [
+        "舌鳎",
+        "舌头鱼"
+      ],
+      "after": [
+        "舌鳎",
+        "舌头鱼",
+        "花纹舌头"
+      ],
+      "certainty": "GUESSED",
+      "basis": "仅从已确认营养食品名的括号同名/别名提取，并排除与其他食材名称或别名冲突的候选"
+    },
+    {
+      "ingredientId": 10000659,
+      "ingredientName": "银鱼",
+      "field": "proteinType",
+      "before": "SEAFOOD",
+      "after": "FISH",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000660,
+      "ingredientName": "凤尾鱼",
+      "field": "proteinType",
+      "before": "SEAFOOD",
+      "after": "FISH",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000661,
+      "ingredientName": "鲥鱼",
+      "field": "proteinType",
+      "before": "SEAFOOD",
+      "after": "FISH",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000676,
+      "ingredientName": "鲻鱼",
+      "field": "proteinType",
+      "before": "SEAFOOD",
+      "after": "FISH",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000677,
+      "ingredientName": "梭鱼",
+      "field": "proteinType",
+      "before": "SEAFOOD",
+      "after": "FISH",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000686,
+      "ingredientName": "黄姑鱼",
+      "field": "proteinType",
+      "before": "SEAFOOD",
+      "after": "FISH",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000687,
+      "ingredientName": "白姑鱼",
+      "field": "proteinType",
+      "before": "SEAFOOD",
+      "after": "FISH",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000687,
+      "ingredientName": "白姑鱼",
+      "field": "aliases",
+      "before": [
+        "白米子"
+      ],
+      "after": [
+        "白米子",
+        "白米子（鱼）"
+      ],
+      "certainty": "GUESSED",
+      "basis": "仅从已确认营养食品名的括号同名/别名提取，并排除与其他食材名称或别名冲突的候选"
+    },
+    {
+      "ingredientId": 10000688,
+      "ingredientName": "鲹鱼",
+      "field": "proteinType",
+      "before": "SEAFOOD",
+      "after": "FISH",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000690,
+      "ingredientName": "红娘鱼",
+      "field": "proteinType",
+      "before": "SEAFOOD",
+      "after": "FISH",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000691,
+      "ingredientName": "金线鱼",
+      "field": "proteinType",
+      "before": "SEAFOOD",
+      "after": "FISH",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000693,
+      "ingredientName": "梅童鱼",
+      "field": "proteinType",
+      "before": "SEAFOOD",
+      "after": "FISH",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000695,
+      "ingredientName": "颚针鱼",
+      "field": "proteinType",
+      "before": "SEAFOOD",
+      "after": "FISH",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000696,
+      "ingredientName": "鲐鱼",
+      "field": "proteinType",
+      "before": "SEAFOOD",
+      "after": "FISH",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000697,
+      "ingredientName": "鳐鱼",
+      "field": "proteinType",
+      "before": "SEAFOOD",
+      "after": "FISH",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000698,
+      "ingredientName": "鳓鱼",
+      "field": "proteinType",
+      "before": "SEAFOOD",
+      "after": "FISH",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000699,
+      "ingredientName": "笋干",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000700,
+      "ingredientName": "干豆角",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000701,
+      "ingredientName": "干萝卜丝",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000702,
+      "ingredientName": "红薯干",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000703,
+      "ingredientName": "土豆干",
+      "field": "proteinType",
+      "before": null,
+      "after": "PLANT",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000704,
+      "ingredientName": "茄子干",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000705,
+      "ingredientName": "黄瓜干",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000706,
+      "ingredientName": "南瓜干",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000707,
+      "ingredientName": "冬瓜干",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000708,
+      "ingredientName": "苦瓜干",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000709,
+      "ingredientName": "冬菜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000710,
+      "ingredientName": "芽菜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000711,
+      "ingredientName": "泡菜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000712,
+      "ingredientName": "韩式泡菜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000712,
+      "ingredientName": "韩式泡菜",
+      "field": "isSpicyIngredient",
+      "before": true,
+      "after": false,
+      "certainty": "GUESSED",
+      "basis": "按名称判断是否主要提供辣、麻或辛辣刺激；普通青红椒、咖喱及复合酱料不默认算辣味驱动"
+    },
+    {
+      "ingredientId": 10000713,
+      "ingredientName": "酸笋",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000714,
+      "ingredientName": "酱黄瓜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000715,
+      "ingredientName": "酱萝卜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000716,
+      "ingredientName": "糖蒜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000717,
+      "ingredientName": "腌蒜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000718,
+      "ingredientName": "咸菜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000719,
+      "ingredientName": "什锦酱菜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000720,
+      "ingredientName": "八宝酱菜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000725,
+      "ingredientName": "腊鱼",
+      "field": "proteinType",
+      "before": "SEAFOOD",
+      "after": "FISH",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000726,
+      "ingredientName": "咸鱼",
+      "field": "proteinType",
+      "before": "SEAFOOD",
+      "after": "FISH",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000727,
+      "ingredientName": "鱼干",
+      "field": "proteinType",
+      "before": "SEAFOOD",
+      "after": "FISH",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000728,
+      "ingredientName": "银鱼干",
+      "field": "proteinType",
+      "before": "SEAFOOD",
+      "after": "FISH",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000729,
+      "ingredientName": "丁香鱼干",
+      "field": "proteinType",
+      "before": "SEAFOOD",
+      "after": "FISH",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000734,
+      "ingredientName": "海带结",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000735,
+      "ingredientName": "海带丝",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000736,
+      "ingredientName": "干海白菜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000737,
+      "ingredientName": "花菇",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000738,
+      "ingredientName": "羊肚菌",
+      "field": "proteinType",
+      "before": null,
+      "after": "LAMB",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000739,
+      "ingredientName": "鸡腿菇干",
+      "field": "proteinType",
+      "before": null,
+      "after": "CHICKEN",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000740,
+      "ingredientName": "元蘑干",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000741,
+      "ingredientName": "蛹虫草",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000742,
+      "ingredientName": "发菜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000743,
+      "ingredientName": "苔菜干",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000744,
+      "ingredientName": "芡实",
+      "field": "proteinType",
+      "before": null,
+      "after": "PLANT",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000745,
+      "ingredientName": "眉豆",
+      "field": "proteinType",
+      "before": null,
+      "after": "PLANT",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000746,
+      "ingredientName": "木豆",
+      "field": "proteinType",
+      "before": null,
+      "after": "PLANT",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000747,
+      "ingredientName": "荆豆",
+      "field": "proteinType",
+      "before": null,
+      "after": "PLANT",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000748,
+      "ingredientName": "蒸鱼豉油",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000749,
+      "ingredientName": "红烧酱油",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000750,
+      "ingredientName": "味极鲜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000751,
+      "ingredientName": "寿司醋",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000752,
+      "ingredientName": "苹果醋",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000753,
+      "ingredientName": "饺子醋",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000754,
+      "ingredientName": "凉拌醋",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000755,
+      "ingredientName": "黑胡椒",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000756,
+      "ingredientName": "花椒粉",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000757,
+      "ingredientName": "咖喱酱",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000757,
+      "ingredientName": "咖喱酱",
+      "field": "isSpicyIngredient",
+      "before": true,
+      "after": false,
+      "certainty": "GUESSED",
+      "basis": "按名称判断是否主要提供辣、麻或辛辣刺激；普通青红椒、咖喱及复合酱料不默认算辣味驱动"
+    },
+    {
+      "ingredientId": 10000758,
+      "ingredientName": "冬阴功酱",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000758,
+      "ingredientName": "冬阴功酱",
+      "field": "isSpicyIngredient",
+      "before": true,
+      "after": false,
+      "certainty": "GUESSED",
+      "basis": "按名称判断是否主要提供辣、麻或辛辣刺激；普通青红椒、咖喱及复合酱料不默认算辣味驱动"
+    },
+    {
+      "ingredientId": 10000759,
+      "ingredientName": "味噌",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000760,
+      "ingredientName": "叉烧酱",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000761,
+      "ingredientName": "海鲜酱",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000762,
+      "ingredientName": "排骨酱",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000763,
+      "ingredientName": "柱候酱",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000764,
+      "ingredientName": "沙茶酱",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000765,
+      "ingredientName": "XO酱",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000765,
+      "ingredientName": "XO酱",
+      "field": "isSpicyIngredient",
+      "before": true,
+      "after": false,
+      "certainty": "GUESSED",
+      "basis": "按名称判断是否主要提供辣、麻或辛辣刺激；普通青红椒、咖喱及复合酱料不默认算辣味驱动"
+    },
+    {
+      "ingredientId": 10000766,
+      "ingredientName": "蒜粉",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000767,
+      "ingredientName": "洋葱粉",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000768,
+      "ingredientName": "姜粉",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000769,
+      "ingredientName": "姜黄粉",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000770,
+      "ingredientName": "红曲粉",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000771,
+      "ingredientName": "食用碱",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000772,
+      "ingredientName": "小苏打",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000773,
+      "ingredientName": "吉士粉",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000774,
+      "ingredientName": "塔塔粉",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000775,
+      "ingredientName": "香草精",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000776,
+      "ingredientName": "柠檬汁",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000777,
+      "ingredientName": "青柠汁",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000778,
+      "ingredientName": "白芷",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000779,
+      "ingredientName": "砂仁",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000780,
+      "ingredientName": "肉蔻",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000781,
+      "ingredientName": "豆蔻",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000782,
+      "ingredientName": "良姜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000783,
+      "ingredientName": "荜拨",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000784,
+      "ingredientName": "香砂",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000785,
+      "ingredientName": "甘草",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000786,
+      "ingredientName": "番茄沙司",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000787,
+      "ingredientName": "泰式甜辣酱",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000788,
+      "ingredientName": "韩式辣酱",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000789,
+      "ingredientName": "蒜蓉辣椒酱",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000790,
+      "ingredientName": "豆豉辣椒酱",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000791,
+      "ingredientName": "牛肉酱",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000792,
+      "ingredientName": "香菇酱",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000793,
+      "ingredientName": "瑶柱酱",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000794,
+      "ingredientName": "虾子酱",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000795,
+      "ingredientName": "长茄子",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000796,
+      "ingredientName": "豆瓣酱",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000797,
+      "ingredientName": "熟白芝麻",
+      "field": "proteinType",
+      "before": null,
+      "after": "PLANT",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000797,
+      "ingredientName": "熟白芝麻",
+      "field": "defaultUnit",
+      "before": null,
+      "after": "克",
+      "certainty": "GUESSED",
+      "basis": "按食材形态和常见计量习惯补默认单位"
+    },
+    {
+      "ingredientId": 10000798,
+      "ingredientName": "番茄",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000799,
+      "ingredientName": "清水",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000800,
+      "ingredientName": "水",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000816,
+      "ingredientName": "土豆淀粉",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000817,
+      "ingredientName": "红薯淀粉",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000818,
+      "ingredientName": "豌豆淀粉",
+      "field": "proteinType",
+      "before": null,
+      "after": "PLANT",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000819,
+      "ingredientName": "绿豆淀粉",
+      "field": "proteinType",
+      "before": null,
+      "after": "PLANT",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000820,
+      "ingredientName": "小麦淀粉",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000821,
+      "ingredientName": "大米淀粉",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000822,
+      "ingredientName": "藕粉",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000822,
+      "ingredientName": "藕粉",
+      "field": "isStaple",
+      "before": true,
+      "after": false,
+      "certainty": "GUESSED",
+      "basis": "按日常主食定义和米面杂粮分类逐项判断；淀粉、粉圆等非主食排除"
+    },
+    {
+      "ingredientId": 10000823,
+      "ingredientName": "桂花藕粉",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000823,
+      "ingredientName": "桂花藕粉",
+      "field": "isStaple",
+      "before": true,
+      "after": false,
+      "certainty": "GUESSED",
+      "basis": "按日常主食定义和米面杂粮分类逐项判断；淀粉、粉圆等非主食排除"
+    },
+    {
+      "ingredientId": 10000824,
+      "ingredientName": "魔芋精粉",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000824,
+      "ingredientName": "魔芋精粉",
+      "field": "isStaple",
+      "before": true,
+      "after": false,
+      "certainty": "GUESSED",
+      "basis": "按日常主食定义和米面杂粮分类逐项判断；淀粉、粉圆等非主食排除"
+    },
+    {
+      "ingredientId": 10000825,
+      "ingredientName": "煎炸粉",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000826,
+      "ingredientName": "西米",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000827,
+      "ingredientName": "芋圆",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000827,
+      "ingredientName": "芋圆",
+      "field": "isStaple",
+      "before": true,
+      "after": false,
+      "certainty": "GUESSED",
+      "basis": "按日常主食定义和米面杂粮分类逐项判断；淀粉、粉圆等非主食排除"
+    },
+    {
+      "ingredientId": 10000828,
+      "ingredientName": "珍珠粉圆",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000828,
+      "ingredientName": "珍珠粉圆",
+      "field": "isStaple",
+      "before": true,
+      "after": false,
+      "certainty": "GUESSED",
+      "basis": "按日常主食定义和米面杂粮分类逐项判断；淀粉、粉圆等非主食排除"
+    },
+    {
+      "ingredientId": 10000829,
+      "ingredientName": "白玉菇",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000830,
+      "ingredientName": "蟹味菇",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000831,
+      "ingredientName": "海鲜菇",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000832,
+      "ingredientName": "秀珍菇",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000833,
+      "ingredientName": "滑子菇",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000834,
+      "ingredientName": "鸡腿菇",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000835,
+      "ingredientName": "紫苏",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000836,
+      "ingredientName": "薄荷",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000837,
+      "ingredientName": "迷迭香",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000838,
+      "ingredientName": "百里香",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000839,
+      "ingredientName": "牛至",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000840,
+      "ingredientName": "莳萝",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000841,
+      "ingredientName": "芝麻菜",
+      "field": "proteinType",
+      "before": null,
+      "after": "PLANT",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000842,
+      "ingredientName": "苦菊",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000843,
+      "ingredientName": "冰草",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000844,
+      "ingredientName": "蓝莓",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000845,
+      "ingredientName": "树莓",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000846,
+      "ingredientName": "黑莓",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000847,
+      "ingredientName": "蔓越莓",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000848,
+      "ingredientName": "车厘子",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000850,
+      "ingredientName": "豆芽",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000851,
+      "ingredientName": "小米辣",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000853,
+      "ingredientName": "九层塔",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000854,
+      "ingredientName": "姜片",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000855,
+      "ingredientName": "鸡毛菜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000857,
+      "ingredientName": "小南瓜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000860,
+      "ingredientName": "红椒",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000860,
+      "ingredientName": "红椒",
+      "field": "isSpicyIngredient",
+      "before": true,
+      "after": false,
+      "certainty": "GUESSED",
+      "basis": "按名称判断是否主要提供辣、麻或辛辣刺激；普通青红椒、咖喱及复合酱料不默认算辣味驱动"
+    },
+    {
+      "ingredientId": 10000861,
+      "ingredientName": "花菜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000862,
+      "ingredientName": "马蹄",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000864,
+      "ingredientName": "温水",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000866,
+      "ingredientName": "包菜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000867,
+      "ingredientName": "蒜末",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000868,
+      "ingredientName": "葱段",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000869,
+      "ingredientName": "白芝麻",
+      "field": "proteinType",
+      "before": null,
+      "after": "PLANT",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000872,
+      "ingredientName": "白菜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000873,
+      "ingredientName": "香葱",
+      "field": "categoryCode",
+      "before": "SEASONING",
+      "after": "PRODUCE",
+      "certainty": "GUESSED",
+      "basis": "鲜香葱按食材本体归入蔬果菌菇；不是加工调味料"
+    },
+    {
+      "ingredientId": 10000873,
+      "ingredientName": "香葱",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000874,
+      "ingredientName": "蒜瓣",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000876,
+      "ingredientName": "葱花",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000876,
+      "ingredientName": "葱花",
+      "field": "defaultUnit",
+      "before": null,
+      "after": "克",
+      "certainty": "GUESSED",
+      "basis": "按食材形态和常见计量习惯补默认单位"
+    },
+    {
+      "ingredientId": 10000879,
+      "ingredientName": "裙带菜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000882,
+      "ingredientName": "芥末酱",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000883,
+      "ingredientName": "小圆子",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000883,
+      "ingredientName": "小圆子",
+      "field": "isStaple",
+      "before": true,
+      "after": false,
+      "certainty": "GUESSED",
+      "basis": "按日常主食定义和米面杂粮分类逐项判断；淀粉、粉圆等非主食排除"
+    },
+    {
+      "ingredientId": 10000884,
+      "ingredientName": "桂花酱",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000886,
+      "ingredientName": "辣椒面",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000887,
+      "ingredientName": "孜然粉",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000888,
+      "ingredientName": "蒜苔",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000890,
+      "ingredientName": "姜蒜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000890,
+      "ingredientName": "姜蒜",
+      "field": "defaultUnit",
+      "before": null,
+      "after": "克",
+      "certainty": "GUESSED",
+      "basis": "按食材形态和常见计量习惯补默认单位"
+    },
+    {
+      "ingredientId": 10000891,
+      "ingredientName": "淀粉水",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000891,
+      "ingredientName": "淀粉水",
+      "field": "defaultUnit",
+      "before": null,
+      "after": "毫升",
+      "certainty": "GUESSED",
+      "basis": "按食材形态和常见计量习惯补默认单位"
+    },
+    {
+      "ingredientId": 10000892,
+      "ingredientName": "葱丝",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000892,
+      "ingredientName": "葱丝",
+      "field": "defaultUnit",
+      "before": null,
+      "after": "克",
+      "certainty": "GUESSED",
+      "basis": "按食材形态和常见计量习惯补默认单位"
+    },
+    {
+      "ingredientId": 10000893,
+      "ingredientName": "姜丝",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000893,
+      "ingredientName": "姜丝",
+      "field": "defaultUnit",
+      "before": null,
+      "after": "克",
+      "certainty": "GUESSED",
+      "basis": "按食材形态和常见计量习惯补默认单位"
+    },
+    {
+      "ingredientId": 10000894,
+      "ingredientName": "黄豆酱",
+      "field": "proteinType",
+      "before": null,
+      "after": "PLANT",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000896,
+      "ingredientName": "姜末",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000896,
+      "ingredientName": "姜末",
+      "field": "defaultUnit",
+      "before": null,
+      "after": "克",
+      "certainty": "GUESSED",
+      "basis": "按食材形态和常见计量习惯补默认单位"
+    },
+    {
+      "ingredientId": 10000898,
+      "ingredientName": "瘦肉",
+      "field": "proteinType",
+      "before": null,
+      "after": "PORK",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000901,
+      "ingredientName": "青菜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000905,
+      "ingredientName": "干木耳",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000906,
+      "ingredientName": "黑胡椒",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000906,
+      "ingredientName": "黑胡椒",
+      "field": "defaultUnit",
+      "before": null,
+      "after": "克",
+      "certainty": "GUESSED",
+      "basis": "按食材形态和常见计量习惯补默认单位"
+    },
+    {
+      "ingredientId": 10000908,
+      "ingredientName": "菜苔",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000910,
+      "ingredientName": "黑芝麻",
+      "field": "proteinType",
+      "before": null,
+      "after": "PLANT",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000911,
+      "ingredientName": "紫米",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000912,
+      "ingredientName": "红米",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000913,
+      "ingredientName": "黑糯米",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000914,
+      "ingredientName": "燕麦片",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000915,
+      "ingredientName": "即食燕麦片",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000916,
+      "ingredientName": "玉米片",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000917,
+      "ingredientName": "低筋面粉",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000918,
+      "ingredientName": "高筋面粉",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000919,
+      "ingredientName": "中筋面粉",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000920,
+      "ingredientName": "自发粉",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000921,
+      "ingredientName": "饺子粉",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000922,
+      "ingredientName": "面包粉",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000923,
+      "ingredientName": "蛋糕粉",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000924,
+      "ingredientName": "烧麦皮",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000925,
+      "ingredientName": "春卷皮",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000926,
+      "ingredientName": "云吞皮",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000927,
+      "ingredientName": "面线",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000928,
+      "ingredientName": "刀削面",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000929,
+      "ingredientName": "热干面",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000930,
+      "ingredientName": "凉面",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000931,
+      "ingredientName": "冷面",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000932,
+      "ingredientName": "荞麦粉",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000933,
+      "ingredientName": "高粱粉",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000934,
+      "ingredientName": "糜子",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000935,
+      "ingredientName": "黍子",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000936,
+      "ingredientName": "朝天椒",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000937,
+      "ingredientName": "二荆条",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000938,
+      "ingredientName": "杭椒",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000939,
+      "ingredientName": "线椒",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000940,
+      "ingredientName": "螺丝椒",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000941,
+      "ingredientName": "指天椒",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000942,
+      "ingredientName": "七星椒",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000943,
+      "ingredientName": "子弹头辣椒",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000944,
+      "ingredientName": "辣椒碎",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000945,
+      "ingredientName": "辣椒段",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000946,
+      "ingredientName": "辣椒丝",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000947,
+      "ingredientName": "油泼辣子",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000948,
+      "ingredientName": "辣椒红油",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000949,
+      "ingredientName": "麻辣红油",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000950,
+      "ingredientName": "香辣酱",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000951,
+      "ingredientName": "麻辣酱",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000952,
+      "ingredientName": "泡小米辣",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000953,
+      "ingredientName": "腌辣椒",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000954,
+      "ingredientName": "酸辣椒",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000955,
+      "ingredientName": "糟辣椒",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000956,
+      "ingredientName": "糍粑辣椒",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000957,
+      "ingredientName": "糊辣椒",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000958,
+      "ingredientName": "山葵",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000961,
+      "ingredientName": "郫县豆瓣酱",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000962,
+      "ingredientName": "青辣椒",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000962,
+      "ingredientName": "青辣椒",
+      "field": "isSpicyIngredient",
+      "before": false,
+      "after": true,
+      "certainty": "GUESSED",
+      "basis": "按名称判断是否主要提供辣、麻或辛辣刺激；普通青红椒、咖喱及复合酱料不默认算辣味驱动"
+    },
+    {
+      "ingredientId": 10000963,
+      "ingredientName": "红辣椒",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000963,
+      "ingredientName": "红辣椒",
+      "field": "isSpicyIngredient",
+      "before": false,
+      "after": true,
+      "certainty": "GUESSED",
+      "basis": "按名称判断是否主要提供辣、麻或辛辣刺激；普通青红椒、咖喱及复合酱料不默认算辣味驱动"
+    },
+    {
+      "ingredientId": 10000964,
+      "ingredientName": "长豆角",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000966,
+      "ingredientName": "椒盐",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000967,
+      "ingredientName": "干桂圆",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000968,
+      "ingredientName": "藕带",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000970,
+      "ingredientName": "玉米淀粉",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000972,
+      "ingredientName": "小米椒",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000972,
+      "ingredientName": "小米椒",
+      "field": "isSpicyIngredient",
+      "before": false,
+      "after": true,
+      "certainty": "GUESSED",
+      "basis": "按名称判断是否主要提供辣、麻或辛辣刺激；普通青红椒、咖喱及复合酱料不默认算辣味驱动"
+    },
+    {
+      "ingredientId": 10000973,
+      "ingredientName": "陈醋",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000974,
+      "ingredientName": "水淀粉",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000974,
+      "ingredientName": "水淀粉",
+      "field": "defaultUnit",
+      "before": null,
+      "after": "毫升",
+      "certainty": "GUESSED",
+      "basis": "按食材形态和常见计量习惯补默认单位"
+    },
+    {
+      "ingredientId": 10000975,
+      "ingredientName": "白胡椒",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000975,
+      "ingredientName": "白胡椒",
+      "field": "isSpicyIngredient",
+      "before": false,
+      "after": true,
+      "certainty": "GUESSED",
+      "basis": "按名称判断是否主要提供辣、麻或辛辣刺激；普通青红椒、咖喱及复合酱料不默认算辣味驱动"
+    },
+    {
+      "ingredientId": 10000976,
+      "ingredientName": "玉米粒",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000977,
+      "ingredientName": "胡萝卜丁",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000978,
+      "ingredientName": "玉子豆腐",
+      "field": "defaultUnit",
+      "before": null,
+      "after": "盒",
+      "certainty": "GUESSED",
+      "basis": "按食材形态和常见计量习惯补默认单位"
+    },
+    {
+      "ingredientId": 10000980,
+      "ingredientName": "泡发木耳",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000981,
+      "ingredientName": "红椒丝",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000982,
+      "ingredientName": "红椒片",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000983,
+      "ingredientName": "黑木耳",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000986,
+      "ingredientName": "咖喱块",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000988,
+      "ingredientName": "青红辣椒",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000988,
+      "ingredientName": "青红辣椒",
+      "field": "isSpicyIngredient",
+      "before": false,
+      "after": true,
+      "certainty": "GUESSED",
+      "basis": "按名称判断是否主要提供辣、麻或辛辣刺激；普通青红椒、咖喱及复合酱料不默认算辣味驱动"
+    },
+    {
+      "ingredientId": 10000989,
+      "ingredientName": "小土豆",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000991,
+      "ingredientName": "芝士碎",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000993,
+      "ingredientName": "东安醋",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000996,
+      "ingredientName": "葱姜末",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000998,
+      "ingredientName": "泡姜",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10000999,
+      "ingredientName": "黄瓜丁",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10001000,
+      "ingredientName": "红油辣椒",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10001000,
+      "ingredientName": "红油辣椒",
+      "field": "isSpicyIngredient",
+      "before": false,
+      "after": true,
+      "certainty": "GUESSED",
+      "basis": "按名称判断是否主要提供辣、麻或辛辣刺激；普通青红椒、咖喱及复合酱料不默认算辣味驱动"
+    },
+    {
+      "ingredientId": 10001000,
+      "ingredientName": "红油辣椒",
+      "field": "defaultUnit",
+      "before": null,
+      "after": "克",
+      "certainty": "GUESSED",
+      "basis": "按食材形态和常见计量习惯补默认单位"
+    },
+    {
+      "ingredientId": 10001001,
+      "ingredientName": "芝麻油",
+      "field": "proteinType",
+      "before": null,
+      "after": "PLANT",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10001002,
+      "ingredientName": "藕片",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10001002,
+      "ingredientName": "藕片",
+      "field": "defaultUnit",
+      "before": null,
+      "after": "克",
+      "certainty": "GUESSED",
+      "basis": "按食材形态和常见计量习惯补默认单位"
+    },
+    {
+      "ingredientId": 10001004,
+      "ingredientName": "鸡",
+      "field": "defaultUnit",
+      "before": null,
+      "after": "个",
+      "certainty": "GUESSED",
+      "basis": "按食材形态和常见计量习惯补默认单位"
+    },
+    {
+      "ingredientId": 10001005,
+      "ingredientName": "鲜百合",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10001005,
+      "ingredientName": "鲜百合",
+      "field": "defaultUnit",
+      "before": null,
+      "after": "克",
+      "certainty": "GUESSED",
+      "basis": "按食材形态和常见计量习惯补默认单位"
+    },
+    {
+      "ingredientId": 10001006,
+      "ingredientName": "胡椒粉",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10001006,
+      "ingredientName": "胡椒粉",
+      "field": "isSpicyIngredient",
+      "before": false,
+      "after": true,
+      "certainty": "GUESSED",
+      "basis": "按名称判断是否主要提供辣、麻或辛辣刺激；普通青红椒、咖喱及复合酱料不默认算辣味驱动"
+    },
+    {
+      "ingredientId": 10001006,
+      "ingredientName": "胡椒粉",
+      "field": "defaultUnit",
+      "before": null,
+      "after": "克",
+      "certainty": "GUESSED",
+      "basis": "按食材形态和常见计量习惯补默认单位"
+    },
+    {
+      "ingredientId": 10001007,
+      "ingredientName": "凤爪",
+      "field": "defaultUnit",
+      "before": null,
+      "after": "个",
+      "certainty": "GUESSED",
+      "basis": "按食材形态和常见计量习惯补默认单位"
+    },
+    {
+      "ingredientId": 10001009,
+      "ingredientName": "青红椒",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10001010,
+      "ingredientName": "青红彩椒",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10001010,
+      "ingredientName": "青红彩椒",
+      "field": "defaultUnit",
+      "before": null,
+      "after": "个",
+      "certainty": "GUESSED",
+      "basis": "按食材形态和常见计量习惯补默认单位"
+    },
+    {
+      "ingredientId": 10001013,
+      "ingredientName": "樟茶",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10001014,
+      "ingredientName": "干辣椒段",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10001014,
+      "ingredientName": "干辣椒段",
+      "field": "isSpicyIngredient",
+      "before": false,
+      "after": true,
+      "certainty": "GUESSED",
+      "basis": "按名称判断是否主要提供辣、麻或辛辣刺激；普通青红椒、咖喱及复合酱料不默认算辣味驱动"
+    },
+    {
+      "ingredientId": 10001015,
+      "ingredientName": "毛肚",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10001016,
+      "ingredientName": "黄喉",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10001018,
+      "ingredientName": "莴笋片",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10001019,
+      "ingredientName": "火锅底料",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10001023,
+      "ingredientName": "蒜头",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10001023,
+      "ingredientName": "蒜头",
+      "field": "defaultUnit",
+      "before": null,
+      "after": "个",
+      "certainty": "GUESSED",
+      "basis": "按食材形态和常见计量习惯补默认单位"
+    },
+    {
+      "ingredientId": 10001025,
+      "ingredientName": "海盐",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10001027,
+      "ingredientName": "甜玉米",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10001027,
+      "ingredientName": "甜玉米",
+      "field": "isStaple",
+      "before": false,
+      "after": true,
+      "certainty": "GUESSED",
+      "basis": "按日常主食定义和米面杂粮分类逐项判断；淀粉、粉圆等非主食排除"
+    },
+    {
+      "ingredientId": 10001027,
+      "ingredientName": "甜玉米",
+      "field": "defaultUnit",
+      "before": null,
+      "after": "个",
+      "certainty": "GUESSED",
+      "basis": "按食材形态和常见计量习惯补默认单位"
+    },
+    {
+      "ingredientId": 10001028,
+      "ingredientName": "牛油果",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10001029,
+      "ingredientName": "圣女果",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10001030,
+      "ingredientName": "甜玉米粒",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10001031,
+      "ingredientName": "魔芋结",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10001032,
+      "ingredientName": "奥尔良腌料",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10001033,
+      "ingredientName": "黑胡椒粉",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10001033,
+      "ingredientName": "黑胡椒粉",
+      "field": "isSpicyIngredient",
+      "before": false,
+      "after": true,
+      "certainty": "GUESSED",
+      "basis": "按名称判断是否主要提供辣、麻或辛辣刺激；普通青红椒、咖喱及复合酱料不默认算辣味驱动"
+    },
+    {
+      "ingredientId": 10001033,
+      "ingredientName": "黑胡椒粉",
+      "field": "defaultUnit",
+      "before": null,
+      "after": "克",
+      "certainty": "GUESSED",
+      "basis": "按食材形态和常见计量习惯补默认单位"
+    },
+    {
+      "ingredientId": 10001035,
+      "ingredientName": "孜然粒",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10001036,
+      "ingredientName": "菌菇",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10001037,
+      "ingredientName": "豆苗",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10001038,
+      "ingredientName": "酸汤调料",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    },
+    {
+      "ingredientId": 10001039,
+      "ingredientName": "高汤",
+      "field": "proteinType",
+      "before": null,
+      "after": "NONE",
+      "certainty": "GUESSED",
+      "basis": "按名称和食材分类匹配主蛋白枚举；保留已有明确类型，NONE 表示当前枚举无对应类型"
+    }
+  ],
+  "exactNutritionCandidates": [
+    {
+      "ingredientId": 10000855,
+      "ingredientName": "鸡毛菜",
+      "nutrientFoodId": 1002,
+      "nutrientFoodName": "鸡毛菜",
+      "sourceFoodCode": "045122"
+    },
+    {
+      "ingredientId": 10000970,
+      "ingredientName": "玉米淀粉",
+      "nutrientFoodId": 1299,
+      "nutrientFoodName": "玉米淀粉",
+      "sourceFoodCode": "022103"
+    },
+    {
+      "ingredientId": 10000971,
+      "ingredientName": "虾仁",
+      "nutrientFoodId": 1516,
+      "nutrientFoodName": "虾仁",
+      "sourceFoodCode": "122206"
+    },
+    {
+      "ingredientId": 10001017,
+      "ingredientName": "火腿肠",
+      "nutrientFoodId": 781,
+      "nutrientFoodName": "火腿肠",
+      "sourceFoodCode": "081409"
+    }
+  ],
+  "exactNutritionCreated": 4,
+  "issues": {
+    "unclassifiedCount": 0,
+    "activeWithoutDefaultUnit": [],
+    "unresolvedMissingDefaultUnit": [],
+    "existingNameAliasConflicts": [
+      {
+        "id": 10000051,
+        "name": "西红柿",
+        "alias": "番茄"
+      },
+      {
+        "id": 10000053,
+        "name": "猪里脊",
+        "alias": "里脊肉"
+      },
+      {
+        "id": 10000054,
+        "name": "食盐",
+        "alias": "盐"
+      },
+      {
+        "id": 10000057,
+        "name": "大白菜",
+        "alias": "白菜"
+      },
+      {
+        "id": 10000058,
+        "name": "小白菜",
+        "alias": "青菜"
+      },
+      {
+        "id": 10000064,
+        "name": "大蒜",
+        "alias": "蒜头"
+      },
+      {
+        "id": 10000064,
+        "name": "大蒜",
+        "alias": "蒜"
+      },
+      {
+        "id": 10000065,
+        "name": "姜",
+        "alias": "生姜"
+      },
+      {
+        "id": 10000066,
+        "name": "葱",
+        "alias": "小葱"
+      },
+      {
+        "id": 10000066,
+        "name": "葱",
+        "alias": "香葱"
+      },
+      {
+        "id": 10000080,
+        "name": "木耳",
+        "alias": "黑木耳"
+      },
+      {
+        "id": 10000088,
+        "name": "牛排",
+        "alias": "牛里脊"
+      },
+      {
+        "id": 10000088,
+        "name": "牛排",
+        "alias": "牛里脊肉"
+      },
+      {
+        "id": 10000125,
+        "name": "淀粉",
+        "alias": "玉米淀粉"
+      },
+      {
+        "id": 10000130,
+        "name": "醋",
+        "alias": "陈醋"
+      },
+      {
+        "id": 10000130,
+        "name": "醋",
+        "alias": "香醋"
+      },
+      {
+        "id": 10000133,
+        "name": "香油",
+        "alias": "芝麻油"
+      },
+      {
+        "id": 10000138,
+        "name": "胡椒",
+        "alias": "胡椒粉"
+      },
+      {
+        "id": 10000139,
+        "name": "孜然",
+        "alias": "孜然粉"
+      },
+      {
+        "id": 10000172,
+        "name": "荸荠",
+        "alias": "马蹄"
+      },
+      {
+        "id": 10000216,
+        "name": "花生仁",
+        "alias": "花生米"
+      },
+      {
+        "id": 10000217,
+        "name": "芝麻",
+        "alias": "白芝麻"
+      },
+      {
+        "id": 10000224,
+        "name": "虾米",
+        "alias": "虾仁"
+      },
+      {
+        "id": 10000244,
+        "name": "猪排骨",
+        "alias": "排骨"
+      },
+      {
+        "id": 10000246,
+        "name": "猪肠",
+        "alias": "肥肠"
+      },
+      {
+        "id": 10000273,
+        "name": "黄鱼",
+        "alias": "黄花鱼"
+      },
+      {
+        "id": 10000276,
+        "name": "卷心菜",
+        "alias": "包菜"
+      },
+      {
+        "id": 10000432,
+        "name": "豆腐脑",
+        "alias": "老豆腐"
+      },
+      {
+        "id": 10000529,
+        "name": "猪瘦肉",
+        "alias": "瘦肉"
+      },
+      {
+        "id": 10000664,
+        "name": "竹节虾",
+        "alias": "大虾"
+      },
+      {
+        "id": 10000801,
+        "name": "内酯豆腐",
+        "alias": "嫩豆腐"
+      },
+      {
+        "id": 10000851,
+        "name": "小米辣",
+        "alias": "小米椒"
+      }
+    ],
+    "duplicateNames": [
+      {
+        "id": 10000755,
+        "name": "黑胡椒",
+        "status": "ACTIVE",
+        "duplicateId": 10000906,
+        "duplicateStatus": "PENDING"
+      },
+      {
+        "id": 10000906,
+        "name": "黑胡椒",
+        "status": "PENDING",
+        "duplicateId": 10000755,
+        "duplicateStatus": "ACTIVE"
+      }
+    ]
+  }
+}

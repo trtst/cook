@@ -144,7 +144,7 @@
 
 1. `dishRoles`：`MAIN / VEGETABLE / SOUP / STAPLE`，可多选。
 2. `mealTypes`：`BREAKFAST / LUNCH / DINNER`，可多选。
-3. `mainProteinType`：主蛋白类型，可空。
+3. `mainProteinType`：`PORK / CHICKEN / BEEF / LAMB / DUCK / FISH / SEAFOOD / EGG / PLANT / NONE`，无可靠结论时留空；`SEAFOOD` 表示非鱼类水产，`PLANT` 表示植物蛋白。
 4. `primaryIngredientIds`：主要食材的结构化 `ingredientId` 列表。
 5. `flavorProfile`：风味标签数组。
 6. `spiceLevel`：`NONE / MILD / MEDIUM / HOT`。

@@ -33,6 +33,7 @@
     "backfill:system-recipe-units": "tsx scripts/backfill-system-recipe-units.ts",
     "backfill:system-ingredient-units": "tsx scripts/backfill-system-ingredient-units.ts",
     "backfill:recipe-version-tags": "tsx scripts/backfill-recipe-version-tags.ts",
+    "repair:recipe-main-protein": "tsx scripts/repair-recipe-main-protein.ts",
     "backfill:confirmed-recipe-version-tags": "tsx scripts/backfill-confirmed-recipe-version-tags.ts",
     "reset:recipe-fixtures": "tsx scripts/reset-recipe-fixtures.ts",
     "ensure:public-content-user-pool": "tsx scripts/ensure-recipe-inspiration-owner-pool.ts",

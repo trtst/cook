@@ -33,6 +33,7 @@ type RecipeVersionTagInference = RecipeVersionTagSnapshot & {
 
 type IngredientTagFact = {
   id: UUID;
+  name?: string;
   proteinType: DbIngredientProteinType | null;
   categoryCode?: string | null;
   isStaple: boolean;
@@ -60,20 +61,22 @@ function mapIngredientProteinType(value: DbIngredientProteinType | null): Recipe
     case "BEEF":
     case "LAMB":
     case "DUCK":
+    case "FISH":
+    case "SEAFOOD":
     case "EGG":
     case "NONE":
       return value;
-    case "SEAFOOD":
-      return "FISH";
-    case "TOFU":
-      return "NONE";
+    case "PLANT":
+      return "PLANT";
     default:
       return null;
   }
 }
 
 function isMainProteinIngredient(fact: IngredientTagFact | undefined) {
-  return fact?.categoryCode === "MEAT_POULTRY_EGG" || fact?.categoryCode === "SEAFOOD";
+  const incidentalSeafood =
+    fact?.categoryCode === "SEAFOOD" && /(海带|紫菜|裙带菜|虾皮|虾酱|海米|鱼露|鱼干)/.test(`${fact.name ?? ""} ${(fact.aliases ?? []).join(" ")}`);
+  return !incidentalSeafood && (fact?.categoryCode === "MEAT_POULTRY_EGG" || fact?.categoryCode === "SEAFOOD" || fact?.categoryCode === "SOY_DAIRY");
 }
 
 function resolvePrimaryIngredientIds(
@@ -145,10 +148,11 @@ export function inferRecipeVersionTagSnapshot(
     else if (/(羊肉|羊排|羊蝎子)/.test(text)) mainProteinType = "LAMB";
     else if (/(鸡肉|鸡翅|鸡腿|鸡胸|鸡丁)/.test(text)) mainProteinType = "CHICKEN";
     else if (/(鸭肉|鸭腿|鸭翅|鸭血|烤鸭)/.test(text)) mainProteinType = "DUCK";
-    else if (/(鱼|虾|蟹|贝|蛤|蚝|海鲜)/.test(text)) mainProteinType = "FISH";
+    else if (/(草鱼|鲤鱼|鲫鱼|带鱼|鲈鱼|三文鱼|鳕鱼|金枪鱼|罗非鱼|黄花鱼|秋刀鱼|鳗鱼|鲳鱼|鲢鱼|鳜鱼|鲶鱼|武昌鱼|巴沙鱼|多宝鱼|石斑鱼|鲅鱼)/.test(text)) mainProteinType = "FISH";
+    else if (/(虾|蟹|贝|蛤|蚝|鲍鱼|鱿鱼|墨鱼|海鲜)/.test(text)) mainProteinType = "SEAFOOD";
     else if (/(猪肉|排骨|五花肉|里脊|肉末|肉丝|肉片|腊肠)/.test(text)) mainProteinType = "PORK";
     else if (/(鸡蛋|鸭蛋|鹅蛋|鹌鹑蛋|皮蛋|咸蛋|松花蛋)/.test(text)) mainProteinType = "EGG";
-    else if (/(豆腐|豆皮|腐竹|豆干)/.test(text)) mainProteinType = "NONE";
+    else if (/(豆腐|豆皮|腐竹|豆干|豆浆|黄豆|黑豆|鹰嘴豆)/.test(text)) mainProteinType = "PLANT";
   }
 
   const dishRoles = new Set<RecipeVersionTagSnapshot["dishRoles"][number]>();
@@ -307,6 +311,7 @@ export async function replaceAutoRecipeVersionTags(
               where: { id: { in: ingredientIds } },
               select: {
                 id: true,
+                name: true,
                 proteinType: true,
                 category: { select: { code: true } },
                 isStaple: true,

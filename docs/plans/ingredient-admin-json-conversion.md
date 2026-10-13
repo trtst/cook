@@ -102,10 +102,15 @@
 | `BEEF` | 牛 |
 | `LAMB` | 羊 |
 | `DUCK` | 鸭 |
-| `SEAFOOD` | 海鲜 |
+| `FISH` | 鱼类 |
+| `SEAFOOD` | 非鱼类水产 |
 | `EGG` | 鸡蛋 |
-| `TOFU` | 豆腐 |
-| `NONE` | 无 |
+| `PLANT` | 植物蛋白 |
+| `NONE` | 当前枚举中无对应主蛋白类型 |
+
+`proteinType: null` 表示尚未判断或没有可靠依据；`NONE` 表示已判断，但不属于当前支持的主蛋白类型。`NONE` 不表示该食材营养中完全没有蛋白质。鱼类统一使用 `FISH`，虾、蟹、贝等非鱼类水产统一使用 `SEAFOOD`；不使用 `OTHER`。植物蛋白使用 `PLANT`，不使用 `TOFU`。
+
+本表描述正常 JSON 转换时的输入要求：来源不可靠的事实仍填 `null`，不得为了凑齐字段猜测。系统食材存量治理可以另行运行有版本记录的规则回填；回填产生的每条推测必须保存食材 ID、字段、旧值、新值和判断依据，不能把推测伪装成来源确认值。
 
 | `matchType` | 中文 |
 | --- | --- |
@@ -121,3 +126,19 @@
 - 来源：`Sanotsu/china-food-composition-data`。
 - 当前版本：`2026-08-22-primary-subset-v1`。
 - 项目数据文件：[food_composition_primary.csv](/Users/yangpenghui/personal/cook/apps/api/data/nutrition/food_composition_primary.csv)。
+
+## 5. 线上系统食材存量修复
+
+线上执行前先发布支持当前食材枚举的 API 和数据库 migration，并确认生产数据库备份可恢复。使用 API 服务器仓库根目录下的包装脚本，先生成只读报告：
+
+```bash
+./apps/api/scripts/repair-system-ingredients-online.sh preview /tmp/ingredient-repair-online-preview.json
+```
+
+逐项审阅 `guessedChanges` 和冲突后，只有确认清单符合预期时，才将同一报告路径传给写入模式：
+
+```bash
+./apps/api/scripts/repair-system-ingredients-online.sh apply /tmp/ingredient-repair-online-preview.json --confirm-online-write
+```
+
+写入会重新计算候选并与已审阅清单逐项比对。目标环境、数据库指纹、食材总数、推测修改或精确营养候选任一不一致时，脚本拒绝写入。脚本本身不会创建数据库备份；执行前必须完成并确认备份。以上命令仅为操作说明，不代表已经连接或修改线上数据。

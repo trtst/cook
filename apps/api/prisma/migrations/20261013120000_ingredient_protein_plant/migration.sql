@@ -1,0 +1,1 @@
+ALTER TYPE "IngredientProteinType" RENAME VALUE 'TOFU' TO 'PLANT';

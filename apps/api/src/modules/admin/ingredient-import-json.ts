@@ -21,7 +21,7 @@ export interface IngredientImportItemDraft {
   aliases: string[];
   categoryCode: string | null;
   defaultUnitName: string | null;
-  proteinType: "PORK" | "CHICKEN" | "BEEF" | "LAMB" | "DUCK" | "SEAFOOD" | "EGG" | "TOFU" | "NONE" | null;
+  proteinType: "PORK" | "CHICKEN" | "BEEF" | "LAMB" | "DUCK" | "FISH" | "SEAFOOD" | "EGG" | "PLANT" | "NONE" | null;
   isStaple: boolean;
   isSpicyIngredient: boolean;
   imageUrl: string | null;
@@ -60,7 +60,7 @@ const categoryCodes = new Set([
   "DRIED_PRESERVED",
   "BEVERAGE_ALCOHOL"
 ]);
-const proteinTypes = new Set(["PORK", "CHICKEN", "BEEF", "LAMB", "DUCK", "SEAFOOD", "EGG", "TOFU", "NONE"]);
+const proteinTypes = new Set(["PORK", "CHICKEN", "BEEF", "LAMB", "DUCK", "FISH", "SEAFOOD", "EGG", "PLANT", "NONE"]);
 const matchTypes = new Set(["EXACT_NAME", "ALIAS", "REPRESENTATIVE", "LEAN_REPRESENTATIVE", "MANUAL", "REVIEW_NEEDED"]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
