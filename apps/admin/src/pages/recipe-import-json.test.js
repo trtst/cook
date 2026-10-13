@@ -34,7 +34,17 @@ test("import workbench requires complete content and disables publish with error
   assert.match(itemPage, /label="小贴士" required/);
   assert.match(itemPage, /:disabled="detail\?\.status !== 'READY' \|\| detail\.errorItems\.length > 0"/);
   assert.match(itemPage, /tagValueOptions/);
+  assert.match(itemPage, /recipeRoleOptions/);
+  assert.match(itemPage, /recipeRole: item\.recipeRole/);
+  assert.match(itemPage, /请为每条食材选择菜谱角色/);
   assert.doesNotMatch(itemPage, /estimatedCalories/);
+});
+
+test("API contract requires ingredient roles when saving an import item", () => {
+  assert.match(apiFile, /RecipeIngredientRole = "MAIN" \| "ACCOMPANIMENT" \| "SEASONING"/);
+  assert.match(apiFile, /RecipeImportIngredientUpdateDraft[\s\S]*recipeRole: RecipeIngredientRole/);
+  assert.match(apiFile, /recipeBody: RecipeImportRecipeBodyUpdate/);
+  assert.match(itemPage, /v-model="item\.recipeRole"/);
 });
 
 test("import workbench edits keywords, shows category errors on the form, and supports cuisine and dish style", () => {
@@ -91,6 +101,8 @@ test("system recipe detail exposes JSON export and keywords", () => {
   assert.match(detailPage.slice(exportStart, exportEnd), /quantity: item\.amount\.kind === "EXACT" \? item\.amount\.quantity : null/);
   assert.match(detailPage.slice(exportStart, exportEnd), /unit: item\.amount\.kind === "EXACT" \? item\.amount\.unitName : null/);
   assert.match(detailPage.slice(exportStart, exportEnd), /categoryCode: item\.categoryCode/);
+  assert.match(detailPage.slice(exportStart, exportEnd), /recipeRole: item\.recipeRole \?\? null/);
+  assert.match(detailPage, /补全\$\{rowLabel\}菜谱角色/);
   assert.match(detailPage.slice(exportStart, exportEnd), /imagePrompt: item\.imagePrompt/);
   assert.match(detailPage.slice(exportStart, exportEnd), /durationMinutes: step\.durationMinutes/);
   assert.match(detailPage, /导出 JSON 前/);

@@ -77,6 +77,9 @@ export interface AdminRecipeWikiExportDocument {
   schemaVersion: "recipe.wiki.v1";
   recipeId: UUID;
   contentVersionId: UUID;
+  recipeContent: {
+    ingredientRoles: Array<{ ingredientId: UUID; ingredientName: string; recipeRole: RecipeIngredientRole | null }>;
+  };
   wiki: {
     tags: Array<{ tagCode: string; tagValue: string }>;
     assistant: { steps: RecipeImportAssistantStepDraft[] };
@@ -104,7 +107,7 @@ export interface AdminRecipeWikiRevisionExportDocument {
         duration: string;
         tips: string;
         keywords: string[];
-        ingredients: Array<{ name: string; quantity: string | null; unit: string | null; fuzzyText: "适量" | null; categoryCode: string | null }>;
+        ingredients: Array<{ name: string; quantity: string | null; unit: string | null; fuzzyText: "适量" | null; categoryCode: string | null; recipeRole: RecipeIngredientRole }>;
         tools: Array<{ name: string }>;
         steps: Array<{ text: string; imageUrl: string | null; imagePrompt: string | null }>;
       };
@@ -309,6 +312,7 @@ export interface AdminRecipeDetail {
       source: "SYSTEM" | "PERSONAL";
       categoryId: UUID;
       categoryCode?: string | null;
+      recipeRole?: RecipeIngredientRole;
       amount:
         | {
             kind: "EXACT";
@@ -460,6 +464,13 @@ export interface RecipeImportIngredientDraft {
   fuzzyText: "适量" | null;
   note: string | null;
   categoryCode?: string | null;
+  recipeRole?: RecipeIngredientRole;
+}
+
+export type RecipeIngredientRole = "MAIN" | "ACCOMPANIMENT" | "SEASONING";
+
+export interface RecipeImportIngredientUpdateDraft extends Omit<RecipeImportIngredientDraft, "recipeRole"> {
+  recipeRole: RecipeIngredientRole;
 }
 
 export interface RecipeImportStepDraft {
@@ -519,6 +530,10 @@ export interface RecipeImportRecipeBody {
   ingredients: RecipeImportIngredientDraft[];
   steps: RecipeImportStepDraft[];
 }
+
+export type RecipeImportRecipeBodyUpdate = Omit<RecipeImportRecipeBody, "ingredients"> & {
+  ingredients: RecipeImportIngredientUpdateDraft[];
+};
 
 export interface RecipeImportJobSummary {
   id: UUID;
@@ -587,7 +602,7 @@ export interface CreateRecipeImportJobPayload {
 export interface UpdateRecipeImportItemPayload {
   operationId: OperationId;
   expectedVersion: number;
-  recipeBody: RecipeImportRecipeBody;
+  recipeBody: RecipeImportRecipeBodyUpdate;
 }
 
 export interface PublishRecipeImportItemPayload {

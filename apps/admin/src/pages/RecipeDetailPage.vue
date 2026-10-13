@@ -196,7 +196,8 @@ function buildRecipeImportJson(source: AdminRecipeDetail) {
           quantity: item.amount.kind === "EXACT" ? item.amount.quantity : null,
           unit: item.amount.kind === "EXACT" ? item.amount.unitName : null,
           fuzzyText: item.amount.kind === "FUZZY" ? "适量" : null,
-          categoryCode: item.categoryCode ?? null
+          categoryCode: item.categoryCode ?? null,
+          recipeRole: item.recipeRole ?? null
         })),
         tools: source.content.tools.map(item => ({ name: item.name })),
         steps: source.content.steps.map(item => ({ text: item.text, imageUrl: item.imageUrl, imagePrompt: item.imagePrompt ?? null }))
@@ -291,6 +292,9 @@ function validateRecipeImportJson(body: ReturnType<typeof buildRecipeImportJson>
     if (!ingredient.name.trim()) return `导出 JSON 前请补全${rowLabel}名称`;
     if (!ingredient.categoryCode || !recipeImportCategoryCodes.has(ingredient.categoryCode)) {
       return `导出 JSON 前请补全${rowLabel}分类`;
+    }
+    if (!ingredient.recipeRole || !["MAIN", "ACCOMPANIMENT", "SEASONING"].includes(ingredient.recipeRole)) {
+      return `导出 JSON 前请补全${rowLabel}菜谱角色`;
     }
     if (ingredient.fuzzyText === "适量") {
       if (ingredient.quantity !== null || ingredient.unit !== null) return `导出 JSON 前请修正${rowLabel}的用量`;

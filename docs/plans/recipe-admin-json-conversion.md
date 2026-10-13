@@ -2,7 +2,7 @@
 
 单菜和批量统一使用 `recipe.import.batch.v1`，单菜时 `recipes` 数组长度为 1，每个 `recipes[]` 元素都是完整的 `{ recipe, wiki }`。
 
-Wiki 修订文件由菜谱管理页生成，并额外在 `recipe` 中包含数值型 `recipeId` 和 `contentVersionId`。通过 Wiki 导入入口回导时，服务端只读取这两个 ID 和 `wiki`，忽略菜谱正文；不得把带 ID 的修订文件提交到菜谱新建导入入口。
+Wiki 修订文件由菜谱管理页生成，并包含数值型 `recipeId` 和 `contentVersionId`。单独角色修订使用 `recipe.wiki.v1` 的 `recipeContent.ingredientRoles`；完整正文修订使用 `recipe.import.batch.v1`，每条食材也必须包含 `recipeRole`。通过 Wiki 导入入口回导时，服务端只读取版本 ID、Wiki 和所选正文字段；不得把带 ID 的修订文件提交到菜谱新建导入入口。若当前版本仍有未标注角色，完整修订文件导出会被拒绝，需先补齐角色。
 
 ## 1. 固定 JSON
 
@@ -27,9 +27,9 @@ Wiki 修订文件由菜谱管理页生成，并额外在 `recipe` 中包含数�
           "tips": "排骨先焯水。",
           "keywords": ["清淡", "家常", "炖煮", "海带", "海带排骨汤"],
           "ingredients": [
-            { "name": "排骨", "quantity": "500", "unit": "克", "fuzzyText": null, "categoryCode": "MEAT_POULTRY_EGG" },
-            { "name": "海带", "quantity": "200", "unit": "克", "fuzzyText": null, "categoryCode": "PRODUCE" },
-            { "name": "食盐", "quantity": null, "unit": null, "fuzzyText": "适量", "categoryCode": "SEASONING" }
+            { "name": "排骨", "quantity": "500", "unit": "克", "fuzzyText": null, "categoryCode": "MEAT_POULTRY_EGG", "recipeRole": "MAIN" },
+            { "name": "海带", "quantity": "200", "unit": "克", "fuzzyText": null, "categoryCode": "PRODUCE", "recipeRole": "ACCOMPANIMENT" },
+            { "name": "食盐", "quantity": null, "unit": null, "fuzzyText": "适量", "categoryCode": "SEASONING", "recipeRole": "SEASONING" }
           ],
           "tools": [
             { "name": "汤锅" }
@@ -192,7 +192,7 @@ Wiki 修订文件由菜谱管理页生成，并额外在 `recipe` 中包含数�
 | `content.duration` | 必填，使用加热烹饪时长枚举；不表示从切配到出锅的全流程耗时 |
 | `content.tips` | 必填字符串，格式见 2.5；无依据时写空字符串 `""`，可保存为草稿并产生错误项，补全前不得发布 |
 | `content.keywords` | 字段必须出现，正文关键词；用于前台展示、聚合和搜索 |
-| `content.ingredients` | 必填，至少一条 |
+| `content.ingredients` | 必填，至少一条；每条必须标注 `recipeRole` |
 | `content.tools` | 必填数组，尽量填写明确厨具；无法确认时使用 `[]`，不得填写猜测值 |
 | `content.steps` | 必填，至少一条；语义保留规则见 2.2 节 `steps[].text` |
 
@@ -204,6 +204,7 @@ Wiki 修订文件由菜谱管理页生成，并额外在 `recipe` 中包含数�
 | `ingredients[].name` | 来源食材名称；按标准化映射处理，见 2.2.1 |
 | `ingredients[].quantity / unit / fuzzyText` | 三个字段都必须出现；精确用量为“字符串数量 / 项目单位名称 / null”，模糊用量为“null / null / 适量” |
 | `ingredients[].categoryCode` | 有效 JSON 中必填稳定分类代码；无法确定时不生成有效 JSON，保留草稿标记 `NEEDS_FIX`，不得填 `null` 或 `UNCLASSIFIED` |
+| `ingredients[].recipeRole` | 必填；按该食材在这道菜中的实际作用填写 `MAIN / ACCOMPANIMENT / SEASONING`，规则见 2.2.3 |
 | `tools[].name` | 明确厨具；无依据填 `[]` |
 | `steps[].text` | 按顺序拆分核心操作；允许分句、去重和统一表达，但必须保留关键动作、用量、顺序和等待节点；不得出现“准备食材：”“处理主料：”“调好酱汁：”“下锅烹饪：”等前缀标签 |
 | `steps[].imageUrl` | 必须出现；无图为 `null` |
@@ -237,6 +238,27 @@ Wiki 修订文件由菜谱管理页生成，并额外在 `recipe` 中包含数�
 精确用量：`quantity` 为大于 0 的数字字符串，`unit` 为项目单位名称，`fuzzyText` 必须为 `null`。
 
 模糊用量：`quantity` 和 `unit` 为 `null`，`fuzzyText` 为 `"适量"`；来源的“少许”“几滴”“按需”等统一归一化。所有食材类别均可使用“适量”，菜谱食材分类不限制用量结构。
+
+#### 2.2.3 菜谱内食材角色
+
+`recipeRole` 描述食材在**当前这道菜**中的作用，不是食材库的全局属性。相同食材在不同菜谱中可以有不同角色；不得单凭 `categoryCode`、`proteinType`、`isStaple` 或食材名称决定角色，必须结合菜名、用量、介绍和步骤判断。
+
+| `recipeRole` | 中文 | 判定规则 |
+| --- | --- | --- |
+| `MAIN` | 主料 | 决定菜品主体或主要蛋白的食材。通常是菜名指向的核心食材，或在菜中份量/作用最突出的主体食材。 |
+| `ACCOMPANIMENT` | 配料 | 与主料共同构成菜品主体的食材，如配菜、搭配蔬菜或增加口感的食材；不是单纯用于调味。 |
+| `SEASONING` | 调味料 | 在这道菜中主要用于调味、增香、上色或烹调辅助的食材，包括盐、酱油、醋、油、香料，以及少量葱姜蒜等。 |
+
+判定要求：
+
+- 按菜谱中的实际用途标注，不按食材库分类标注。例如蒜在蒜蓉菜中可能是 `MAIN`，少量蒜末用于爆香时是 `SEASONING`。
+- `MAIN` 可有一项或多项。必须综合菜名、食材用量、介绍和步骤，按最合理的菜谱语义为每条食材选定一个角色；不因角色判断存在一定不确定性而留空或标记 `NEEDS_FIX`。
+- `SEASONING` 只排除出菜品主体、主要食材和主蛋白推导；仍保留在菜谱正文、营养计算、用量展示和购物准备中。
+- `PRIMARY_INGREDIENT` 从 `MAIN` 食材派生。主蛋白优先从 `MAIN` 中有可靠蛋白类型的食材推导；没有可靠依据时留空，不回退到食材数组顺序或调味料。
+- `ACCOMPANIMENT` 可用于蔬菜与食材多样性等结构分析，不自动替代主料或主蛋白。
+- 转换时必须根据菜谱自身信息完成推导并输出角色，不要求额外人工确认，也不调用独立 AI 服务。推导以菜谱实际用途为准，不得只按食材名称或全局分类机械套用。
+
+**导入兼容说明：**`recipe.import.batch.v1` 的菜谱食材必须带 `recipeRole`，后台 Wiki 修订也支持按 `ingredientRoles` 单独修订角色。角色修订沿用 SUPER_ADMIN Wiki 原位替换规则：正文版本 ID 不变，已引用该固定版本的周刊、收藏和计划读取到更新后的角色；修订写入审计并重算自动菜谱标签。`NEEDS_FIX` 仍按其他字段规则使用，不用于食材角色。
 
 **单位处理**：
 

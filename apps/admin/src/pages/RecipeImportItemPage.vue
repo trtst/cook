@@ -12,6 +12,8 @@ import {
   type RecipeImportImageSummary,
   type RecipeImportItemDetail,
   type RecipeImportRecipeBody,
+  type RecipeImportRecipeBodyUpdate,
+  type RecipeIngredientRole,
   type RecipeImportTagCode
 } from "@/apis/recipe";
 import {
@@ -50,6 +52,7 @@ interface EditIngredientRow {
   unitText: string;
   note: string;
   categoryCode: string | null;
+  recipeRole: RecipeIngredientRole | "";
 }
 
 interface EditStepRow {
@@ -78,6 +81,11 @@ const exportCoverHeight = 900;
 
 const servingOptions = Array.from({ length: 20 }, (_, index) => index + 1);
 const fuzzyOptions: FuzzyText[] = ["适量"];
+const recipeRoleOptions: Array<{ value: RecipeIngredientRole; label: string }> = [
+  { value: "MAIN", label: "主料" },
+  { value: "ACCOMPANIMENT", label: "配料" },
+  { value: "SEASONING", label: "调味料" }
+];
 const tagCodeOptions: Array<{ value: RecipeImportTagCode; label: string }> = [
   { value: "CUISINE", label: "菜系" },
   { value: "DISH_STYLE", label: "菜式" },
@@ -566,7 +574,8 @@ function resetFormFromDetail() {
         },
     unitText: item.unitText ?? "",
     note: item.note ?? "",
-    categoryCode: item.categoryCode ?? null
+    categoryCode: item.categoryCode ?? null,
+    recipeRole: item.recipeRole ?? ""
   }));
   form.ingredients.forEach(item => {
     const ingredient = item.ingredientId ? ingredientReferenceMap.value.get(item.ingredientId) : null;
@@ -672,7 +681,8 @@ function addIngredient() {
     },
     unitText: "",
     note: "",
-    categoryCode: null
+    categoryCode: null,
+    recipeRole: ""
   });
 }
 
@@ -961,7 +971,7 @@ function clearStepImage(index: number) {
   replaceStepPreviewUrl(step, null);
 }
 
-function buildRecipeBody(): RecipeImportRecipeBody {
+function buildRecipeBody(): RecipeImportRecipeBodyUpdate {
   return {
     inspirationCategoryId: form.inspirationCategoryId || null,
     title: form.title.trim(),
@@ -983,7 +993,8 @@ function buildRecipeBody(): RecipeImportRecipeBody {
       unitId: item.amount.kind === "EXACT" ? item.amount.unitId || null : null,
       fuzzyText: item.amount.kind === "FUZZY" ? item.amount.text : null,
       note: item.note.trim() ? item.note.trim() : null,
-      categoryCode: item.categoryCode
+      categoryCode: item.categoryCode,
+      recipeRole: item.recipeRole as RecipeIngredientRole
     })),
     steps: form.steps.map(item => ({
       text: item.text.trim(),
@@ -1011,6 +1022,10 @@ function buildRecipeBody(): RecipeImportRecipeBody {
 
 async function saveItem() {
   if (!detail.value) return;
+  if (form.ingredients.some(item => !item.recipeRole)) {
+    ElMessage.error("请为每条食材选择菜谱角色");
+    return;
+  }
   saving.value = true;
   try {
     detail.value = await recipeApi.updateImportItem(detail.value.id, {
@@ -1217,6 +1232,11 @@ onBeforeUnmount(() => {
               <el-form-item class="ingredient-row__kind" :error="formError(`ingredients.${index}.categoryCode`)">
                 <el-select v-model="item.categoryCode" placeholder="食材分类" :disabled="Boolean(item.ingredientId)" @change="updateIngredientCategory(index)">
                   <el-option v-for="category in ingredientCategories.filter(category => category.isSelectable)" :key="category.code" :label="category.name" :value="category.code" />
+                </el-select>
+              </el-form-item>
+              <el-form-item class="ingredient-row__kind" :error="formError(`ingredients.${index}.recipeRole`)">
+                <el-select v-model="item.recipeRole" placeholder="菜谱角色">
+                  <el-option v-for="option in recipeRoleOptions" :key="option.value" :label="option.label" :value="option.value" />
                 </el-select>
               </el-form-item>
               <el-form-item class="ingredient-row__kind">
@@ -1468,7 +1488,7 @@ onBeforeUnmount(() => {
 
 .ingredient-row {
   display: grid;
-  grid-template-columns: minmax(300px, 600px) 140px minmax(0, 120px) minmax(0, 140px) auto;
+  grid-template-columns: minmax(240px, 1.8fr) minmax(125px, 0.9fr) minmax(135px, 1fr) minmax(100px, 0.8fr) minmax(100px, 0.8fr) minmax(125px, 0.9fr) auto;
   gap: 12px;
   align-items: center;
   padding: 14px;
