@@ -3804,6 +3804,11 @@ export class RecipeImportIngredientDto {
   @ValidateIf((_object, value) => value !== null)
   @IsIn(["PRODUCE", "MEAT_POULTRY_EGG", "SEAFOOD", "SOY_DAIRY", "GRAINS_STAPLES", "SEASONING", "DRIED_PRESERVED", "BEVERAGE_ALCOHOL"])
   categoryCode!: string | null;
+
+  @ApiProperty({ enum: ["MAIN", "ACCOMPANIMENT", "SEASONING"] })
+  @IsDefined()
+  @IsIn(["MAIN", "ACCOMPANIMENT", "SEASONING"])
+  recipeRole!: string;
 }
 
 export class RecipeImportToolDto {

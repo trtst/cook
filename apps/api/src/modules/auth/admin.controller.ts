@@ -227,7 +227,9 @@ function toRecipeImportRecipeBody(content: UpdateRecipeImportItemDto["recipeBody
       unitText: item.unitText ?? null,
       unitId: item.unitId ?? null,
       fuzzyText: item.fuzzyText ?? null,
-      note: item.note ?? null
+      note: item.note ?? null,
+      categoryCode: item.categoryCode ?? null,
+      recipeRole: item.recipeRole as RecipeImportRecipeBody["ingredients"][number]["recipeRole"]
     })),
     steps: content.steps.map(item => ({
       text: item.text,

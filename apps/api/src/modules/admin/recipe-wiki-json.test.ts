@@ -39,6 +39,23 @@ test("parses a single Wiki export with recipe and content version IDs", () => {
   });
 });
 
+test("parses exported ingredient roles for a roles-only Wiki revision", () => {
+  const result = parseRecipeWikiDocument({
+    schemaVersion: "recipe.wiki.v1",
+    recipeId: 100,
+    contentVersionId: 200,
+    recipeContent: {
+      ingredientRoles: [{ ingredientId: 301, ingredientName: "虾皮", recipeRole: "SEASONING" }]
+    },
+    wiki: {}
+  }, new Set(["ingredientRoles"]));
+
+  assert.deepEqual(result.issues, []);
+  assert.deepEqual(result.items[0]?.recipeContent, {
+    ingredientRoles: [{ ingredientId: 301, ingredientName: "虾皮", recipeRole: "SEASONING" }]
+  });
+});
+
 test("keeps a malformed batch item separate from valid items", () => {
   const result = parseRecipeWikiDocument({
     schemaVersion: "recipe.wiki.batch.v1",

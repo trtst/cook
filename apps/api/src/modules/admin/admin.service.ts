@@ -187,7 +187,7 @@ const recipeWikiTagCodes = [
   "SPICE_LEVEL"
 ] as const;
 const recipeWikiReplaceFields: RecipeWikiReplaceField[] = [
-  "name", "story", "difficulty", "duration", "tips", "keywords", "ingredients", "tools", "steps", "tags", "assistant.steps"
+  "name", "story", "difficulty", "duration", "tips", "keywords", "ingredients", "ingredientRoles", "tools", "steps", "tags", "assistant.steps"
 ];
 
 function parseRecipeWikiReplaceFields(value?: string): Set<RecipeWikiReplaceField> {
@@ -4934,6 +4934,7 @@ export class AdminService {
           tools: recipeBody.tools ?? [],
           ingredients: recipeBody.ingredients.map(item => ({
             ingredientId: item.ingredientId as number,
+            recipeRole: item.recipeRole,
             amount: item.fuzzyText
               ? {
                   kind: "FUZZY",
@@ -5375,6 +5376,7 @@ export class AdminService {
             tools: importBody.tools ?? [],
             ingredients: importBody.ingredients.map(item => ({
               ingredientId: item.ingredientId!,
+              recipeRole: item.recipeRole,
               amount: item.fuzzyText
                 ? { kind: "FUZZY", text: item.fuzzyText }
                 : { kind: "EXACT", quantity: item.quantity ?? "", unitId: item.unitId! }
@@ -5797,6 +5799,9 @@ export class AdminService {
     }
 
     const contents = recipes.map(recipe => versionToContent(recipe.currentVersion));
+    if (contents.some(content => content.ingredients.some(item => !item.recipeRole))) {
+      throw new ConflictException("当前菜谱食材角色未完整标注，无法导出 Wiki 修订 JSON");
+    }
     const categoryIds = Array.from(new Set(contents.flatMap(content => content.ingredients.map(item => item.categoryId))));
     const ingredientCategories = categoryIds.length
       ? await this.prisma.ingredientCategory.findMany({ where: { id: { in: categoryIds } }, select: { id: true, code: true } })
@@ -5827,7 +5832,8 @@ export class AdminService {
                 quantity: item.amount.kind === "EXACT" ? item.amount.quantity : null,
                 unit: item.amount.kind === "EXACT" ? item.amount.unitName : null,
                 fuzzyText: item.amount.kind === "FUZZY" ? "适量" : null,
-                categoryCode: categoryCodeById.get(item.categoryId) ?? null
+                categoryCode: categoryCodeById.get(item.categoryId) ?? null,
+                recipeRole: item.recipeRole!
               })),
               tools: (content.tools ?? []).map(item => ({ name: item.name })),
               steps: content.steps.map(item => ({ text: item.text, imageUrl: item.imageUrl, imagePrompt: item.imagePrompt ?? null }))
@@ -6552,6 +6558,7 @@ export class AdminService {
     id: UUID;
     currentVersionId: UUID;
     currentVersion: {
+      ingredientsJson: Prisma.JsonValue;
       versionTags: Array<{ tagCode: string; tagValue: string }>;
       cookAssistant: { status: string; generatedAt: Date | null; snapshotJson: unknown } | null;
     };
@@ -6561,6 +6568,13 @@ export class AdminService {
       schemaVersion: "recipe.wiki.v1",
       recipeId: recipe.id,
       contentVersionId: recipe.currentVersionId,
+      recipeContent: {
+        ingredientRoles: fromJson<RecipeContentSnapshot["ingredients"]>(recipe.currentVersion.ingredientsJson).map(item => ({
+          ingredientId: item.ingredientId,
+          ingredientName: item.ingredientName,
+          recipeRole: item.recipeRole ?? null
+        }))
+      },
       wiki: {
         tags: recipe.currentVersion.versionTags
           .filter(item => (recipeWikiTagCodes as readonly string[]).includes(item.tagCode))
@@ -6657,6 +6671,9 @@ export class AdminService {
         : [];
       next.ingredients = rows.map((value, index) => {
         const name = (value.name as string).trim();
+        if (value.recipeRole !== "MAIN" && value.recipeRole !== "ACCOMPANIMENT" && value.recipeRole !== "SEASONING") {
+          throw new BadRequestException(`第 ${index + 1} 个食材必须标注主料、配料或调味料角色`);
+        }
         const ingredientMatches = [...(activeByKey.get(buildSearchKey(name))?.values() ?? [])];
         if (!ingredientMatches.length) throw new NotFoundException(`第 ${index + 1} 个食材“${name}”未匹配到启用中的系统食材`);
         if (ingredientMatches.length !== 1) throw new ConflictException(`第 ${index + 1} 个食材“${name}”匹配到多个系统食材`);
@@ -6665,7 +6682,7 @@ export class AdminService {
           throw new BadRequestException(`第 ${index + 1} 个食材分类与系统数据不一致`);
         }
         if (value.fuzzyText === "适量") {
-          return { ingredientId: ingredient.id, ingredientName: ingredient.name, source: "SYSTEM", categoryId: ingredient.categoryId, categoryCode: ingredient.category.code, amount: { kind: "FUZZY", text: "适量" } };
+          return { ingredientId: ingredient.id, ingredientName: ingredient.name, source: "SYSTEM", categoryId: ingredient.categoryId, categoryCode: ingredient.category.code, recipeRole: value.recipeRole, amount: { kind: "FUZZY", text: "适量" } };
         }
         if (typeof value.quantity !== "string" || value.quantity.length > 64 || !isValidWikiRecipeQuantity(value.quantity) || typeof value.unit !== "string" || !value.unit.trim()) {
           throw new BadRequestException(`第 ${index + 1} 个食材的用量或单位不完整`);
@@ -6679,8 +6696,27 @@ export class AdminService {
           source: "SYSTEM",
           categoryId: ingredient.categoryId,
           categoryCode: ingredient.category.code,
+          recipeRole: value.recipeRole,
           amount: { kind: "EXACT", quantity: value.quantity.trim(), unitId: unit.id, unitName: unit.name, unitType: unit.type }
         };
+      });
+    }
+    if (selectedFields.has("ingredientRoles")) {
+      const roleRows = raw.ingredientRoles;
+      if (!Array.isArray(roleRows) || roleRows.length !== next.ingredients.length) {
+        throw new BadRequestException("食材角色列表必须与当前菜谱食材逐行对应");
+      }
+      next.ingredients = next.ingredients.map((ingredient, index) => {
+        const row = roleRows[index];
+        if (!row || typeof row !== "object" || Array.isArray(row)) throw new BadRequestException(`第 ${index + 1} 个食材角色格式不正确`);
+        const roleRow = row as Record<string, unknown>;
+        if (roleRow.ingredientId !== ingredient.ingredientId || roleRow.ingredientName !== ingredient.ingredientName) {
+          throw new ConflictException(`第 ${index + 1} 个食材角色与当前正文不匹配`);
+        }
+        if (roleRow.recipeRole !== "MAIN" && roleRow.recipeRole !== "ACCOMPANIMENT" && roleRow.recipeRole !== "SEASONING") {
+          throw new BadRequestException(`第 ${index + 1} 个食材必须标注主料、配料或调味料角色`);
+        }
+        return { ...ingredient, recipeRole: roleRow.recipeRole };
       });
     }
     if (selectedFields.has("steps")) {
@@ -6712,7 +6748,7 @@ export class AdminService {
       ...(selectedFields.has("tips") ? { tips: next.tips } : {}),
       ...(selectedFields.has("keywords") ? { keywordsJson: toJson(next.keywords) } : {}),
       ...(selectedFields.has("tools") ? { toolsJson: toJson(next.tools ?? []) } : {}),
-      ...(selectedFields.has("ingredients") ? { ingredientsJson: toJson(next.ingredients) } : {}),
+      ...(selectedFields.has("ingredients") || selectedFields.has("ingredientRoles") ? { ingredientsJson: toJson(next.ingredients) } : {}),
       ...(selectedFields.has("steps") ? { stepsJson: toJson(next.steps), imagesJson: toJson({ coverImageUrl: recipe.coverImageUrl, stepImages: next.steps.map((step, index) => ({ index, imageUrl: step.imageUrl })).filter(step => step.imageUrl) }) } : {}),
       searchText: buildRecipeSearchText(next),
       contentSizeBytes: contentSizeBytes(next)
@@ -6730,7 +6766,7 @@ export class AdminService {
       await tx.recipeNutritionSnapshot.deleteMany({ where: { recipeVersionId: item.contentVersionId } });
       await loadRecipeNutritionSummary(tx, item.contentVersionId, next);
     }
-    if (["name", "story", "ingredients", "steps"].some(field => selectedFields.has(field as RecipeWikiReplaceField))) {
+    if (["name", "story", "ingredients", "ingredientRoles", "steps"].some(field => selectedFields.has(field as RecipeWikiReplaceField))) {
       await replaceAutoRecipeVersionTags(tx, item.contentVersionId, next);
     }
     return next;
@@ -6747,9 +6783,12 @@ export class AdminService {
       where: { id: item.recipeId },
       include: { currentVersion: { include: { cookAssistant: true } } }
     });
-    if (!recipe || recipe.status !== "ACTIVE") throw new NotFoundException("菜谱不存在或不是正常状态");
-    if (recipe.currentVersionId !== item.contentVersionId) throw new ConflictException("菜谱正文版本已变化，请重新导出");
     const selectedFields = options.selectedFields ?? new Set<RecipeWikiReplaceField>(["tags", "assistant.steps"]);
+    const ingredientOnlyRepair = selectedFields.size === 1 && (selectedFields.has("ingredients") || selectedFields.has("ingredientRoles"));
+    if (!recipe || (recipe.status !== "ACTIVE" && !(ingredientOnlyRepair && recipe.status === "BLOCKED"))) {
+      throw new NotFoundException("菜谱不存在或不是正常状态");
+    }
+    if (recipe.currentVersionId !== item.contentVersionId) throw new ConflictException("菜谱正文版本已变化，请重新导出");
     const updatedContent = await this.replaceRecipeContentFields(tx, recipe, item, selectedFields);
     const candidate = selectedFields.has("assistant.steps") ? buildImportedRecipeAssistantSnapshot(item.assistantSteps) : null;
     if (candidate && !this.isRecipeAssistantCandidateReady(candidate)) throw new BadRequestException("Wiki 助理步骤不完整，不能保存为 READY");
@@ -8144,7 +8183,8 @@ export class AdminService {
         unitId: item.fuzzyText ? null : item.unitId ?? null,
         fuzzyText: item.fuzzyText ? "适量" : null,
         note: item.note?.trim() || null,
-        categoryCode: item.categoryCode?.trim() || null
+        categoryCode: item.categoryCode?.trim() || null,
+        recipeRole: item.recipeRole
       })),
       steps: body.steps.map(item => ({
         text: item.text.trim(),
@@ -8595,6 +8635,7 @@ export class AdminService {
             ingredientName: ingredient.name,
             source: "SYSTEM",
             categoryId: ingredient.categoryId,
+            ...(item.recipeRole ? { recipeRole: item.recipeRole } : {}),
             amount: {
               kind: "FUZZY",
               text: item.amount.text
@@ -8608,6 +8649,7 @@ export class AdminService {
           ingredientName: ingredient.name,
           source: "SYSTEM",
           categoryId: ingredient.categoryId,
+          ...(item.recipeRole ? { recipeRole: item.recipeRole } : {}),
           amount: {
             kind: "EXACT",
             quantity: item.amount.quantity.trim(),

@@ -1043,6 +1043,8 @@ POST /admin/recipe-wiki/{recipeId}/reject
 
 菜谱导入接口接收批量选择的 `.json` / `.zip`，字段为 `files[]`；单菜使用 `recipe.import.v1`，批次使用 `recipe.import.batch.v1.recipes[]`，每道菜独立创建待审核项。ZIP 只允许 JSON；单 JSON 不超过 10 MB，展开后最多 100 道菜、总 JSON 不超过 20 MB；不支持 Markdown 或 Excel。`GET /admin/recipes/{recipeId}` 的后台详情返回当前正文版本、工具、业务标签、营养分析、做饭助手 Wiki 和七个 Wiki 质量卡；质量卡按当前版本实时返回状态、分数和阻断原因。
 
+每条导入食材必须提交 `recipeRole`，枚举为 `MAIN / ACCOMPANIMENT / SEASONING`；角色属于菜谱上下文，不改变全局食材属性。Wiki 导出包含 `recipeContent.ingredientRoles`（逐条食材的 ID、名称和现有角色；尚未标注的角色为 `null`），可直接用于角色修订。`POST /admin/recipe-wiki/import` 可通过 `fields=["ingredientRoles"]` 只替换角色，`recipeContent.ingredientRoles` 必须与当前版本食材等长且按 `ingredientId + ingredientName` 逐行一致。该原位修订要求 SUPER_ADMIN，保持 `contentVersionId` 不变、递增菜谱版本并写审计；仅此角色修订可作用于 ACTIVE 或 BLOCKED 菜谱，且自动标签按主料重算，不重建用量索引或营养快照。
+
 `DELETE /admin/recipe-import-items/{itemId}` 接收 `expectedVersion`，只删除一条 JSON 导入记录，保留关联的正式菜谱，并更新任务统计与审计。已关联正式菜谱的导入条目不可再编辑；重复发布返回该条目及原 `recipeId`，不得重复创建菜谱。导入菜谱只有完整 Wiki 才能发布。
 
 `GET /admin/recipes` 的菜谱摘要增加 `hasWikiCandidate`。`POST /admin/recipes/wiki/confirm-candidates` 最多接收 100 个已勾选菜谱 ID，批量确认当前版本候选标签并锁定；完整助理步骤同时发布为 `READY`，不完整助理步骤保留待复核。系统菜谱详情返回 `assistantCandidate`；`PUT /admin/recipes/{recipeId}/wiki-candidate` 可编辑当前版本候选标签与助理步骤，要求 `expectedContentVersionId` 与当前正文版本一致，编辑只替换候选标签并保留已确认及自动推导标签，编辑后仍为候选。写入要求 `SUPER_ADMIN` 和数字字符串 `Idempotency-Key`。

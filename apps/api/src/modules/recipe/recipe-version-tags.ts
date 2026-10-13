@@ -80,9 +80,18 @@ function isMainProteinIngredient(fact: IngredientTagFact | undefined) {
 }
 
 function resolvePrimaryIngredientIds(
-  ingredientIds: UUID[],
+  ingredients: RecipeContentSnapshot["ingredients"],
   ingredientFacts: Map<UUID, IngredientTagFact>
 ) {
+  const hasRoles = ingredients.some(item => item.recipeRole !== undefined);
+  if (hasRoles) {
+    return ingredients
+      .filter(item => item.recipeRole === "MAIN")
+      .map(item => item.ingredientId)
+      .filter((id): id is UUID => typeof id === "number" && id > 0)
+      .slice(0, 3);
+  }
+  const ingredientIds = ingredients.map(item => item.ingredientId).filter((id): id is UUID => typeof id === "number" && id > 0);
   const proteinIds = ingredientIds.filter(id => {
     const fact = ingredientFacts.get(id);
     const proteinType = mapIngredientProteinType(fact?.proteinType ?? null);
@@ -117,13 +126,22 @@ export function inferRecipeVersionTagSnapshot(
   ingredientFacts: Map<UUID, IngredientTagFact> = new Map()
 ): RecipeVersionTagInference {
   const ingredientText = content.ingredients
-    .filter(item => !item.ingredientId || !ingredientFacts.has(item.ingredientId) || isMainProteinIngredient(ingredientFacts.get(item.ingredientId)))
+    .filter(item => item.recipeRole
+      ? item.recipeRole !== "SEASONING"
+      : !item.ingredientId || !ingredientFacts.has(item.ingredientId) || isMainProteinIngredient(ingredientFacts.get(item.ingredientId)))
     .map(item => item.ingredientName)
     .join(" ");
   const text = `${content.name} ${content.story ?? ""} ${ingredientText} ${content.steps.map(item => item.text).join(" ")}`;
   const ingredientIds = content.ingredients
     .map(item => item.ingredientId ?? null)
     .filter((item): item is UUID => typeof item === "number" && item > 0);
+  const hasRoles = content.ingredients.some(item => item.recipeRole !== undefined);
+  const proteinText = hasRoles
+    ? content.ingredients.filter(item => item.recipeRole === "MAIN").map(item => item.ingredientName).join(" ")
+    : text;
+  const mainIngredientIds = hasRoles
+    ? content.ingredients.filter(item => item.recipeRole === "MAIN").map(item => item.ingredientId).filter((id): id is UUID => typeof id === "number" && id > 0)
+    : ingredientIds;
   const normalizedNames = content.ingredients.map(item => normalizeNameKey(item.ingredientName));
 
   const mealTypes: RecipeVersionTagSnapshot["mealTypes"] =
@@ -133,7 +151,7 @@ export function inferRecipeVersionTagSnapshot(
 
   let mainProteinType: RecipeVersionTagSnapshot["mainProteinType"] = null;
   let hasMappedProteinFact = false;
-  for (const ingredientId of ingredientIds) {
+  for (const ingredientId of mainIngredientIds) {
     const fact = ingredientFacts.get(ingredientId);
     if (!isMainProteinIngredient(fact)) continue;
     const mapped = mapIngredientProteinType(fact?.proteinType ?? null);
@@ -144,15 +162,15 @@ export function inferRecipeVersionTagSnapshot(
     }
   }
   if (!mainProteinType) {
-    if (/(牛肉|肥牛|牛腩|牛排)/.test(text)) mainProteinType = "BEEF";
-    else if (/(羊肉|羊排|羊蝎子)/.test(text)) mainProteinType = "LAMB";
-    else if (/(鸡肉|鸡翅|鸡腿|鸡胸|鸡丁)/.test(text)) mainProteinType = "CHICKEN";
-    else if (/(鸭肉|鸭腿|鸭翅|鸭血|烤鸭)/.test(text)) mainProteinType = "DUCK";
-    else if (/(草鱼|鲤鱼|鲫鱼|带鱼|鲈鱼|三文鱼|鳕鱼|金枪鱼|罗非鱼|黄花鱼|秋刀鱼|鳗鱼|鲳鱼|鲢鱼|鳜鱼|鲶鱼|武昌鱼|巴沙鱼|多宝鱼|石斑鱼|鲅鱼)/.test(text)) mainProteinType = "FISH";
-    else if (/(虾|蟹|贝|蛤|蚝|鲍鱼|鱿鱼|墨鱼|海鲜)/.test(text)) mainProteinType = "SEAFOOD";
-    else if (/(猪肉|排骨|五花肉|里脊|肉末|肉丝|肉片|腊肠)/.test(text)) mainProteinType = "PORK";
-    else if (/(鸡蛋|鸭蛋|鹅蛋|鹌鹑蛋|皮蛋|咸蛋|松花蛋)/.test(text)) mainProteinType = "EGG";
-    else if (/(豆腐|豆皮|腐竹|豆干|豆浆|黄豆|黑豆|鹰嘴豆)/.test(text)) mainProteinType = "PLANT";
+    if (/(牛肉|肥牛|牛腩|牛排)/.test(proteinText)) mainProteinType = "BEEF";
+    else if (/(羊肉|羊排|羊蝎子)/.test(proteinText)) mainProteinType = "LAMB";
+    else if (/(鸡肉|鸡翅|鸡腿|鸡胸|鸡丁)/.test(proteinText)) mainProteinType = "CHICKEN";
+    else if (/(鸭肉|鸭腿|鸭翅|鸭血|烤鸭)/.test(proteinText)) mainProteinType = "DUCK";
+    else if (/(草鱼|鲤鱼|鲫鱼|带鱼|鲈鱼|三文鱼|鳕鱼|金枪鱼|罗非鱼|黄花鱼|秋刀鱼|鳗鱼|鲳鱼|鲢鱼|鳜鱼|鲶鱼|武昌鱼|巴沙鱼|多宝鱼|石斑鱼|鲅鱼)/.test(proteinText)) mainProteinType = "FISH";
+    else if (/(虾|蟹|贝|蛤|蚝|鲍鱼|鱿鱼|墨鱼|海鲜)/.test(proteinText)) mainProteinType = "SEAFOOD";
+    else if (/(猪肉|排骨|五花肉|里脊|肉末|肉丝|肉片|腊肠)/.test(proteinText)) mainProteinType = "PORK";
+    else if (/(鸡蛋|鸭蛋|鹅蛋|鹌鹑蛋|皮蛋|咸蛋|松花蛋)/.test(proteinText)) mainProteinType = "EGG";
+    else if (/(豆腐|豆皮|腐竹|豆干|豆浆|黄豆|黑豆|鹰嘴豆)/.test(proteinText)) mainProteinType = "PLANT";
   }
 
   const dishRoles = new Set<RecipeVersionTagSnapshot["dishRoles"][number]>();
@@ -171,7 +189,7 @@ export function inferRecipeVersionTagSnapshot(
     else dishRoles.add("VEGETABLE");
   }
 
-  const primaryIngredientIds = resolvePrimaryIngredientIds(ingredientIds, ingredientFacts);
+  const primaryIngredientIds = resolvePrimaryIngredientIds(content.ingredients, ingredientFacts);
 
   const flavorProfile = new Set<string>();
   if (/不辣|清淡/.test(text)) flavorProfile.add("LIGHT");

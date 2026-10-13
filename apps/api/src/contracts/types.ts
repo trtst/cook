@@ -1636,7 +1636,10 @@ export interface AdminRecipeImageUploadResponse {
 export interface RecipeIngredientInput {
   ingredientId: UUID;
   amount: RecipeAmountInput;
+  recipeRole?: RecipeIngredientRole;
 }
+
+export type RecipeIngredientRole = "MAIN" | "ACCOMPANIMENT" | "SEASONING";
 
 export interface RecipeDraftIngredientInput {
   ingredientId: UUID | null;
@@ -1655,6 +1658,7 @@ export interface RecipeIngredientSnapshot {
   source: IngredientSource;
   categoryId: UUID;
   categoryCode?: string | null;
+  recipeRole?: RecipeIngredientRole;
   amount: RecipeAmountSnapshot;
 }
 
@@ -2150,6 +2154,13 @@ export interface AdminRecipeWikiExportDocument {
   schemaVersion: "recipe.wiki.v1";
   recipeId: UUID;
   contentVersionId: UUID;
+  recipeContent: {
+    ingredientRoles: Array<{
+      ingredientId: UUID;
+      ingredientName: string;
+      recipeRole: RecipeIngredientRole | null;
+    }>;
+  };
   wiki: {
     tags: RecipeImportTagDraft[];
     assistant: { steps: RecipeImportAssistantStepDraft[] };
@@ -2183,6 +2194,7 @@ export interface AdminRecipeWikiRevisionExportDocument {
           unit: string | null;
           fuzzyText: "适量" | null;
           categoryCode: string | null;
+          recipeRole: RecipeIngredientRole;
         }>;
         tools: Array<{ name: string }>;
         steps: Array<{ text: string; imageUrl: string | null; imagePrompt: string | null }>;
@@ -2441,6 +2453,7 @@ export interface RecipeImportIngredientDraft {
   fuzzyText: "适量" | null;
   note: string | null;
   categoryCode?: string | null;
+  recipeRole?: RecipeIngredientRole;
 }
 
 export interface RecipeImportStepDraft {

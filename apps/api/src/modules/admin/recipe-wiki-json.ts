@@ -23,6 +23,7 @@ export type RecipeWikiReplaceField =
   | "tips"
   | "keywords"
   | "ingredients"
+  | "ingredientRoles"
   | "tools"
   | "steps"
   | "tags"
@@ -271,8 +272,8 @@ export function parseRecipeWikiDocument(
     return { items, invalidItems, issues };
   }
   if (schemaVersion === "recipe.wiki.v1") {
-    assertKnownKeys(document, new Set(["schemaVersion", "recipeId", "contentVersionId", "wiki"]), "", issues);
-    const item = parseItem({ recipeId: document.recipeId, contentVersionId: document.contentVersionId, wiki: document.wiki }, "recipe", issues, selectedFields);
+    assertKnownKeys(document, new Set(["schemaVersion", "recipeId", "contentVersionId", "recipeContent", "wiki"]), "", issues);
+    const item = parseItem({ recipeId: document.recipeId, contentVersionId: document.contentVersionId, recipeContent: document.recipeContent, wiki: document.wiki }, "recipe", issues, selectedFields);
     return { items: item ? [item] : [], invalidItems: [], issues };
   }
   if (schemaVersion === "recipe.wiki.batch.v1") {

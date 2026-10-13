@@ -81,6 +81,25 @@ test("seasoning seafood facts do not become the recipe main protein", () => {
   assert.equal(tags.some(tag => tag.tagCode === "MAIN_PROTEIN_TYPE"), false);
 });
 
+test("role-aware protein inference ignores seafood seasonings in all recipe text", () => {
+  const recipe = content("虾皮炒青菜", 4063, "虾皮");
+  recipe.story = "加入虾皮提鲜。";
+  recipe.steps = [{ text: "放入虾皮和青菜翻炒。", imageUrl: null }];
+  recipe.ingredients = [
+    { ...recipe.ingredients[0]!, recipeRole: "SEASONING" },
+    { ingredientId: 5001, ingredientName: "青菜", source: "SYSTEM", categoryId: 1, recipeRole: "MAIN", amount: { kind: "FUZZY", text: "适量" } }
+  ];
+
+  const tags = buildAutoRecipeVersionTags(recipe, new Map([
+    [4063, { id: 4063, proteinType: "SEAFOOD", categoryCode: "DRIED_PRESERVED", isStaple: false, isSpicyIngredient: false, aliases: [] }],
+    [5001, { id: 5001, proteinType: "PLANT", categoryCode: "PRODUCE", isStaple: false, isSpicyIngredient: false, aliases: [] }]
+  ]));
+
+  assert.equal(tags.some(tag => tag.tagCode === "MAIN_PROTEIN_TYPE"), false);
+  assert.equal(tags.some(tag => tag.tagCode === "PRIMARY_INGREDIENT" && tag.tagValue === "4063"), false);
+  assert.equal(tags.some(tag => tag.tagCode === "PRIMARY_INGREDIENT" && tag.tagValue === "5001"), true);
+});
+
 test("manual protein facts suppress conflicting automatic protein tags", () => {
   const filtered = filterAutoRecipeVersionTags(
     [{ tagCode: "MAIN_PROTEIN_TYPE", tagValue: "FISH", source: "AUTO", status: "CANDIDATE" }],

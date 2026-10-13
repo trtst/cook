@@ -1774,16 +1774,28 @@ export class AdminRecipeWikiExportWikiModel {
   @ApiProperty({ type: AdminRecipeWikiExportAssistantModel }) assistant!: AdminRecipeWikiExportAssistantModel;
 }
 
+export class AdminRecipeWikiIngredientRoleModel {
+  @ApiProperty(uuid) ingredientId!: string;
+  @ApiProperty({ type: String }) ingredientName!: string;
+  @ApiProperty({ type: String, nullable: true, enum: ["MAIN", "ACCOMPANIMENT", "SEASONING"] }) recipeRole!: string | null;
+}
+
+export class AdminRecipeWikiIngredientRolesModel {
+  @ApiProperty({ type: [AdminRecipeWikiIngredientRoleModel] }) ingredientRoles!: AdminRecipeWikiIngredientRoleModel[];
+}
+
 export class AdminRecipeWikiExportDocumentModel {
   @ApiProperty({ type: String, enum: ["recipe.wiki.v1"] }) schemaVersion!: string;
   @ApiProperty(uuid) recipeId!: string;
   @ApiProperty(uuid) contentVersionId!: string;
+  @ApiProperty({ type: AdminRecipeWikiIngredientRolesModel }) recipeContent!: AdminRecipeWikiIngredientRolesModel;
   @ApiProperty({ type: AdminRecipeWikiExportWikiModel }) wiki!: AdminRecipeWikiExportWikiModel;
 }
 
 export class AdminRecipeWikiBatchExportItemModel {
   @ApiProperty(uuid) recipeId!: string;
   @ApiProperty(uuid) contentVersionId!: string;
+  @ApiProperty({ type: AdminRecipeWikiIngredientRolesModel }) recipeContent!: AdminRecipeWikiIngredientRolesModel;
   @ApiProperty({ type: AdminRecipeWikiExportWikiModel }) wiki!: AdminRecipeWikiExportWikiModel;
 }
 
@@ -1798,6 +1810,7 @@ export class AdminRecipeWikiRevisionIngredientModel {
   @ApiProperty({ type: String, nullable: true }) unit!: string | null;
   @ApiProperty({ type: String, nullable: true, enum: ["适量"] }) fuzzyText!: "适量" | null;
   @ApiProperty({ type: String, nullable: true }) categoryCode!: string | null;
+  @ApiProperty({ type: String, enum: ["MAIN", "ACCOMPANIMENT", "SEASONING"] }) recipeRole!: string;
 }
 
 export class AdminRecipeWikiRevisionToolModel {
@@ -1973,6 +1986,8 @@ export class RecipeImportIngredientModel {
     ]
   })
   categoryCode!: string | null;
+  @ApiPropertyOptional({ type: String, enum: ["MAIN", "ACCOMPANIMENT", "SEASONING"] })
+  recipeRole?: string;
 }
 
 export class RecipeImportStepModel {

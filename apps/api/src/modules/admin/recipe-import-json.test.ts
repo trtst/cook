@@ -41,8 +41,8 @@ function validDocument() {
         tips: "排骨先焯水。",
         keywords: [],
         ingredients: [
-          { name: "排骨", quantity: "500", unit: "克", fuzzyText: null, categoryCode: "MEAT_POULTRY_EGG" },
-          { name: "海带", quantity: "200", unit: "克", fuzzyText: null, categoryCode: "PRODUCE" }
+          { name: "排骨", quantity: "500", unit: "克", fuzzyText: null, categoryCode: "MEAT_POULTRY_EGG", recipeRole: "MAIN" },
+          { name: "海带", quantity: "200", unit: "克", fuzzyText: null, categoryCode: "PRODUCE", recipeRole: "ACCOMPANIMENT" }
         ],
         tools: [{ name: "汤锅" }],
         steps: [{ text: "排骨焯水后洗净。", imageUrl: null, imagePrompt: "锅中焯水后的排骨盛在白瓷碗中，真实中式家常烹饪场景，不出现文字" }]
@@ -92,6 +92,18 @@ test("parses recipe.import.v1 and strictly matches ingredient and unit names", (
   assert.equal(result.recipeBody.assistantSteps?.[0]?.action, "BLANCH");
 });
 
+test("requires a recipe role on every imported ingredient", () => {
+  const document = validDocument() as Record<string, any>;
+  delete document.recipe.content.ingredients[0].recipeRole;
+
+  const result = parseJsonSource(
+    { sourcePath: "missing-role.json", jsonText: JSON.stringify(document) },
+    refs
+  );
+
+  assert.equal(result.errorItems.some(item => item.field === "recipe.content.ingredients.0.recipeRole"), true);
+});
+
 test("recognizes generated import ingredient placeholders before materialization", () => {
   assert.equal(isImportedIngredientPlaceholder("导入食材-1788936333414"), true);
   assert.equal(isImportedIngredientPlaceholder("排骨"), false);
@@ -115,7 +127,12 @@ test("accepts the converted beef stir-fry example as recipe.import.v1", () => {
       { name: "香菜", quantity: "30", unit: "克" },
       { name: "食用油", quantity: "15", unit: "毫升" },
       { name: "酱油", quantity: "6", unit: "毫升" }
-    ].map(item => ({ ...item, fuzzyText: null, categoryCode: item.name === "牛里脊" ? "MEAT_POULTRY_EGG" : "PRODUCE" })),
+    ].map(item => ({
+      ...item,
+      fuzzyText: null,
+      categoryCode: item.name === "牛里脊" ? "MEAT_POULTRY_EGG" : "PRODUCE",
+      recipeRole: item.name === "牛里脊" ? "MAIN" : item.name === "芹菜" ? "ACCOMPANIMENT" : "SEASONING"
+    })),
     tools: [{ name: "炒锅" }, { name: "锅铲" }],
     steps: [
       { text: "牛里脊切成不超过3cm宽、3mm厚的薄片，倒入6ml酱油抓匀备用。", imageUrl: null },
@@ -177,7 +194,7 @@ test("accepts the converted beef stir-fry example as recipe.import.v1", () => {
 test("requires complete source content and rejects fuzzy text in quantity", () => {
   const document = validDocument();
   document.recipe.content.story = "";
-  document.recipe.content.ingredients[0] = { name: "排骨", quantity: "适量", unit: "克", fuzzyText: null, categoryCode: "MEAT_POULTRY_EGG" };
+  document.recipe.content.ingredients[0] = { name: "排骨", quantity: "适量", unit: "克", fuzzyText: null, categoryCode: "MEAT_POULTRY_EGG", recipeRole: "MAIN" };
 
   const result = parseJsonSource(
     { sourcePath: "incomplete.json", jsonText: JSON.stringify(document) },
@@ -213,7 +230,8 @@ test("accepts 适量 for every JSON ingredient category", () => {
     unitId: null,
     fuzzyText: "适量",
     note: null,
-    categoryCode: "SEASONING"
+    categoryCode: "SEASONING",
+    recipeRole: "ACCOMPANIMENT"
   });
   assert.deepEqual(rebuildJsonItemState(result.recipeBody).errorItems, []);
 });
@@ -394,8 +412,8 @@ test("allows multiple distinct meal-type candidates", () => {
 test("normalizes only explicit kg and L quantities to the fixed project units", () => {
   const document = validDocument();
   document.recipe.content.ingredients = [
-    { name: "排骨", quantity: "1.5", unit: "kg", fuzzyText: null, categoryCode: "MEAT_POULTRY_EGG" },
-    { name: "海带", quantity: "0.5", unit: "L", fuzzyText: null, categoryCode: "PRODUCE" }
+    { name: "排骨", quantity: "1.5", unit: "kg", fuzzyText: null, categoryCode: "MEAT_POULTRY_EGG", recipeRole: "MAIN" },
+    { name: "海带", quantity: "0.5", unit: "L", fuzzyText: null, categoryCode: "PRODUCE", recipeRole: "ACCOMPANIMENT" }
   ];
 
   const result = parseJsonSource(
@@ -412,7 +430,7 @@ test("normalizes only explicit kg and L quantities to the fixed project units", 
 
 test("keeps unmatched source rows for manual confirmation and rejects unknown tool fields", () => {
   const document = validDocument();
-  document.recipe.content.ingredients[0] = { name: "未知食材", quantity: "100", unit: "克", fuzzyText: null, categoryCode: "PRODUCE" };
+  document.recipe.content.ingredients[0] = { name: "未知食材", quantity: "100", unit: "克", fuzzyText: null, categoryCode: "PRODUCE", recipeRole: "MAIN" };
   document.recipe.content.tools = [{ name: "汤锅", material: "不应导入" } as { name: string }];
 
   const result = parseJsonSource(

@@ -59,7 +59,8 @@ const contentKeys = new Set([
   "steps"
 ]);
 const wikiKeys = new Set(["tags", "assistant"]);
-const ingredientKeys = new Set(["name", "quantity", "unit", "fuzzyText", "categoryCode"]);
+const ingredientKeys = new Set(["name", "quantity", "unit", "fuzzyText", "categoryCode", "recipeRole"]);
+const recipeRoles = new Set(["MAIN", "ACCOMPANIMENT", "SEASONING"]);
 const toolKeys = new Set(["name"]);
 const stepKeys = new Set(["text", "imageUrl", "imagePrompt"]);
 const tagKeys = new Set(["tagCode", "tagValue"]);
@@ -384,9 +385,11 @@ export function parseJsonSource(source: RecipeImportJsonSource, refs: RecipeImpo
     const quantity = isFuzzy ? null : exactQuantity(row.quantity, `${field}.quantity`, errors);
     const sourceUnit = isFuzzy ? "" : typeof row.unit === "string" ? row.unit.trim() : "";
     const categoryCode = typeof row.categoryCode === "string" ? row.categoryCode.trim() : "";
+    const recipeRole = typeof row.recipeRole === "string" ? row.recipeRole.trim() : "";
     if (!name) addIssue(errors, `${field}.name`, "食材名称不能为空");
     if (!isFuzzy && !sourceUnit) addIssue(errors, `${field}.unit`, "单位不能为空，无法确认时待人工确认");
     if (!ingredientCategoryCodes.has(categoryCode)) addIssue(errors, `${field}.categoryCode`, "食材分类代码不支持");
+    if (!recipeRoles.has(recipeRole)) addIssue(errors, `${field}.recipeRole`, "必须标注 MAIN、ACCOMPANIMENT 或 SEASONING");
     const unitAlias = unitAliasMap.get(sourceUnit.toLowerCase());
     const unitName = unitAlias?.name ?? sourceUnit;
     const normalizedQuantity = quantity && unitAlias ? scaleQuantity(quantity, unitAlias.factor) : quantity;
@@ -403,7 +406,8 @@ export function parseJsonSource(source: RecipeImportJsonSource, refs: RecipeImpo
       unitId: unit?.id ?? null,
       fuzzyText: isFuzzy ? "适量" : null,
       note: null,
-      categoryCode: ingredientCategoryCodes.has(categoryCode) ? categoryCode : null
+      categoryCode: ingredientCategoryCodes.has(categoryCode) ? categoryCode : null,
+      recipeRole: recipeRoles.has(recipeRole) ? recipeRole as RecipeImportRecipeBody["ingredients"][number]["recipeRole"] : undefined
     });
   });
 
