@@ -64,35 +64,70 @@ export interface HomeTopicRecipeSearchResponse {
   hasNext: boolean;
 }
 
-export interface HomeTopicRecipeStatsFacet { value: string; count: number }
+export interface HomeTopicRecipeStatsFacet {
+  value: string;
+  count: number;
+  shareOfTotal: number;
+  shareOfConfirmed: number;
+}
+
+export interface HomeTopicRecipeStatsDimension {
+  confirmedCount: number;
+  missingCount: number;
+  coverageRate: number;
+  values: HomeTopicRecipeStatsFacet[];
+}
 
 export interface HomeTopicRecipeStatsSnapshot {
   snapshotId: string;
   generatedAt: string;
-  eligibleRecipeCount: number;
-  coverage: {
-    ingredients: number;
-    primaryIngredients: number;
-    cuisines: number;
-    dishStyles: number;
-    dishRoles: number;
-    proteins: number;
-    difficulties: number;
-    durations: number;
-  };
+  totalPublicRecipes: number;
   facets: {
-    allIngredients: HomeTopicRecipeStatsFacet[];
-    primaryIngredients: HomeTopicRecipeStatsFacet[];
-    cuisines: HomeTopicRecipeStatsFacet[];
-    dishStyles: HomeTopicRecipeStatsFacet[];
-    dishRoles: HomeTopicRecipeStatsFacet[];
-    proteins: HomeTopicRecipeStatsFacet[];
-    difficulties: HomeTopicRecipeStatsFacet[];
-    durations: HomeTopicRecipeStatsFacet[];
+    allIngredients: HomeTopicRecipeStatsDimension;
+    primaryIngredients: HomeTopicRecipeStatsDimension;
+    cuisines: HomeTopicRecipeStatsDimension;
+    dishStyles: HomeTopicRecipeStatsDimension;
+    dishRoles: HomeTopicRecipeStatsDimension;
+    proteins: HomeTopicRecipeStatsDimension;
+    difficulties: HomeTopicRecipeStatsDimension;
+    durations: HomeTopicRecipeStatsDimension;
+  };
+  nutrition: {
+    hasNutritionAnalysis: number;
+    statusCounts: { COMPLETE: number; ESTIMATED: number; INSUFFICIENT: number; NONE: number };
+    fieldCoverage: { calories: number; protein: number; fat: number; carbohydrate: number };
   };
 }
 
 export interface HomeTopicRecipeStatsResponse { snapshot: HomeTopicRecipeStatsSnapshot | null }
+
+export interface HomeTopicMenuCheckResponse {
+  topicId: UUID;
+  topicVersion: number;
+  generatedAt: string;
+  stale: boolean;
+  totalRecipeCount: number;
+  uniqueRecipeCount: number;
+  duplicateRecipeIds: UUID[];
+  days: Array<{
+    weekday: HomeTopicWeekday;
+    recipeCount: number;
+    uniqueRecipeCount: number;
+    facets: HomeTopicRecipeStatsSnapshot["facets"];
+  }>;
+  weekly: {
+    recipeCount: number;
+    uniqueRecipeCount: number;
+    facets: HomeTopicRecipeStatsSnapshot["facets"];
+  };
+  warnings: Array<{
+    code: "CONSECUTIVE_PRIMARY_INGREDIENT";
+    ingredientId: UUID;
+    ingredientName: string;
+    fromWeekday: HomeTopicWeekday;
+    toWeekday: HomeTopicWeekday;
+  }>;
+}
 
 export interface HomeTopicBatchPreviewIssue {
   issueIndex: number;
@@ -200,6 +235,9 @@ export const homeTopicsApi = {
   },
   getRecipeStats() {
     return requestData<HomeTopicRecipeStatsResponse>("/admin/home-topics/statistics");
+  },
+  getMenuCheck(topicId: UUID) {
+    return requestData<HomeTopicMenuCheckResponse>(`/admin/home-topics/${encodeURIComponent(String(topicId))}/menu-check`);
   },
   rebuildRecipeStats(operationId: OperationId) {
     return requestData<{ snapshot: HomeTopicRecipeStatsSnapshot }>("/admin/home-topics/statistics/rebuild", {

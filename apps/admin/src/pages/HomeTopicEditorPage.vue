@@ -9,6 +9,7 @@ import {
   type AdminHomeTopicsResponse,
   type CreateHomeTopicRequest,
   type HomeTopicRecipeItem,
+  type HomeTopicMenuCheckResponse,
   type HomeTopicStatus,
   type HomeTopicWeekday,
   homeTopicWeekdays
@@ -18,6 +19,7 @@ import RecipePreviewDrawer from "@/components/RecipePreviewDrawer.vue";
 import { useAdminHeaderRefresh } from "@/composables/useAdminHeader";
 import { createOperationId } from "@/utils/operation-id";
 import { difficultyText, durationText } from "@/utils/recipe-meta";
+import { formatDateTime } from "@/utils/date";
 import { createHomeTopicCover } from "@/utils/home-topic-cover";
 type TopicForm = {
   id: number | null;
@@ -48,6 +50,8 @@ const previewRecipeId = ref<number | null>(null);
 const fileInput = ref<HTMLInputElement | null>(null);
 const searchKey = ref("");
 const topics = ref<AdminHomeTopicItem[]>([]);
+const menuCheck = ref<HomeTopicMenuCheckResponse | null>(null);
+const menuCheckLoading = ref(false);
 const searchItems = ref<HomeTopicRecipeItem[]>([]);
 const form = ref<TopicForm | null>(null);
 const route = useRoute();
@@ -61,6 +65,7 @@ const groupedItems = computed(() => homeTopicWeekdays.map(day => ({
   ...day,
   items: (form.value?.items ?? []).filter(item => item.weekday === day.value).sort((left, right) => left.sort - right.sort)
 })));
+const menuCheckStale = computed(() => Boolean(menuCheck.value && form.value?.id && (menuCheck.value.topicId !== form.value.id || menuCheck.value.topicVersion !== form.value.version)));
 
 useAdminHeaderRefresh(() => {
   void loadPage();
@@ -174,6 +179,7 @@ function syncFormFromRoute() {
   const topicId = parseTopicId(route.query.topicId);
   if (!topicId) {
     form.value = createForm();
+    menuCheck.value = null;
     scheduleInput.value = "";
     searchReady.value = false;
     searchItems.value = [];
@@ -189,6 +195,7 @@ function syncFormFromRoute() {
   }
 
   form.value = toForm(current);
+  void loadMenuCheck(topicId);
   scheduleInput.value = toDateTimeInput(current.scheduledPublishAt);
   searchReady.value = false;
   searchItems.value = [];
@@ -231,6 +238,31 @@ async function loadPage() {
   } finally {
     loading.value = false;
   }
+}
+
+async function loadMenuCheck(topicId: number) {
+  menuCheckLoading.value = true;
+  try {
+    const result = await homeTopicsApi.getMenuCheck(topicId);
+    if (form.value?.id === topicId) menuCheck.value = result;
+  } catch (error) {
+    if (form.value?.id === topicId) ElMessage.error(error instanceof Error ? error.message : "加载周刊检查失败");
+  } finally {
+    menuCheckLoading.value = false;
+  }
+}
+
+function formatMenuDimension(dimension: HomeTopicMenuCheckResponse["weekly"]["facets"]["allIngredients"], total = menuCheck.value?.uniqueRecipeCount ?? 0) {
+  const values = dimension.values.slice(0, 6).map(item => `${item.value} ${item.count}`).join("、") || "暂无确认数据";
+  return `${values}（覆盖 ${dimension.confirmedCount}/${total}）`;
+}
+
+function weekdayText(value: HomeTopicWeekday) {
+  return homeTopicWeekdays.find(item => item.value === value)?.label ?? value;
+}
+
+function menuCheckDaySummary(day: HomeTopicMenuCheckResponse["days"][number]) {
+  return `菜品 ${day.recipeCount} 道；角色 ${formatMenuDimension(day.facets.dishRoles, day.uniqueRecipeCount)}；食材 ${formatMenuDimension(day.facets.primaryIngredients, day.uniqueRecipeCount)}；蛋白 ${formatMenuDimension(day.facets.proteins, day.uniqueRecipeCount)}；做法 ${formatMenuDimension(day.facets.dishStyles, day.uniqueRecipeCount)}；难度/时长 ${formatMenuDimension(day.facets.difficulties, day.uniqueRecipeCount)} / ${formatMenuDimension(day.facets.durations, day.uniqueRecipeCount)}`;
 }
 
 function backToList() {
@@ -624,6 +656,43 @@ onMounted(() => {
           </div>
         </div>
 
+        <section v-if="form.id" v-loading="menuCheckLoading" class="menu-check-panel">
+          <div class="menu-check-panel__head">
+            <div>
+              <h5>本期菜单检查</h5>
+              <p>按当前保存版本即时复用缓存；只提示结构与数据覆盖，不判定健康达标，也不改变发布条件。</p>
+            </div>
+            <span v-if="menuCheck" class="menu-check-panel__meta">
+              版本 {{ menuCheck.topicVersion }} · 检查于 {{ formatDateTime(menuCheck.generatedAt) }}
+            </span>
+            <el-button v-if="menuCheckStale || menuCheck?.stale" text :loading="menuCheckLoading" @click="loadMenuCheck(form.id!)">重新读取当前版本检查</el-button>
+          </div>
+          <el-alert v-if="menuCheckStale || menuCheck?.stale" title="当前检查结果对应旧版本，请重新读取以更新。" type="warning" :closable="false" />
+          <el-empty v-else-if="!menuCheck" description="暂无菜单检查结果" :image-size="44" />
+          <template v-else>
+            <p class="menu-check-panel__summary">整周 {{ menuCheck.totalRecipeCount }} 道 / 去重 {{ menuCheck.uniqueRecipeCount }} 道</p>
+            <p v-if="menuCheck.duplicateRecipeIds.length" class="menu-check-panel__warning">数据完整性异常：重复菜谱 ID {{ menuCheck.duplicateRecipeIds.join("、") }}</p>
+            <p v-for="warning in menuCheck.warnings" :key="`${warning.ingredientId}-${warning.fromWeekday}`" class="menu-check-panel__warning">
+              连续主要食材提示：{{ weekdayText(warning.fromWeekday) }}、{{ weekdayText(warning.toWeekday) }} 均有 {{ warning.ingredientName }} 主角菜。
+            </p>
+            <div class="menu-check-panel__weekly">
+              <p><strong>整周角色</strong>{{ formatMenuDimension(menuCheck.weekly.facets.dishRoles) }}</p>
+              <p><strong>主要食材</strong>{{ formatMenuDimension(menuCheck.weekly.facets.primaryIngredients) }}</p>
+              <p><strong>核心食材</strong>{{ formatMenuDimension(menuCheck.weekly.facets.allIngredients) }}</p>
+              <p><strong>蛋白</strong>{{ formatMenuDimension(menuCheck.weekly.facets.proteins) }}</p>
+              <p><strong>做法</strong>{{ formatMenuDimension(menuCheck.weekly.facets.dishStyles) }}</p>
+              <p><strong>难度</strong>{{ formatMenuDimension(menuCheck.weekly.facets.difficulties) }}</p>
+              <p><strong>时长</strong>{{ formatMenuDimension(menuCheck.weekly.facets.durations) }}</p>
+            </div>
+            <ul class="menu-check-panel__days">
+              <li v-for="day in menuCheck.days" :key="day.weekday">
+                <strong>{{ weekdayText(day.weekday) }} · {{ day.recipeCount }} 道</strong>
+                <span>{{ menuCheckDaySummary(day) }}</span>
+              </li>
+            </ul>
+          </template>
+        </section>
+
         <div class="topic-editor__stack">
           <el-form label-position="top" class="topic-form">
             <div class="topic-form__row topic-form__row--half">
@@ -943,6 +1012,90 @@ onMounted(() => {
 .topic-hero__version {
   color: #6b7280;
   font-size: 13px;
+}
+
+.menu-check-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px 20px;
+  border: 1px solid #e8edf4;
+  border-radius: 16px;
+  background: #fff;
+}
+
+.menu-check-panel__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.menu-check-panel__head h5,
+.menu-check-panel__head p,
+.menu-check-panel__summary,
+.menu-check-panel__warning,
+.menu-check-panel__weekly p {
+  margin: 0;
+}
+
+.menu-check-panel__head h5 {
+  color: #111827;
+  font-size: 15px;
+}
+
+.menu-check-panel__head p,
+.menu-check-panel__meta {
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.menu-check-panel__meta {
+  flex: 0 0 auto;
+}
+
+.menu-check-panel__summary {
+  color: #374151;
+  font-weight: 600;
+}
+
+.menu-check-panel__warning {
+  color: #a16207;
+  font-size: 13px;
+}
+
+.menu-check-panel__weekly {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 16px;
+  color: #4b5563;
+  font-size: 12px;
+}
+
+.menu-check-panel__weekly strong {
+  color: #111827;
+  margin-right: 6px;
+}
+
+.menu-check-panel__days {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.menu-check-panel__days li {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.menu-check-panel__days strong {
+  color: #374151;
 }
 
 .topic-editor__stack {

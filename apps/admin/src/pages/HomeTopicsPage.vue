@@ -180,7 +180,7 @@ async function rebuildStats() {
   try {
     const result = await homeTopicsApi.rebuildRecipeStats(createOperationId());
     stats.value = result.snapshot;
-    ElMessage.success(`统计已更新，共 ${result.snapshot.eligibleRecipeCount} 道可用菜谱`);
+    ElMessage.success(`统计已更新，共 ${result.snapshot.totalPublicRecipes} 道可用菜谱`);
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : "重新统计失败，原统计仍保留");
   } finally {
@@ -230,8 +230,12 @@ async function commitBatchImport() {
   }
 }
 
-function formatFacetRows(rows: HomeTopicRecipeStatsSnapshot["facets"]["allIngredients"]) {
-  return rows.slice(0, 12).map(item => `${item.value} ${item.count}`).join("、");
+function formatFacetRows(rows: HomeTopicRecipeStatsSnapshot["facets"]["allIngredients"]["values"]) {
+  return rows.slice(0, 12).map(item => `${item.value} ${item.count}（${(item.shareOfTotal * 100).toFixed(1)}%）`).join("、");
+}
+
+function formatCoverage(dimension: HomeTopicRecipeStatsSnapshot["facets"]["allIngredients"]) {
+  return `覆盖 ${dimension.confirmedCount} / 缺失 ${dimension.missingCount}（${(dimension.coverageRate * 100).toFixed(1)}%）`;
 }
 
 function batchIssue(issueIndex: number) {
@@ -381,18 +385,19 @@ onMounted(() => {
           <el-button :icon="Refresh" :loading="statsBusy" @click="rebuildStats">重新统计</el-button>
         </div>
         <div v-if="stats" class="stats-summary">
-          <strong>{{ stats.eligibleRecipeCount }} 道可用菜谱</strong>
+          <strong>{{ stats.totalPublicRecipes }} 道公开菜谱</strong>
           <span>快照 {{ stats.snapshotId }}</span>
           <span>生成于 {{ formatDateTime(stats.generatedAt) }}</span>
         </div>
         <el-empty v-else description="尚无统计快照，请先重新统计" :image-size="48" />
         <div v-if="stats" class="stats-facets">
-          <p><strong>主要食材</strong>{{ formatFacetRows(stats.facets.primaryIngredients) || "暂无确认数据" }} · 覆盖 {{ stats.coverage.primaryIngredients }} 道</p>
-          <p><strong>核心食材</strong>{{ formatFacetRows(stats.facets.allIngredients) || "暂无数据" }} · 覆盖 {{ stats.coverage.ingredients }} 道</p>
-          <p><strong>菜系</strong>{{ formatFacetRows(stats.facets.cuisines) || "暂无确认数据" }} · 覆盖 {{ stats.coverage.cuisines }} 道</p>
-          <p><strong>菜式/做法</strong>{{ formatFacetRows(stats.facets.dishStyles) || "暂无确认数据" }} · 覆盖 {{ stats.coverage.dishStyles }} 道</p>
-          <p><strong>菜品角色</strong>{{ formatFacetRows(stats.facets.dishRoles) || "暂无确认数据" }} · 蛋白 {{ formatFacetRows(stats.facets.proteins) || "暂无确认数据" }}</p>
-          <p><strong>难度/时长</strong>{{ formatFacetRows(stats.facets.difficulties) || "暂无数据" }} · {{ formatFacetRows(stats.facets.durations) || "暂无数据" }}</p>
+          <p><strong>主要食材</strong>{{ formatFacetRows(stats.facets.primaryIngredients.values) || "暂无确认数据" }} · {{ formatCoverage(stats.facets.primaryIngredients) }}</p>
+          <p><strong>核心食材</strong>{{ formatFacetRows(stats.facets.allIngredients.values) || "暂无数据" }} · {{ formatCoverage(stats.facets.allIngredients) }}</p>
+          <p><strong>菜系</strong>{{ formatFacetRows(stats.facets.cuisines.values) || "暂无确认数据" }} · {{ formatCoverage(stats.facets.cuisines) }}</p>
+          <p><strong>菜式/做法</strong>{{ formatFacetRows(stats.facets.dishStyles.values) || "暂无确认数据" }} · {{ formatCoverage(stats.facets.dishStyles) }}</p>
+          <p><strong>菜品角色</strong>{{ formatFacetRows(stats.facets.dishRoles.values) || "暂无确认数据" }} · {{ formatCoverage(stats.facets.dishRoles) }}；蛋白 {{ formatFacetRows(stats.facets.proteins.values) || "暂无确认数据" }} · {{ formatCoverage(stats.facets.proteins) }}</p>
+          <p><strong>难度/时长</strong>{{ formatFacetRows(stats.facets.difficulties.values) || "暂无数据" }} · {{ formatCoverage(stats.facets.difficulties) }}；{{ formatFacetRows(stats.facets.durations.values) || "暂无数据" }} · {{ formatCoverage(stats.facets.durations) }}</p>
+          <p><strong>营养数据</strong>有分析 {{ stats.nutrition.hasNutritionAnalysis }} 道；完整 {{ stats.nutrition.statusCounts.COMPLETE }} · 估算 {{ stats.nutrition.statusCounts.ESTIMATED }} · 不足 {{ stats.nutrition.statusCounts.INSUFFICIENT }} · 无分析 {{ stats.nutrition.statusCounts.NONE }}；热量 {{ stats.nutrition.fieldCoverage.calories }}、蛋白 {{ stats.nutrition.fieldCoverage.protein }}、脂肪 {{ stats.nutrition.fieldCoverage.fat }}、碳水 {{ stats.nutrition.fieldCoverage.carbohydrate }} 道有值</p>
         </div>
       </section>
 
