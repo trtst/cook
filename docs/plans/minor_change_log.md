@@ -1,5 +1,7 @@
 # 项目变更记录
 
+| 2026-10-14 | 修正菜谱/食材 JSON 规范中的食材分类歧义：明确 `categoryCode`、食材 `isStaple` 与菜谱 `recipeRole` 相互独立；已有食材沿用目标环境系统分类，不按菜谱用途改分类；校正干辣椒、料酒、黄酒、米酒及饮品分类示例。 | `docs/plans/recipe-admin-json-conversion.md`、`docs/plans/ingredient-admin-json-conversion.md`、`docs/plans/minor_change_log.md` | 已复核相关规则与 `seed.ts` 示例，`git diff --check` 通过；未改数据或代码。 |
+
 | 2026-10-14 | Admin 全局页面禁用纵向 overscroll 回弹，避免滚动到边界时继续带动外层页面。 | `apps/admin/src/styles/global.scss`、`docs/plans/minor_change_log.md` | `git diff --check` 通过；未运行测试。 |
 
 | 2026-10-14 | 修复菜谱内容修订页无法选择完整菜谱 JSON 中食材角色字段的问题：识别 `recipe.content.ingredients[].recipeRole`；服务端按食材名称、系统别名及已归并名称做唯一匹配，兼容食材顺序变化，并保留 Wiki-only `recipeContent.ingredientRoles` 的 ID/名称严格匹配。 | `apps/admin/src/pages/RecipeWikiPage.vue`、`apps/api/src/modules/admin/recipe-wiki-json.ts`、`apps/api/src/modules/admin/admin.service.ts`、`docs/api-contract.md`、`docs/plans/recipe-admin-json-conversion.md`、`docs/plans/minor_change_log.md` | API/Admin type-check 与 `git diff --check` 通过；未运行测试，未做登录态页面或数据库验收。 |
