@@ -292,6 +292,7 @@ import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { buildThemePageStyle } from "@/composables/theme-page-style";
 import { useTheme } from "@/composables/useTheme";
 import { uniPlatform } from "@/platform/uni";
+import { useLoginModalStore } from "@/stores/login-modal";
 import { useSessionStore } from "@/stores/session";
 import { useUserStore } from "@/stores/user";
 import { createOperationId } from "@/utils/operation-id";
@@ -310,6 +311,7 @@ const pageStyle = usePageScrollStyle();
 const { themeVars, themeClasses } = useTheme();
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const sessionStore = useSessionStore();
+const loginModalStore = useLoginModalStore();
 const userStore = useUserStore();
 const { openLogin } = useLoginEmptyState(handleLoginSuccess);
 
@@ -582,6 +584,13 @@ function openList(listId: UUID, action = "") {
 }
 
 function openCreateSheet() {
+  if (!sessionStore.isLoggedIn) {
+    loginModalStore.open(null, () => {
+      void handleLoginSuccess().then(() => openCreateSheet());
+    });
+    return;
+  }
+
   editingList.value = null;
   createName.value = buildDefaultListName();
   createSheetVisible.value = true;
