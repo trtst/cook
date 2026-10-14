@@ -195,7 +195,6 @@
             <scroll-view
               scroll-y
               :scroll-top="scrollCommandByTab[tab]"
-              scroll-with-animation
               class="recipe-scroll"
               refresher-enabled
               refresher-default-style="none"
@@ -741,12 +740,21 @@ function consumeRecipeTabIntent() {
 
 function changeCategory(categoryId: UUID | "") {
 	if (currentCategoryId.value === categoryId) return;
+	resetActiveListScroll();
 	if (activeTab.value === "my") {
 		myCategoryId.value = categoryId;
 	} else {
 		inspirationCategoryId.value = categoryId;
 	}
 	void loadActiveTab({ force: true, source: "switch" });
+}
+
+function resetActiveListScroll() {
+	const tab = activeTab.value;
+	scrollCommandByTab.value = { ...scrollCommandByTab.value, [tab]: 1 };
+	void nextTick(() => {
+		scrollCommandByTab.value = { ...scrollCommandByTab.value, [tab]: 0 };
+	});
 }
 
 function changeSort(value: InspirationSort) {

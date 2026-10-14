@@ -52,22 +52,31 @@
               <view class="topic-section__head">
                 <text class="topic-section__title font-medium">本期菜单</text>
                 <view v-if="dayItems.length" class="topic-section__meta" @click="addDayToPlan">
-                  <text class="cookfont topic-section__meta-icon icon-add-plan" />
-                  <text>加入计划</text>
+                  <text class="cookfont topic-section__meta-icon" :class="selectedWeekIconClass" aria-hidden="true" />
+                  <text>加入{{ selectedDay?.name || "当天" }}计划</text>
                 </view>
               </view>
 
-              <view v-if="weekDays.length > 1" class="topic-weekdays">
-                <view
-                  v-for="day in weekDays"
-                  :key="day.weekday"
-                  :class="['topic-weekdays__day', selectedWeekday === day.weekday ? 'topic-weekdays__day--active' : '']"
-                  @click="selectWeekday(day.weekday)"
-                >
-                  <text class="topic-weekdays__name">{{ day.name }}</text>
-                  <text class="topic-weekdays__date">{{ day.dateText }}</text>
+              <scroll-view
+                v-if="weekDays.length > 1"
+                scroll-x
+                scroll-with-animation
+                class="topic-weekdays"
+                :scroll-left="weekdaysScrollLeft"
+                :show-scrollbar="false"
+              >
+                <view class="topic-weekdays__row">
+                  <view
+                    v-for="day in weekDays"
+                    :key="day.weekday"
+                    :class="['topic-weekdays__day', selectedWeekday === day.weekday ? 'topic-weekdays__day--active' : '']"
+                    @click="selectWeekday(day.weekday)"
+                  >
+                    <text class="topic-weekdays__name">{{ day.name }}</text>
+                    <text class="topic-weekdays__date">{{ day.dateText }}</text>
+                  </view>
                 </view>
-              </view>
+              </scroll-view>
 
               <view v-if="dayItems.length" class="recipe-list">
                 <view
@@ -179,7 +188,7 @@ const pageStyle = usePageScrollStyle();
 const { themeVars, themeClasses } = useTheme();
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const { setLocked } = usePageScrollLock(Symbol("home-topic-sheet"));
-const { navBarTotalHeight } = useSystemInfo();
+const { navBarTotalHeight, systemInfo } = useSystemInfo();
 const sessionStore = useSessionStore();
 const loginModalStore = useLoginModalStore();
 const NAV_FADE_DISTANCE = 96;
@@ -192,6 +201,15 @@ const WEEKDAYS: { weekday: HomeTopicWeekday; name: string }[] = [
   { weekday: "SATURDAY", name: "周六" },
   { weekday: "SUNDAY", name: "周日" }
 ];
+const WEEKDAY_ICON_CLASS: Record<HomeTopicWeekday, string> = {
+  MONDAY: "icon-week-mon",
+  TUESDAY: "icon-week-tue",
+  WEDNESDAY: "icon-week-wed",
+  THURSDAY: "icon-week-thu",
+  FRIDAY: "icon-week-fri",
+  SATURDAY: "icon-week-sat",
+  SUNDAY: "icon-week-sun"
+};
 
 const loading = ref(false);
 const errorText = ref("");
@@ -235,6 +253,17 @@ const weekDays = computed(() => {
   });
 });
 const selectedDay = computed(() => weekDays.value.find(day => day.weekday === selectedWeekday.value) ?? weekDays.value[0] ?? null);
+const selectedWeekIconClass = computed(() => WEEKDAY_ICON_CLASS[selectedDay.value?.weekday ?? selectedWeekday.value]);
+const weekdaysScrollLeft = computed(() => {
+  const selectedIndex = weekDays.value.findIndex(day => day.weekday === selectedWeekday.value);
+  if (selectedIndex <= 0 || systemInfo.value.windowWidth <= 0) return 0;
+  const viewportWidth = 750 - 48;
+  const contentWidth = weekDays.value.length * 120 + Math.max(weekDays.value.length - 1, 0) * 12;
+  const maxScroll = Math.max(contentWidth - viewportWidth, 0);
+  const centeredScroll = selectedIndex * 132 + 60 - viewportWidth / 2;
+  const scrollLeft = Math.min(maxScroll, Math.max(0, centeredScroll));
+  return Math.round(scrollLeft * systemInfo.value.windowWidth / 750);
+});
 const dayItems = computed(() => {
   const weekday = selectedDay.value?.weekday;
   if (!weekday || !topic.value) return [];
@@ -658,7 +687,7 @@ function formatWeekRange(value: { periodStartDate: string; periodEndDate: string
   flex-direction: column;
   gap: 20rpx;
   border-radius: var(--radius-xl) var(--radius-xl) 0 0;
-  padding: 20rpx var(--space-page) 0;
+  padding: 20rpx 0 0;
   overflow: hidden;
   background: color-mix(in srgb, var(--color-page) 30%, transparent);
   isolation: isolate;
@@ -709,7 +738,7 @@ function formatWeekRange(value: { periodStartDate: string; periodEndDate: string
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 0 40rpx;
+  padding: 0 var(--space-page);
 }
 
 .topic-section__title {
@@ -721,31 +750,45 @@ function formatWeekRange(value: { periodStartDate: string; periodEndDate: string
 .topic-section__meta {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 8rpx;
+  min-height: 56rpx;
+  border-radius: var(--radius-pill);
+  padding: 0 18rpx;
   color: var(--color-primary);
-  font-size: 24rpx;
+  font-size: 30rpx;
   font-weight: 700;
 }
 
 .topic-section__meta-icon {
-  font-size: 26rpx;
+  font-size: 30rpx;
   line-height: 1;
 }
 
 .topic-weekdays {
-  display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 8rpx;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0 var(--space-page) var(--space-page);
+  white-space: nowrap;
+}
+
+.topic-weekdays__row {
+  display: flex;
+  align-items: stretch;
+  gap: 12rpx;
 }
 
 .topic-weekdays__day {
   display: flex;
-  min-width: 0;
+  box-sizing: border-box;
+  width: 120rpx;
+  flex: 0 0 120rpx;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 6rpx;
   border-radius: var(--radius-xs);
-  padding: 12rpx 2rpx;
+  padding: 12rpx 4rpx;
   color: var(--color-text-secondary);
   background: var(--material-card-bg);
   font-size: 20rpx;
@@ -777,9 +820,10 @@ function formatWeekRange(value: { periodStartDate: string; periodEndDate: string
 }
 
 .recipe-card {
-  width: calc(100% - 36rpx);
+  width: 100%;
+  padding: 0 var(--space-page) 40rpx;
   margin: 0 auto;
-  padding-bottom: 40rpx;
+  box-sizing: border-box;
   transition: transform 0.18s ease;
 }
 

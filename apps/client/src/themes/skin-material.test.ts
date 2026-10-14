@@ -1044,6 +1044,26 @@ expectIncludes(homeTopicPageSource, `.topic-section::after {
 }`);
 expectSelectorExcludes(homeTopicPageSource, ".topic-section::before", ["filter: blur(24rpx);"]);
 expectSelectorExcludes(homeTopicPageSource, ".topic-section::after", ["filter: blur(24rpx);"]);
+expectSelectorIncludes(homeTopicPageSource, ".topic-section", [
+  "padding: 20rpx 0 0;"
+]);
+expectSelectorIncludes(homeTopicPageSource, ".topic-section__head", [
+  "padding: 0 var(--space-page);"
+]);
+expectSelectorIncludes(homeTopicPageSource, ".topic-weekdays", [
+  "box-sizing: border-box;",
+  "padding: 0 var(--space-page) var(--space-page);",
+  "white-space: nowrap;"
+]);
+expectSelectorIncludes(homeTopicPageSource, ".topic-weekdays__day", [
+  "width: 120rpx;",
+  "flex: 0 0 120rpx;"
+]);
+expectSelectorIncludes(homeTopicPageSource, ".recipe-card", [
+  "width: 100%;",
+  "padding: 0 var(--space-page) 40rpx;",
+  "box-sizing: border-box;"
+]);
 expectSelectorIncludes(homeTopicPageSource, ".sheet-creator__input", [
   "border: 1rpx solid var(--material-input-border);",
   "background: var(--material-input-bg);",

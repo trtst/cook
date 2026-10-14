@@ -722,7 +722,7 @@ function isUploadApiResponse<T>(value: unknown): value is UploadApiResponse<T> {
 
 export const recipeApi = {
 	downloadDraftImage(draftId: UUID, imageUrl: string) {
-		const imagePath = new URL(imageUrl, cfg.domain).pathname;
+		const imagePath = imageUrl.replace(/^https?:\/\/[^/]+/i, "").split(/[?#]/, 1)[0] || "";
 		const match = /(?:^|\/)uploads\/recipe-images\/\.tmp\/(\d+)\/([0-9a-f-]+\.(?:jpg|png|webp))$/i.exec(imagePath);
 		if (!match || Number(match[1]) !== draftId) throw new Error("草稿图片地址无效");
 		const url = `${cfg.domain}/static/uploads/recipe-images/.tmp/${draftId}/${match[2]}`;
