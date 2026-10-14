@@ -1158,6 +1158,34 @@ export class PageQueryDto {
   keyword?: string;
 }
 
+export class HomeTopicRecipeStatsMissingQueryDto {
+  @ApiProperty({ enum: ["allIngredients", "primaryIngredients", "cuisines", "dishStyles", "dishRoles", "proteins", "difficulties", "durations", "nutrition"] })
+  @IsIn(["allIngredients", "primaryIngredients", "cuisines", "dishStyles", "dishRoles", "proteins", "difficulties", "durations", "nutrition"])
+  dimension!: string;
+
+  @ApiPropertyOptional({ maxLength: 120, description: "传入分类值时筛选该分类；营养维度支持 COMPLETE / ESTIMATED / INSUFFICIENT / NONE / HAS_ANALYSIS" })
+  @IsOptional()
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @MaxLength(120)
+  value?: string;
+
+  @ApiPropertyOptional({ default: 1 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page = 1;
+
+  @ApiPropertyOptional({ default: 20, maximum: 100 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  pageSize = 20;
+}
+
 export class HomeTopicHistoryQueryDto {
   @ApiPropertyOptional({ default: 1 })
   @IsOptional()
@@ -2939,21 +2967,7 @@ export class AdminRecipeQueryDto extends PageQueryDto {
   status?: string;
 }
 
-export class AdminRecipeExportQueryDto extends PageQueryDto {
-  @ApiPropertyOptional({ example: resourceIdExample })
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  categoryId?: number;
-
-  @ApiPropertyOptional({ example: "ACTIVE", enum: ["ACTIVE", "RECYCLED", "BLOCKED", "DELETED"] })
-  @IsOptional()
-  @IsIn(["ACTIVE", "RECYCLED", "BLOCKED", "DELETED"])
-  status?: string;
-}
-
-export class AdminRecipeWikiRevisionExportDto {
+export class AdminRecipeFullExportDto {
   @ApiPropertyOptional({ type: [Number], maxItems: 100, example: [10_000_001, 10_000_002] })
   @IsOptional()
   @IsArray()
@@ -3101,18 +3115,13 @@ export class AdminImageGenerationApplyDto extends OperationDto {
 }
 
 export class AdminRecipeWikiQueryDto extends PageQueryDto {
-}
-
-export class AdminRecipeWikiExportDto {
-  @ApiProperty({ type: [Number], minItems: 1, maxItems: 100, example: [10000001] })
-  @IsArray()
-  @ArrayMinSize(1)
-  @ArrayMaxSize(100)
-  @ArrayUnique()
-  @Type(() => Number)
-  @IsInt({ each: true })
-  @Min(1, { each: true })
-  recipeIds!: number[];
+  @ApiPropertyOptional({ maxLength: 1100, description: "从待处理分页中排除已加入修订列表的菜谱 ID，逗号分隔，最多 100 个" })
+  @IsOptional()
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @MaxLength(1100)
+  @Matches(/^\d+(,\d+)*$/)
+  excludeRecipeIds?: string;
 }
 
 export class AdminRecipeWikiQuickFillDto {

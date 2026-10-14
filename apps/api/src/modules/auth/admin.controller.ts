@@ -26,11 +26,9 @@ import {
   AdminUnitPayloadDto,
   AdminLoginDto,
     AdminRecipeContentDto,
-  AdminRecipeExportQueryDto,
-  AdminRecipeWikiRevisionExportDto,
+  AdminRecipeFullExportDto,
     AdminRecipeQueryDto,
     AdminRecipeImageBackfillDto,
-  AdminRecipeWikiExportDto,
   AdminRecipeWikiDismissDto,
   AdminRecipeWikiDismissBatchDto,
   AdminRecipeWikiQuickFillDto,
@@ -112,8 +110,7 @@ import {
     AdminPendingUnitRecommendationModel,
     AdminPendingRecipeModel,
     AdminRecipeDetailModel,
-  AdminRecipeImageExportItemModel,
-  AdminRecipeWikiRevisionExportDocumentModel,
+  AdminRecipeFullExportDocumentModel,
     AdminRecipeImageBackfillResultModel,
   AdminReviewIngredientFeedbackResultModel,
     AdminReviewPendingRecipeResultModel,
@@ -131,8 +128,6 @@ import {
   AdminRecipeWikiConfirmCandidatesResultModel,
   AdminRecipeImportContentSyncResultModel,
   AdminRecipeWikiImportResultModel,
-  AdminRecipeWikiBatchExportDocumentModel,
-  AdminRecipeWikiExportDocumentModel,
   AdminRecipeWikiRejectResultModel,
   AdminRecipeWikiDismissResultModel,
   AdminRecipeWikiDismissBatchResultModel,
@@ -611,20 +606,12 @@ export class AdminController {
     }, request.admin.adminId).then(result => ok(result));
   }
 
-  @Get("recipes/export")
-  @UseGuards(AdminAuthGuard)
-  @ApiBearerAuth("AdminBearerAuth")
-  @ApiOkPage(AdminRecipeImageExportItemModel, "分页导出当前筛选命中的系统菜谱图片资料")
-  exportRecipes(@Req() request: RequestWithAdmin, @Query() query: AdminRecipeExportQueryDto) {
-    return this.adminService.exportRecipes(query.page, query.pageSize, query.keyword, query.status, query.categoryId, request.admin.adminId).then(result => ok(result));
-  }
-
-  @Post("recipes/wiki-revision-export")
+  @Post("recipes/full-export")
   @UseGuards(AdminAuthGuard, SuperAdminGuard)
   @ApiBearerAuth("AdminBearerAuth")
-  @ApiOkModel(AdminRecipeWikiRevisionExportDocumentModel, "导出当前版本 READY Wiki 修订文件")
-  exportRecipeWikiRevision(@Req() request: RequestWithAdmin, @Body() body: AdminRecipeWikiRevisionExportDto) {
-    return this.adminService.exportRecipeWikiRevision(body, request.admin.adminId).then(result => ok(result));
+  @ApiOkModel(AdminRecipeFullExportDocumentModel, "批量导出完整菜谱当前内容")
+  exportRecipeFullJson(@Req() request: RequestWithAdmin, @Body() body: AdminRecipeFullExportDto) {
+    return this.adminService.exportRecipeFullJson(body, request.admin.adminId).then(result => ok(result));
   }
 
   @Post("recipes/:recipeId/images/backfill")
@@ -646,23 +633,7 @@ export class AdminController {
   @ApiBearerAuth("AdminBearerAuth")
   @ApiOkPage(AdminRecipeWikiSummaryModel, "后台待补充菜谱 Wiki 列表")
   listRecipeWiki(@Req() request: RequestWithAdmin, @Query() query: AdminRecipeWikiQueryDto) {
-    return this.adminService.listRecipeWiki(query.page, query.pageSize, query.keyword, request.admin.adminId).then(result => ok(result));
-  }
-
-  @Get("recipe-wiki/:recipeId/export")
-  @UseGuards(AdminAuthGuard)
-  @ApiBearerAuth("AdminBearerAuth")
-  @ApiOkModel(AdminRecipeWikiExportDocumentModel, "导出一个菜谱 Wiki JSON")
-  exportRecipeWiki(@Req() request: RequestWithAdmin, @Param("recipeId", ParseIntPipe) recipeId: number) {
-    return this.adminService.exportRecipeWiki(recipeId, request.admin.adminId).then(result => ok(result));
-  }
-
-  @Post("recipe-wiki/export")
-  @UseGuards(AdminAuthGuard)
-  @ApiBearerAuth("AdminBearerAuth")
-  @ApiOkModel(AdminRecipeWikiBatchExportDocumentModel, "批量导出菜谱 Wiki JSON")
-  exportRecipeWikiBatch(@Req() request: RequestWithAdmin, @Body() body: AdminRecipeWikiExportDto) {
-    return this.adminService.exportRecipeWikiBatch(body.recipeIds, request.admin.adminId).then(result => ok(result));
+    return this.adminService.listRecipeWiki(query.page, query.pageSize, query.keyword, request.admin.adminId, query.excludeRecipeIds).then(result => ok(result));
   }
 
   @Post("recipe-wiki/import")

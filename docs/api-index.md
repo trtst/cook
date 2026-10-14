@@ -57,6 +57,7 @@
 | AdminHomeTopic | GET | `/admin/home-topics` | 后台读取本周灵感专题列表与类别选项 |
 | AdminHomeTopic | GET | `/admin/home-topics/recipes` | 后台搜索可加入专题的灵感菜谱 |
 | AdminHomeTopicStats | GET | `/admin/home-topics/statistics` | 读取共享周刊可用菜谱统计快照（SUPER_ADMIN） |
+| AdminHomeTopicStats | GET | `/admin/home-topics/statistics/missing-recipes` | 按维度分页查询当前缺少标签或符合筛选值的公开菜谱（SUPER_ADMIN） |
 | AdminHomeTopicStats | POST | `/admin/home-topics/statistics/rebuild` | 重建共享周刊统计快照（SUPER_ADMIN） |
 | AdminHomeTopic | POST | `/admin/home-topics/import/preview` | 校验周刊 JSON 批次，不写入（SUPER_ADMIN） |
 | AdminHomeTopic | POST | `/admin/home-topics/import` | 将 JSON 批次有效期逐期导入为草稿（SUPER_ADMIN） |
@@ -221,17 +222,14 @@
 | Shopping | GET | `/meal-plans/{planItemId}/shopping-gap` | 预览指定计划餐次的完整准备需求 |
 | Shopping | GET | `/dining-events/{eventId}/shopping-gap` | 预览指定饭局的完整准备需求 |
 | AdminRecipe | GET | `/admin/recipes` | 后台系统菜谱列表 |
-| AdminRecipe | GET | `/admin/recipes/export` | 按筛选条件分页读取菜谱图片导出资料 |
+| AdminRecipe | POST | `/admin/recipes/full-export` | 按筛选条件或勾选项导出完整菜谱 JSON（SUPER_ADMIN） |
 | AdminRecipe | POST | `/admin/recipes/{recipeId}/images/backfill` | 按文件名回填菜谱封面、正文步骤与 Wiki 步骤图片地址 |
 | AdminRecipe | DELETE | `/admin/inspiration-categories/{categoryId}` | 删除空的系统菜谱分类 |
 | AdminRecipe | POST | `/admin/recipes` | 后台新增系统菜谱 |
 | AdminRecipe | GET | `/admin/recipes/{recipeId}` | 后台菜谱详情 |
 | AdminRecipe | PUT | `/admin/recipes/{recipeId}` | 后台编辑系统菜谱正文 |
 | AdminRecipeWiki | GET | `/admin/recipe-wiki` | ACTIVE 当前版本待补充 Wiki 列表，含来源和最近申请信息 |
-| AdminRecipeWiki | GET | `/admin/recipe-wiki/{recipeId}/export` | 导出单个菜谱 Wiki JSON |
-| AdminRecipeWiki | POST | `/admin/recipe-wiki/export` | 批量导出菜谱 Wiki JSON |
 | AdminRecipeWiki | POST | `/admin/recipe-wiki/import` | 按勾选字段批量原位替换菜谱正文或 Wiki |
-| AdminRecipe | POST | `/admin/recipes/wiki-revision-export` | 导出当前筛选或勾选菜谱的完整 Wiki 修订 JSON |
 | AdminRecipeWiki | POST | `/admin/recipe-wiki/{recipeId}/reject` | 拒绝当前版本 Wiki 申请并释放预扣次数 |
 | AdminRecipeWiki | DELETE | `/admin/recipe-wiki/{recipeId}` | 从待补充列表移除当前版本 Wiki 条目并处理待申请 |
 | AdminRecipeWiki | POST | `/admin/recipe-wiki/dismiss` | 批量移除选中的当前版本 Wiki 条目，单事务全量成功或失败 |

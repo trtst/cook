@@ -917,6 +917,8 @@ export class HomeTopicRecipeStatsFacetModel {
 
 export class HomeTopicRecipeStatsDimensionModel {
   @ApiProperty({ type: Number, minimum: 0 }) confirmedCount!: number;
+  @ApiProperty({ type: Boolean }) coverageApplicable!: boolean;
+  @ApiProperty({ type: Number, minimum: 0 }) notApplicableCount!: number;
   @ApiProperty({ type: Number, minimum: 0 }) missingCount!: number;
   @ApiProperty({ type: Number, minimum: 0, maximum: 1 }) coverageRate!: number;
   @ApiProperty({ type: [HomeTopicRecipeStatsFacetModel] }) values!: HomeTopicRecipeStatsFacetModel[];
@@ -967,6 +969,21 @@ export class HomeTopicRecipeStatsResponseModel {
 
 export class RebuildHomeTopicRecipeStatsResponseModel {
   @ApiProperty({ type: HomeTopicRecipeStatsSnapshotModel }) snapshot!: HomeTopicRecipeStatsSnapshotModel;
+}
+
+export class HomeTopicRecipeStatsMissingRecipeModel {
+  @ApiProperty({ type: Number, minimum: 1 }) id!: number;
+  @ApiProperty({ type: String }) title!: string;
+  @ApiProperty({ type: String, nullable: true }) coverImageUrl!: string | null;
+}
+
+export class HomeTopicRecipeStatsMissingRecipesPageModel {
+  @ApiProperty({ type: [HomeTopicRecipeStatsMissingRecipeModel] }) items!: HomeTopicRecipeStatsMissingRecipeModel[];
+  @ApiProperty({ type: Number, minimum: 1 }) page!: number;
+  @ApiProperty({ type: Number, minimum: 1, maximum: 100 }) pageSize!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) total!: number;
+  @ApiProperty({ type: Boolean }) hasNext!: boolean;
+  @ApiProperty(dateTime) checkedAt!: string;
 }
 
 export class HomeTopicMenuCheckDayModel {
@@ -1637,22 +1654,6 @@ export class AdminRecipeImportContentSyncResultModel {
   @ApiProperty({ type: [AdminRecipeImportContentSyncItemModel] }) items!: AdminRecipeImportContentSyncItemModel[];
 }
 
-export class AdminRecipeImagePromptModel {
-  @ApiProperty({ type: Number, minimum: 1 }) order!: number;
-  @ApiProperty(nullableString) imagePrompt!: string | null;
-}
-
-export class AdminRecipeImageExportItemModel {
-  @ApiProperty({ type: Number, minimum: 1 }) recipeId!: number;
-  @ApiProperty({ type: Number, minimum: 1 }) contentVersionId!: number;
-  @ApiProperty({ type: String }) title!: string;
-  @ApiProperty({ type: String }) description!: string;
-  @ApiProperty({ type: [String] }) keywords!: string[];
-  @ApiProperty({ type: String }) tips!: string;
-  @ApiProperty({ type: [AdminRecipeImagePromptModel] }) steps!: AdminRecipeImagePromptModel[];
-  @ApiProperty({ type: [AdminRecipeImagePromptModel] }) wikiSteps!: AdminRecipeImagePromptModel[];
-}
-
 export class AdminRecipeImageBackfillItemResultModel {
   @ApiProperty({ type: String }) fileName!: string;
   @ApiProperty({ type: String, enum: ["COVER", "RECIPE_STEP", "WIKI_STEP"] }) target!: string;
@@ -1774,43 +1775,13 @@ export class AdminRecipeWikiExportWikiModel {
   @ApiProperty({ type: AdminRecipeWikiExportAssistantModel }) assistant!: AdminRecipeWikiExportAssistantModel;
 }
 
-export class AdminRecipeWikiIngredientRoleModel {
-  @ApiProperty(uuid) ingredientId!: string;
-  @ApiProperty({ type: String }) ingredientName!: string;
-  @ApiProperty({ type: String, nullable: true, enum: ["MAIN", "ACCOMPANIMENT", "SEASONING"] }) recipeRole!: string | null;
-}
-
-export class AdminRecipeWikiIngredientRolesModel {
-  @ApiProperty({ type: [AdminRecipeWikiIngredientRoleModel] }) ingredientRoles!: AdminRecipeWikiIngredientRoleModel[];
-}
-
-export class AdminRecipeWikiExportDocumentModel {
-  @ApiProperty({ type: String, enum: ["recipe.wiki.v1"] }) schemaVersion!: string;
-  @ApiProperty(uuid) recipeId!: string;
-  @ApiProperty(uuid) contentVersionId!: string;
-  @ApiProperty({ type: AdminRecipeWikiIngredientRolesModel }) recipeContent!: AdminRecipeWikiIngredientRolesModel;
-  @ApiProperty({ type: AdminRecipeWikiExportWikiModel }) wiki!: AdminRecipeWikiExportWikiModel;
-}
-
-export class AdminRecipeWikiBatchExportItemModel {
-  @ApiProperty(uuid) recipeId!: string;
-  @ApiProperty(uuid) contentVersionId!: string;
-  @ApiProperty({ type: AdminRecipeWikiIngredientRolesModel }) recipeContent!: AdminRecipeWikiIngredientRolesModel;
-  @ApiProperty({ type: AdminRecipeWikiExportWikiModel }) wiki!: AdminRecipeWikiExportWikiModel;
-}
-
-export class AdminRecipeWikiBatchExportDocumentModel {
-  @ApiProperty({ type: String, enum: ["recipe.wiki.batch.v1"] }) schemaVersion!: string;
-  @ApiProperty({ type: [AdminRecipeWikiBatchExportItemModel] }) recipes!: AdminRecipeWikiBatchExportItemModel[];
-}
-
 export class AdminRecipeWikiRevisionIngredientModel {
   @ApiProperty({ type: String }) name!: string;
   @ApiProperty({ type: String, nullable: true }) quantity!: string | null;
   @ApiProperty({ type: String, nullable: true }) unit!: string | null;
   @ApiProperty({ type: String, nullable: true, enum: ["适量"] }) fuzzyText!: "适量" | null;
   @ApiProperty({ type: String, nullable: true }) categoryCode!: string | null;
-  @ApiProperty({ type: String, enum: ["MAIN", "ACCOMPANIMENT", "SEASONING"] }) recipeRole!: string;
+  @ApiProperty({ type: String, nullable: true, enum: ["MAIN", "ACCOMPANIMENT", "SEASONING"] }) recipeRole!: string | null;
 }
 
 export class AdminRecipeWikiRevisionToolModel {
@@ -1849,7 +1820,7 @@ export class AdminRecipeWikiRevisionItemModel {
   @ApiProperty({ type: AdminRecipeWikiExportWikiModel }) wiki!: AdminRecipeWikiExportWikiModel;
 }
 
-export class AdminRecipeWikiRevisionExportDocumentModel {
+export class AdminRecipeFullExportDocumentModel {
   @ApiProperty({ type: String, enum: ["recipe.import.batch.v1"] }) schemaVersion!: string;
   @ApiProperty({ type: [AdminRecipeWikiRevisionItemModel] }) recipes!: AdminRecipeWikiRevisionItemModel[];
 }

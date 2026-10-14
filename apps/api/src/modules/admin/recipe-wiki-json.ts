@@ -18,6 +18,7 @@ export interface RecipeWikiImportItem {
 export type RecipeWikiReplaceField =
   | "name"
   | "story"
+  | "baseServings"
   | "difficulty"
   | "duration"
   | "tips"
@@ -200,6 +201,13 @@ function parseItem(
   const recipeContent = isRecord(value.recipeContent) ? value.recipeContent : null;
   for (const field of selectedFields) {
     if (field === "tags" || field === "assistant.steps") continue;
+    if (field === "ingredientRoles" && recipeContent && !Object.prototype.hasOwnProperty.call(recipeContent, field)) {
+      const ingredients = recipeContent.ingredients;
+      const supportedRoles = new Set(["MAIN", "ACCOMPANIMENT", "SEASONING"]);
+      if (Array.isArray(ingredients) && ingredients.length > 0 && ingredients.every(ingredient =>
+        isRecord(ingredient) && typeof ingredient.recipeRole === "string" && supportedRoles.has(ingredient.recipeRole)
+      )) continue;
+    }
     if (!recipeContent || !Object.prototype.hasOwnProperty.call(recipeContent, field)) {
       issue(issues, `${path}.recipe.content.${field}`, "所选字段在文件中缺失");
     }

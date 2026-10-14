@@ -23,7 +23,6 @@ import type {
   AdminRecipeDetail,
   AdminRecipeImageBackfillRequest,
   AdminRecipeImageBackfillResult,
-  AdminRecipeImageExportItem,
   AdminRecipeImportContentSyncResult,
   AdminRecipeWiki,
   AdminRecipeWikiNutrition,
@@ -67,8 +66,7 @@ import type {
   UpdateAdminRecipeWikiCandidateRequest,
   AdminRecipeWikiSummary,
   AdminRecipeWikiExportDocument,
-  AdminRecipeWikiBatchExportDocument,
-  AdminRecipeWikiRevisionExportDocument,
+  AdminRecipeFullExportDocument,
   AdminRecipeWikiImportResult,
   AdminRecipeWikiDismissResult,
   AdminRecipeWikiDismissBatchResult,
@@ -187,7 +185,7 @@ const recipeWikiTagCodes = [
   "SPICE_LEVEL"
 ] as const;
 const recipeWikiReplaceFields: RecipeWikiReplaceField[] = [
-  "name", "story", "difficulty", "duration", "tips", "keywords", "ingredients", "ingredientRoles", "tools", "steps", "tags", "assistant.steps"
+  "name", "story", "baseServings", "difficulty", "duration", "tips", "keywords", "ingredients", "ingredientRoles", "tools", "steps", "tags", "assistant.steps"
 ];
 
 function parseRecipeWikiReplaceFields(value?: string): Set<RecipeWikiReplaceField> {
@@ -5673,77 +5671,10 @@ export class AdminService {
     return this.getRecipeDetail(recipeId, adminId);
   }
 
-  async exportRecipes(
-    page: number,
-    pageSize: number,
-    keyword: string | undefined,
-    status: string | undefined,
-    categoryId: UUID | undefined,
-    adminId: UUID
-  ): Promise<PageResult<AdminRecipeImageExportItem & { recipeId: UUID }>> {
-    await this.requireSuperAdmin(adminId);
-    const normalizedPage = toPositiveInt(page, 1);
-    const normalizedPageSize = Math.min(toPositiveInt(pageSize, 100), 100);
-    const skip = (normalizedPage - 1) * normalizedPageSize;
-    const normalizedStatus = status?.trim();
-    if (normalizedStatus && !["ACTIVE", "RECYCLED", "BLOCKED", "DELETED"].includes(normalizedStatus)) {
-      throw new BadRequestException("系统菜谱状态参数错误");
-    }
-    const where: Prisma.RecipeWhereInput = {
-      isInspiration: true,
-      inspirationCategoryId: categoryId ? { equals: categoryId } : { not: null },
-      ...(keyword?.trim() ? { searchText: { contains: buildSearchKey(keyword) } } : {}),
-      ...(normalizedStatus ? { status: normalizedStatus as RecipeStatus } : {})
-    };
-    const [recipes, total] = await this.prisma.$transaction([
-      this.prisma.recipe.findMany({
-        where,
-        select: {
-          id: true,
-          currentVersionId: true,
-          currentVersion: {
-            select: {
-              name: true,
-              story: true,
-              tips: true,
-              keywordsJson: true,
-              stepsJson: true,
-              cookAssistant: { select: { status: true, generatedAt: true, snapshotJson: true } }
-            }
-          }
-        },
-        orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
-        skip,
-        take: normalizedPageSize
-      }),
-      this.prisma.recipe.count({ where })
-    ]);
-    return {
-      items: recipes.map(recipe => {
-        const steps = fromJson<Array<{ imagePrompt?: string | null }>>(recipe.currentVersion.stepsJson);
-        const assistant = versionAssistantToSnapshot(recipe.currentVersion.cookAssistant);
-        return {
-          recipeId: recipe.id,
-          contentVersionId: recipe.currentVersionId,
-          title: recipe.currentVersion.name,
-          description: recipe.currentVersion.story ?? "",
-          keywords: fromJson<string[]>(recipe.currentVersion.keywordsJson),
-          tips: recipe.currentVersion.tips ?? "",
-          steps: steps.map((step, index) => ({ order: index + 1, imagePrompt: step.imagePrompt ?? null })),
-          wikiSteps: (assistant?.steps ?? []).map(step => ({ order: step.order, imagePrompt: step.imagePrompt ?? null }))
-        };
-      }),
-      page: normalizedPage,
-      pageSize: normalizedPageSize,
-      total,
-      hasNext: skip + recipes.length < total
-    };
-  }
-
-  async exportRecipeWikiRevision(
+  async exportRecipeFullJson(
     input: { recipeIds?: UUID[]; categoryId?: UUID; keyword?: string },
     adminId: UUID
-  ): Promise<AdminRecipeWikiRevisionExportDocument> {
+  ): Promise<AdminRecipeFullExportDocument> {
     await this.requireSuperAdmin(adminId);
     if (input.recipeIds && (input.categoryId || input.keyword?.trim())) {
       throw new BadRequestException("勾选菜谱导出不能同时使用分类或关键词筛选");
@@ -5757,8 +5688,7 @@ export class AdminService {
       status: "ACTIVE",
       inspirationCategoryId: input.categoryId ? { equals: input.categoryId } : { not: null },
       ...(recipeIds ? { id: { in: recipeIds } } : {}),
-      ...(input.keyword?.trim() ? { searchText: { contains: buildSearchKey(input.keyword) } } : {}),
-      currentVersion: { is: { cookAssistant: { is: { status: "READY" } } } }
+      ...(input.keyword?.trim() ? { searchText: { contains: buildSearchKey(input.keyword) } } : {})
     };
     const recipes = await this.prisma.recipe.findMany({
       where,
@@ -5792,23 +5722,20 @@ export class AdminService {
       take: recipeIds ? 100 : 101
     });
     if (recipeIds && recipes.length !== recipeIds.length) {
-      throw new BadRequestException("勾选项中包含非 ACTIVE 菜谱或当前版本 Wiki 未 READY 的菜谱");
+      throw new BadRequestException("勾选项中包含非 ACTIVE 系统菜谱");
     }
     if (!recipeIds && recipes.length > 100) {
       throw new BadRequestException("当前筛选超过 100 道菜谱，请缩小分类或关键词范围后再导出");
     }
 
     const contents = recipes.map(recipe => versionToContent(recipe.currentVersion));
-    if (contents.some(content => content.ingredients.some(item => !item.recipeRole))) {
-      throw new ConflictException("当前菜谱食材角色未完整标注，无法导出 Wiki 修订 JSON");
-    }
     const categoryIds = Array.from(new Set(contents.flatMap(content => content.ingredients.map(item => item.categoryId))));
     const ingredientCategories = categoryIds.length
       ? await this.prisma.ingredientCategory.findMany({ where: { id: { in: categoryIds } }, select: { id: true, code: true } })
       : [];
     const categoryCodeById = new Map(ingredientCategories.map(item => [item.id, item.code]));
 
-    const document: AdminRecipeWikiRevisionExportDocument = {
+    const document: AdminRecipeFullExportDocument = {
       schemaVersion: "recipe.import.batch.v1",
       recipes: recipes.map((recipe, index) => {
         const content = contents[index];
@@ -5833,7 +5760,7 @@ export class AdminService {
                 unit: item.amount.kind === "EXACT" ? item.amount.unitName : null,
                 fuzzyText: item.amount.kind === "FUZZY" ? "适量" : null,
                 categoryCode: categoryCodeById.get(item.categoryId) ?? null,
-                recipeRole: item.recipeRole!
+                recipeRole: item.recipeRole ?? null
               })),
               tools: (content.tools ?? []).map(item => ({ name: item.name })),
               steps: content.steps.map(item => ({ text: item.text, imageUrl: item.imageUrl, imagePrompt: item.imagePrompt ?? null }))
@@ -6152,16 +6079,29 @@ export class AdminService {
     page: number,
     pageSize: number,
     keyword: string | undefined,
-    adminId: UUID
+    adminId: UUID,
+    excludeRecipeIds?: string
   ): Promise<PageResult<AdminRecipeWikiSummary>> {
     await this.requireSuperAdmin(adminId);
     const normalizedPage = toPositiveInt(page, 1);
     const normalizedPageSize = Math.min(toPositiveInt(pageSize, 20), 100);
     const skip = (normalizedPage - 1) * normalizedPageSize;
     const searchKey = keyword?.trim() ? buildSearchKey(keyword) : null;
+    const excludedIds = excludeRecipeIds?.split(",").map(Number) ?? [];
+    if (excludedIds.length > 100 || excludedIds.some(id => !Number.isSafeInteger(id) || id < 1)) {
+      throw new BadRequestException("排除菜谱 ID 最多 100 个且必须为正整数");
+    }
     const where: Prisma.RecipeWhereInput = {
       status: "ACTIVE",
-      ...(searchKey ? { title: { contains: searchKey } } : {}),
+      ...(excludedIds.length ? { id: { notIn: excludedIds } } : {}),
+      ...(searchKey ? {
+        OR: [
+          { title: { contains: searchKey } },
+          ...(keyword && /^\d+$/.test(keyword.trim()) && Number.isSafeInteger(Number(keyword.trim()))
+            ? [{ id: Number(keyword.trim()) }]
+            : [])
+        ]
+      } : {}),
       currentVersion: {
         is: {
           OR: [
@@ -6316,32 +6256,6 @@ export class AdminService {
     });
     if (!recipe || recipe.status !== "ACTIVE") throw new NotFoundException("正常菜谱不存在");
     return this.buildRecipeWikiExportDocument(recipe);
-  }
-
-  async exportRecipeWikiBatch(recipeIds: UUID[], adminId: UUID): Promise<AdminRecipeWikiBatchExportDocument> {
-    await this.requireSuperAdmin(adminId);
-    const uniqueIds = Array.from(new Set(recipeIds));
-    const recipes = await this.prisma.recipe.findMany({
-      where: { id: { in: uniqueIds }, status: "ACTIVE" },
-      include: {
-        currentVersion: {
-          include: {
-            versionTags: true,
-            cookAssistant: true
-          }
-        }
-      }
-    });
-    if (recipes.length !== uniqueIds.length) throw new BadRequestException("存在无效或非正常菜谱");
-    const byId = new Map(recipes.map(recipe => [recipe.id, recipe]));
-    return {
-      schemaVersion: "recipe.wiki.batch.v1",
-      recipes: uniqueIds.map(id => {
-        const document = this.buildRecipeWikiExportDocument(byId.get(id)!);
-        const { schemaVersion: _schemaVersion, ...item } = document;
-        return item;
-      })
-    };
   }
 
   async importRecipeWiki(buffer: Buffer, operationId: OperationId, adminId: UUID, fields?: string): Promise<AdminRecipeWikiImportResult> {
@@ -6558,6 +6472,7 @@ export class AdminService {
     id: UUID;
     currentVersionId: UUID;
     currentVersion: {
+      baseServings: number;
       ingredientsJson: Prisma.JsonValue;
       versionTags: Array<{ tagCode: string; tagValue: string }>;
       cookAssistant: { status: string; generatedAt: Date | null; snapshotJson: unknown } | null;
@@ -6569,6 +6484,7 @@ export class AdminService {
       recipeId: recipe.id,
       contentVersionId: recipe.currentVersionId,
       recipeContent: {
+        baseServings: recipe.currentVersion.baseServings,
         ingredientRoles: fromJson<RecipeContentSnapshot["ingredients"]>(recipe.currentVersion.ingredientsJson).map(item => ({
           ingredientId: item.ingredientId,
           ingredientName: item.ingredientName,
@@ -6617,6 +6533,12 @@ export class AdminService {
       if (raw.story !== null && typeof raw.story !== "string") throw new BadRequestException("菜谱故事格式不正确");
       if (typeof raw.story === "string" && raw.story.length > 2000) throw new BadRequestException("菜谱故事不能超过 2000 个字符");
       next.story = typeof raw.story === "string" ? raw.story.trim() || null : null;
+    }
+    if (selectedFields.has("baseServings")) {
+      if (!Number.isInteger(raw.baseServings) || Number(raw.baseServings) < 1 || Number(raw.baseServings) > 20) {
+        throw new BadRequestException("基准份量必须为 1 到 20 人份的整数");
+      }
+      next.baseServings = Number(raw.baseServings);
     }
     if (selectedFields.has("difficulty")) {
       const values = ["BEGINNER", "EASY", "SKILLED", "CHALLENGING", null];
@@ -6702,7 +6624,11 @@ export class AdminService {
       });
     }
     if (selectedFields.has("ingredientRoles")) {
-      const roleRows = raw.ingredientRoles;
+      const roleRows = Array.isArray(raw.ingredientRoles)
+        ? raw.ingredientRoles
+        : Array.isArray(raw.ingredients)
+          ? raw.ingredients
+          : null;
       if (!Array.isArray(roleRows) || roleRows.length !== next.ingredients.length) {
         throw new BadRequestException("食材角色列表必须与当前菜谱食材逐行对应");
       }
@@ -6710,7 +6636,11 @@ export class AdminService {
         const row = roleRows[index];
         if (!row || typeof row !== "object" || Array.isArray(row)) throw new BadRequestException(`第 ${index + 1} 个食材角色格式不正确`);
         const roleRow = row as Record<string, unknown>;
-        if (roleRow.ingredientId !== ingredient.ingredientId || roleRow.ingredientName !== ingredient.ingredientName) {
+        if (Array.isArray(raw.ingredientRoles)) {
+          if (roleRow.ingredientId !== ingredient.ingredientId || roleRow.ingredientName !== ingredient.ingredientName) {
+            throw new ConflictException(`第 ${index + 1} 个食材角色与当前正文不匹配`);
+          }
+        } else if (typeof roleRow.name !== "string" || buildSearchKey(roleRow.name) !== buildSearchKey(ingredient.ingredientName)) {
           throw new ConflictException(`第 ${index + 1} 个食材角色与当前正文不匹配`);
         }
         if (roleRow.recipeRole !== "MAIN" && roleRow.recipeRole !== "ACCOMPANIMENT" && roleRow.recipeRole !== "SEASONING") {
@@ -6743,6 +6673,7 @@ export class AdminService {
     const data: Prisma.RecipeContentVersionUpdateInput = {
       ...(selectedFields.has("name") ? { name: next.name } : {}),
       ...(selectedFields.has("story") ? { story: next.story } : {}),
+      ...(selectedFields.has("baseServings") ? { baseServings: next.baseServings } : {}),
       ...(selectedFields.has("difficulty") ? { difficulty: next.difficulty } : {}),
       ...(selectedFields.has("duration") ? { duration: next.duration } : {}),
       ...(selectedFields.has("tips") ? { tips: next.tips } : {}),
@@ -6763,6 +6694,8 @@ export class AdminService {
     if (selectedFields.has("ingredients")) {
       await tx.recipeVersionIngredient.deleteMany({ where: { recipeVersionId: item.contentVersionId } });
       await indexRecipeVersionIngredients(tx, item.contentVersionId, toJson(next.ingredients) as unknown as Prisma.JsonValue);
+    }
+    if (selectedFields.has("ingredients") || selectedFields.has("baseServings")) {
       await tx.recipeNutritionSnapshot.deleteMany({ where: { recipeVersionId: item.contentVersionId } });
       await loadRecipeNutritionSummary(tx, item.contentVersionId, next);
     }

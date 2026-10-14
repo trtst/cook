@@ -52,10 +52,14 @@ function buildDimension(rows: RecipeFacts[], key: FacetKey): HomeTopicRecipeStat
     for (const value of current) values.set(value, (values.get(value) ?? 0) + 1);
   }
   const total = rows.length;
+  const notApplicableCount = key === "allIngredients" ? total - confirmedCount : 0;
+  const missingCount = total - confirmedCount - notApplicableCount;
   return {
     confirmedCount,
-    missingCount: total - confirmedCount,
-    coverageRate: total ? confirmedCount / total : 0,
+    coverageApplicable: true,
+    notApplicableCount,
+    missingCount,
+    coverageRate: total ? (confirmedCount + notApplicableCount) / total : 0,
     values: [...values.entries()]
       .map(([value, count]) => ({ value, count, shareOfTotal: total ? count / total : 0, shareOfConfirmed: confirmedCount ? count / confirmedCount : 0 }))
       .sort((left, right) => right.count - left.count || left.value.localeCompare(right.value, "zh-CN"))

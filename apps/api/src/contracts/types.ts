@@ -682,6 +682,8 @@ export interface HomeTopicRecipeStatsFacet {
 
 export interface HomeTopicRecipeStatsDimension {
   confirmedCount: number;
+  coverageApplicable: boolean;
+  notApplicableCount: number;
   missingCount: number;
   coverageRate: number;
   values: HomeTopicRecipeStatsFacet[];
@@ -722,6 +724,27 @@ export interface HomeTopicRecipeStatsSnapshot {
 
 export interface HomeTopicRecipeStatsResponse {
   snapshot: HomeTopicRecipeStatsSnapshot | null;
+}
+
+export type HomeTopicRecipeStatsDimensionKey =
+  | "allIngredients"
+  | "primaryIngredients"
+  | "cuisines"
+  | "dishStyles"
+  | "dishRoles"
+  | "proteins"
+  | "difficulties"
+  | "durations"
+  | "nutrition";
+
+export interface HomeTopicRecipeStatsMissingRecipe {
+  id: UUID;
+  title: string;
+  coverImageUrl: string | null;
+}
+
+export interface HomeTopicRecipeStatsMissingRecipesResponse extends PageResult<HomeTopicRecipeStatsMissingRecipe> {
+  checkedAt: IsoDateTime;
 }
 
 export interface HomeTopicMenuCheckWarning {
@@ -2155,6 +2178,7 @@ export interface AdminRecipeWikiExportDocument {
   recipeId: UUID;
   contentVersionId: UUID;
   recipeContent: {
+    baseServings: number;
     ingredientRoles: Array<{
       ingredientId: UUID;
       ingredientName: string;
@@ -2167,12 +2191,7 @@ export interface AdminRecipeWikiExportDocument {
   };
 }
 
-export interface AdminRecipeWikiBatchExportDocument {
-  schemaVersion: "recipe.wiki.batch.v1";
-  recipes: Array<Omit<AdminRecipeWikiExportDocument, "schemaVersion">>;
-}
-
-export interface AdminRecipeWikiRevisionExportDocument {
+export interface AdminRecipeFullExportDocument {
   schemaVersion: "recipe.import.batch.v1";
   recipes: Array<{
     recipe: {
@@ -2194,7 +2213,7 @@ export interface AdminRecipeWikiRevisionExportDocument {
           unit: string | null;
           fuzzyText: "适量" | null;
           categoryCode: string | null;
-          recipeRole: RecipeIngredientRole;
+          recipeRole: RecipeIngredientRole | null;
         }>;
         tools: Array<{ name: string }>;
         steps: Array<{ text: string; imageUrl: string | null; imagePrompt: string | null }>;
@@ -2206,18 +2225,6 @@ export interface AdminRecipeWikiRevisionExportDocument {
     };
   }>;
 }
-
-export interface AdminRecipeImageExportItem {
-  contentVersionId: UUID;
-  title: string;
-  description: string;
-  keywords: string[];
-  tips: string;
-  steps: Array<{ order: number; imagePrompt: string | null }>;
-  wikiSteps: Array<{ order: number; imagePrompt: string | null }>;
-}
-
-export type AdminRecipeImageExport = Record<string, AdminRecipeImageExportItem>;
 
 export interface AdminRecipeImageBackfillRequest {
   operationId: OperationId;

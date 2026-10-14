@@ -5,8 +5,8 @@ import { ok } from "../../common/api-response";
 import type { RequestWithAdmin } from "../../common/auth-context";
 import { AdminAuthGuard } from "../../common/admin-auth.guard";
 import { ApiIdempotencyKey, ReadIdempotencyKey } from "../../common/idempotency-key";
-import { CreateHomeTopicDto, DeleteHomeTopicDto, DismissHomeTopicTodoDto, HomeTopicBatchImportDto, HomeTopicHistoryQueryDto, HomeTopicRecipeQueryDto, ReplaceHomeTopicItemDto, SetHomeTopicScheduleDto, SetHomeTopicStatusDto, UpdateHomeTopicDto, UpdateHomeTopicImageDto } from "../../contracts/dtos";
-import { AdminHomeTopicItemModel, AdminHomeTopicMiniCodeResponseModel, AdminHomeTopicTodosPageModel, AdminHomeTopicsResponseModel, ApiOkModel, HomeTopicBatchImportResponseModel, HomeTopicBatchPreviewResponseModel, HomeTopicMenuCheckResponseModel, HomeTopicRecipeSearchResponseModel, HomeTopicRecipeStatsResponseModel, RebuildHomeTopicRecipeStatsResponseModel } from "../../contracts/openapi";
+import { CreateHomeTopicDto, DeleteHomeTopicDto, DismissHomeTopicTodoDto, HomeTopicBatchImportDto, HomeTopicHistoryQueryDto, HomeTopicRecipeQueryDto, HomeTopicRecipeStatsMissingQueryDto, ReplaceHomeTopicItemDto, SetHomeTopicScheduleDto, SetHomeTopicStatusDto, UpdateHomeTopicDto, UpdateHomeTopicImageDto } from "../../contracts/dtos";
+import { AdminHomeTopicItemModel, AdminHomeTopicMiniCodeResponseModel, AdminHomeTopicTodosPageModel, AdminHomeTopicsResponseModel, ApiOkModel, HomeTopicBatchImportResponseModel, HomeTopicBatchPreviewResponseModel, HomeTopicMenuCheckResponseModel, HomeTopicRecipeSearchResponseModel, HomeTopicRecipeStatsMissingRecipesPageModel, HomeTopicRecipeStatsResponseModel, RebuildHomeTopicRecipeStatsResponseModel } from "../../contracts/openapi";
 import { SuperAdminGuard } from "../../common/super-admin.guard";
 import { HomeTopicService } from "./home-topic.service";
 import { HomeTopicMenuCheckService } from "./home-topic-menu-check.service";
@@ -28,6 +28,13 @@ export class AdminHomeTopicController {
   @ApiOkModel(HomeTopicRecipeStatsResponseModel, "读取共享周刊可用菜谱统计快照")
   getRecipeStats() {
     return this.statsService.getSnapshot().then(result => ok(result));
+  }
+
+  @Get("statistics/missing-recipes")
+  @UseGuards(SuperAdminGuard)
+  @ApiOkModel(HomeTopicRecipeStatsMissingRecipesPageModel, "分页读取当前缺少所选标签的公开灵感菜谱")
+  getMissingRecipeStats(@Query() query: HomeTopicRecipeStatsMissingQueryDto) {
+    return this.statsService.listMissingRecipes(query).then(result => ok(result));
   }
 
   @Post("statistics/rebuild")
