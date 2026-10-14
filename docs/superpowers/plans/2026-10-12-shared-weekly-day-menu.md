@@ -41,7 +41,7 @@
 - [x] 审阅当前工作区差异；开始时干净，Client 页面和测试直接按当前 HEAD 增量实现。
 - [ ] 盘点现有 HomeTopic 数据，生成只读清单：专题 ID/期数/状态/发布时间、菜谱项 ID/顺序、封面路径。
 - [x] 为历史专题提供明确的周期与菜品星期映射：旧菜谱项统一映射到周一；周期周一按既有 `publishedAt` 之后的下一个北京时间完整自然周回填；不得根据旧 `sortOrder` 猜测星期。用户确认同周期已下架旧专题合并到 ID 较小者并保留菜谱项；合并后按原专题 ID、原排序重新编号。含未下架专题或重复菜谱的冲突仍停止迁移并报告。
-- [x] 冻结“无预约草稿”的周期来源：新建时按当前北京时间分配下周；改预约时间时重算周期；取消预约保留当前已分配周期。
+- [x] 冻结周期规则：新建时默认按当前北京时间分配下周；运营可在编辑页为任意状态周刊选择周期周一；周期与预约/发布时间分离，修改预约、取消预约和发布均保留选定周期。该规则替代此前“改预约时间重算周期”的决策。
 - [x] 确认待办忽略状态：在 `HomeTopicItem` 保存可空的 `todoDismissedAt`，并写入包含操作者与专题菜谱项身份的审计事件；忽略只关闭该菜单项的待办，不改其菜谱资格或公开过滤结果。
 
 ## Task 1：同步执行单和迁移输入
@@ -92,7 +92,7 @@
 - Modify: `apps/api/scripts/verify-home-weekly-topic-flow.ts`
 
 - [x] **Step 1: Add one Beijing-time period helper inside the HomeTopic service boundary.** For immediate publish, calculate the next Monday from current server time; for a scheduled publish, calculate the next Monday from the scheduled time; do not use Worker execution time to recalculate.
-- [x] **Step 2: Enforce one issue per period.** Apply the same calculated `periodStartDate` on create/schedule updates and translate the database unique conflict into a stable conflict response.
+- [x] **Step 2: Enforce one issue per period.** Accept an optional Monday `periodStartDate` when creating or updating a topic, default it to next Beijing week only on create, preserve it through schedule/publish changes, and translate the database unique conflict into a stable conflict response.
 - [x] **Step 3: Validate publish readiness.** Before immediate publish or scheduling, require at least one eligible configured item for each weekday; allow drafts with incomplete or empty menus. Do not re-block already published browsing if a recipe later becomes unavailable.
 - [x] **Step 4: Implement article-like transitions.** Drafts publish immediately or schedule; schedule may be changed/cancelled only on drafts; published topics can be edited or unlisted; unlisted topics must return to draft before republishing; only current drafts can be deleted.
 - [x] **Step 5: Return date and weekday fields.** Public current/detail/history responses include `periodStartDate`, server-computed `periodEndDate`, and item weekday. Current is the latest published issue by period even when its period starts next Monday; history excludes current and remains paginated.

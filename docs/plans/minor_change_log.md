@@ -1,5 +1,7 @@
 # 项目变更记录
 
+| 2026-10-14 | 后台周刊编辑页支持选择周期周一；新建省略时仍默认下周，周期与预约/发布时间分离，预约调整、取消和发布保留已选周期；所有状态均可调整，数据库唯一约束处理冲突。同步 DTO、服务、管理页、API 契约和周刊计划。 | `apps/admin/src/apis/home-topics.ts`、`apps/admin/src/pages/HomeTopicEditorPage.vue`、`apps/api/src/contracts/dtos.ts`、`apps/api/src/contracts/types.ts`、`apps/api/src/modules/home/home-topic.service.ts`、`docs/api-contract.md`、`docs/plans/home-weekly-topic-execution.md`、`docs/superpowers/plans/2026-10-12-shared-weekly-day-menu.md`、`docs/superpowers/specs/2026-10-12-shared-weekly-day-menu-design.md`、`docs/plans/minor_change_log.md` | API/Admin type-check/build、编译后 OpenAPI schema 断言与 `git diff --check` 通过；标准 OpenAPI 脚本因 sandbox IPC socket `EPERM` 未启动成功；当前测试环境页面仍显示已发布期的周期选择框为禁用，需部署本次更新后复核。 |
+
 | 2026-10-14 | 修正菜谱/食材 JSON 规范中的食材分类歧义：明确 `categoryCode`、食材 `isStaple` 与菜谱 `recipeRole` 相互独立；已有食材沿用目标环境系统分类，不按菜谱用途改分类；校正干辣椒、料酒、黄酒、米酒及饮品分类示例。 | `docs/plans/recipe-admin-json-conversion.md`、`docs/plans/ingredient-admin-json-conversion.md`、`docs/plans/minor_change_log.md` | 已复核相关规则与 `seed.ts` 示例，`git diff --check` 通过；未改数据或代码。 |
 
 | 2026-10-14 | Admin 全局页面禁用纵向 overscroll 回弹，避免滚动到边界时继续带动外层页面。 | `apps/admin/src/styles/global.scss`、`docs/plans/minor_change_log.md` | `git diff --check` 通过；未运行测试。 |

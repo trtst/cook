@@ -974,6 +974,11 @@ export class CreateHomeTopicDto extends OperationDto {
   @Min(1)
   issueNo!: number;
 
+  @ApiPropertyOptional({ type: String, format: "date", description: "周期周一；仅新建请求省略时默认分配下周，更新请求省略时保留现有周期" })
+  @IsOptional()
+  @IsISO8601({ strict: true })
+  periodStartDate?: string;
+
   @ApiProperty({ maxLength: 120 })
   @Transform(({ value }) => trimString(value))
   @IsString()

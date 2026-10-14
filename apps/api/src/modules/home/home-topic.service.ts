@@ -409,7 +409,7 @@ export class HomeTopicService {
             issueNo: data.issueNo,
             description: data.description,
             coverImageUrl: null,
-            periodStartDate: nextBeijingWeekStart(new Date()),
+            periodStartDate: data.periodStartDate ? this.periodDate(data.periodStartDate) : nextBeijingWeekStart(new Date()),
             publishedAt: null,
             items: {
               createMany: {
@@ -465,7 +465,6 @@ export class HomeTopicService {
           this.assertPublishReady(current.items.filter(item => this.isPublicTopicItem(item)));
           updateData = {
             status: "PUBLISHED",
-            periodStartDate: nextBeijingWeekStart(now),
             scheduledPublishAt: null,
             publishedAt: now,
             version: { increment: 1 }
@@ -528,7 +527,6 @@ export class HomeTopicService {
           where: { id: topicId },
           data: {
             scheduledPublishAt,
-            ...(scheduledPublishAt ? { periodStartDate: nextBeijingWeekStart(scheduledPublishAt) } : {}),
             version: { increment: 1 }
           }
         });
@@ -791,6 +789,7 @@ export class HomeTopicService {
             subTitle: data.subTitle,
             issueNo: data.issueNo,
             description: data.description,
+            ...(data.periodStartDate ? { periodStartDate: this.periodDate(data.periodStartDate) } : {}),
             version: { increment: 1 },
             items: {
               deleteMany: unavailableItems.length ? { recipeId: { notIn: [...unavailableIds] } } : {},
@@ -1123,10 +1122,12 @@ export class HomeTopicService {
   }
 
   private topicData(body: CreateHomeTopicRequest | UpdateHomeTopicRequest) {
+    if (body.periodStartDate) this.assertPeriodStartDate(body.periodStartDate);
     return {
       title: body.title.trim(),
       subTitle: cleanText(body.subTitle),
       issueNo: body.issueNo,
+      periodStartDate: body.periodStartDate,
       description: body.description.trim(),
       items: body.items.map(item => ({
         recipeId: item.recipeId,
@@ -1135,6 +1136,15 @@ export class HomeTopicService {
         recommendNote: cleanText(item.recommendNote)
       }))
     };
+  }
+
+  private assertPeriodStartDate(value: string) {
+    const date = this.periodDate(value);
+    if (date.getUTCDay() !== 1) throw new BadRequestException("周刊周期必须从周一开始");
+  }
+
+  private periodDate(value: string) {
+    return new Date(`${value}T00:00:00.000Z`);
   }
 
   private assertPublishReady(items: Array<{ weekday: HomeTopicWeekday }>) {
@@ -1329,7 +1339,7 @@ export class HomeTopicService {
   private raiseTopicWriteError(error: unknown, issueNo: number): never {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
       const target = Array.isArray(error.meta?.target) ? error.meta.target.join(",") : String(error.meta?.target ?? "");
-      if (target.includes("period_start_date")) throw new ConflictException("该自然周已存在周刊，请编辑已有期数或调整预约时间");
+      if (target.includes("period_start_date")) throw new ConflictException("该自然周已存在周刊，请编辑已有期数或选择其他周期");
       if (target.includes("topic_id") && target.includes("weekday") && target.includes("sort_order")) {
         throw new ConflictException("同一天的菜单顺序重复，请刷新后重试");
       }

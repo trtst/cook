@@ -618,6 +618,7 @@ export interface CreateHomeTopicRequest {
   title: string;
   subTitle: string | null;
   issueNo: number;
+  periodStartDate?: IsoDate;
   description: string;
   items: HomeTopicPickInput[];
 }
