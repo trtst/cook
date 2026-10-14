@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, reactive, ref } from "vue";
-import { Download, Upload } from "@element-plus/icons-vue";
+import { computed, onMounted, reactive, ref } from "vue";
+import { Upload } from "@element-plus/icons-vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { recipeApi, type AdminRecipeWikiReplaceField, type AdminRecipeWikiSummary } from "@/apis/recipe";
 import { useAdminHeaderRefresh } from "@/composables/useAdminHeader";
@@ -12,20 +12,16 @@ const loading = ref(false);
 const saving = ref(false);
 const session = useSessionStore();
 const rows = ref<AdminRecipeWikiSummary[]>([]);
+const visibleRevisionItems = ref<RevisionEntry[]>([]);
 const selected = ref<AdminRecipeWikiSummary[]>([]);
 const total = ref(0);
 const fileInput = ref<HTMLInputElement | null>(null);
-const revisionTable = ref<{
-  toggleRowSelection: (row: RevisionEntry, selected?: boolean) => void;
-  clearSelection: () => void;
-} | null>(null);
+const tableRef = ref<{ clearSelection: () => void } | null>(null);
 const revisionItems = ref<RevisionEntry[]>([]);
 const selectedRevisionItems = ref<RevisionEntry[]>([]);
 const availableFields = ref<AdminRecipeWikiReplaceField[]>([]);
 const selectedFields = ref<AdminRecipeWikiReplaceField[]>([]);
-const revisionPreviewVisible = ref(false);
 const revisionPoolLoaded = ref(false);
-const revisionKeyword = ref("");
 const query = reactive({ page: 1, pageSize: 20, keyword: "" });
 
 const revisionPoolDatabase = "next-meal-admin-local";
@@ -48,9 +44,14 @@ interface RevisionEntry {
   wiki: Record<string, unknown>;
 }
 
+type RecipeWikiPageRow =
+  | { kind: "revision"; key: string; recipe: RevisionEntry }
+  | { kind: "wiki"; key: string; wiki: AdminRecipeWikiSummary };
+
 const replaceFieldOptions: Array<{ value: AdminRecipeWikiReplaceField; label: string }> = [
   { value: "name", label: "菜名" },
   { value: "story", label: "故事" },
+  { value: "baseServings", label: "基准份量" },
   { value: "difficulty", label: "难度" },
   { value: "duration", label: "时长" },
   { value: "tips", label: "小贴士" },
@@ -63,14 +64,12 @@ const replaceFieldOptions: Array<{ value: AdminRecipeWikiReplaceField; label: st
   { value: "assistant.steps", label: "助手步骤" }
 ];
 
-const visibleRevisionItems = computed(() => {
-  const keyword = revisionKeyword.value.trim().toLocaleLowerCase();
-  if (!keyword) return revisionItems.value;
-  return revisionItems.value.filter(item =>
-    item.title.toLocaleLowerCase().includes(keyword)
-    || String(item.recipeId).includes(keyword)
-    || String(item.contentVersionId).includes(keyword)
-  );
+const pageRows = computed<RecipeWikiPageRow[]>(() => {
+  const revisions: RecipeWikiPageRow[] = visibleRevisionItems.value
+    .map(recipe => ({ kind: "revision", key: `revision-${recipe.recipeId}`, recipe }));
+  const wiki: RecipeWikiPageRow[] = rows.value
+    .map(item => ({ kind: "wiki", key: `wiki-${item.id}`, wiki: item }));
+  return [...revisions, ...wiki];
 });
 
 function openRevisionPoolDatabase() {
@@ -150,7 +149,9 @@ async function restoreRevisionPool() {
     && typeof item.key === "string"
     && isRecord(item.wiki)
   ).slice(0, 100);
-  const available = replaceFieldOptions.map(option => option.value).filter(field => items.every(item => hasRevisionField(item, field)));
+  const available = items.length
+    ? replaceFieldOptions.map(option => option.value).filter(field => items.every(item => hasRevisionField(item, field)))
+    : [];
   revisionItems.value = items;
   availableFields.value = available;
   selectedFields.value = stored.fields.filter(field => available.includes(field));
@@ -173,22 +174,71 @@ useAdminHeaderRefresh(() => loadPage());
 async function loadPage() {
   loading.value = true;
   try {
-    const result = await recipeApi.listWiki({
-      page: query.page,
-      pageSize: query.pageSize,
-      keyword: query.keyword.trim() || undefined
-    });
-    rows.value = result.items;
-    total.value = result.total;
-    selected.value = selected.value.filter(item => rows.value.some(row => row.id === item.id));
+    const keyword = query.keyword.trim();
+    const normalizedKeyword = keyword.toLocaleLowerCase();
+    const matchingRevisions = revisionItems.value.filter(item => !keyword
+      || item.title.toLocaleLowerCase().includes(normalizedKeyword)
+      || String(item.recipeId).includes(normalizedKeyword)
+      || String(item.contentVersionId).includes(normalizedKeyword));
+    const offset = (query.page - 1) * query.pageSize;
+    const pageRevisions = matchingRevisions.slice(offset, offset + query.pageSize);
+    const serverOffset = Math.max(0, offset - matchingRevisions.length);
+    const serverCount = query.pageSize - pageRevisions.length;
+    const excludedIds = revisionItems.value.map(item => item.recipeId).join(",");
+    const window = await loadWikiWindow(serverOffset, serverCount, keyword || undefined, excludedIds || undefined);
+    const nextTotal = matchingRevisions.length + window.total;
+    const lastPage = Math.max(1, Math.ceil(nextTotal / query.pageSize));
+    if (query.page > lastPage) {
+      query.page = lastPage;
+      await loadPage();
+      return;
+    }
+    visibleRevisionItems.value = pageRevisions;
+    rows.value = window.items;
+    total.value = nextTotal;
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : "加载 Wiki 补充列表失败");
+    ElMessage.error(error instanceof Error ? error.message : "加载菜谱内容列表失败");
   } finally {
     loading.value = false;
   }
 }
 
+async function loadWikiWindow(start: number, count: number, keyword?: string, excludeRecipeIds?: string) {
+  const pageSize = count > 0 ? 100 : 1;
+  const firstPage = count > 0 ? Math.floor(start / pageSize) + 1 : 1;
+  const offsetInFirstPage = count > 0 ? start % pageSize : 0;
+  const items: AdminRecipeWikiSummary[] = [];
+  let total = 0;
+  let page = firstPage;
+  let hasNext = true;
+
+  do {
+    const result = await recipeApi.listWiki({ page, pageSize, keyword, excludeRecipeIds });
+    total = result.total;
+    hasNext = result.hasNext;
+    const pageItems = page === firstPage ? result.items.slice(offsetInFirstPage) : result.items;
+    items.push(...pageItems.slice(0, Math.max(0, count - items.length)));
+    page += 1;
+  } while (items.length < count && hasNext);
+
+  return { items, total };
+}
+
 function search() {
+  tableRef.value?.clearSelection();
+  selected.value = [];
+  selectedRevisionItems.value = [];
+  query.page = 1;
+  void loadPage();
+}
+
+function changePage(page: number) {
+  query.page = page;
+  void loadPage();
+}
+
+function changePageSize(pageSize: number) {
+  query.pageSize = pageSize;
   query.page = 1;
   void loadPage();
 }
@@ -207,34 +257,41 @@ function openFilePicker() {
 
 async function importFile(event: Event) {
   const input = event.target as HTMLInputElement;
-  const file = input.files?.[0];
+  const files = Array.from(input.files ?? []);
   input.value = "";
-  if (!file) return;
-  if (file.size > 10 * 1024 * 1024) {
-    ElMessage.error("修订文件不能超过 10 MB");
+  if (!files.length) return;
+  if (files.some(file => file.size > 10 * 1024 * 1024)) {
+    ElMessage.error("单个修订文件不能超过 10 MB");
     return;
   }
   try {
-    const document = JSON.parse(await file.text()) as unknown;
-    const entries = readRevisionEntries(document);
+    const imported = await Promise.all(files.map(async file => {
+      try {
+        return readRevisionEntries(JSON.parse(await file.text()) as unknown);
+      } catch (error) {
+        throw new Error(`${file.name}：${error instanceof Error ? error.message : "文件格式错误"}`);
+      }
+    }));
+    const entries = imported.flat();
     if (!entries.length) throw new Error("文件中没有可修订的菜谱条目");
     if (entries.length > 100) throw new Error("一次最多处理 100 道菜谱");
-    if (new Set(entries.map(item => item.recipeId)).size !== entries.length) throw new Error("文件中存在重复的 recipeId");
+    if (new Set(entries.map(item => item.recipeId)).size !== entries.length) throw new Error("所选文件中存在重复的 recipeId");
     const existingIds = new Set(revisionItems.value.map(item => item.recipeId));
     const appendedEntries = entries.filter(item => !existingIds.has(item.recipeId));
     const duplicateCount = entries.length - appendedEntries.length;
     if (!appendedEntries.length) {
-      ElMessage.warning("文件中的菜谱 ID 已全部存在于导入池，未重复添加");
-      revisionPreviewVisible.value = revisionItems.value.length > 0;
+      ElMessage.warning("所选文件中的菜谱已全部在当前列表中");
       return;
     }
     if (revisionItems.value.length + appendedEntries.length > 100) {
-      ElMessage.warning("导入池最多保留 100 条，请先替换或删除部分条目");
+      ElMessage.warning("当前修订列表最多保留 100 条，请先替换或移除部分条目");
       return;
     }
     const isFirstImport = revisionItems.value.length === 0;
     const nextItems = [...revisionItems.value, ...appendedEntries];
-    const supported = replaceFieldOptions.map(option => option.value).filter(field => nextItems.every(item => hasRevisionField(item, field)));
+    const supported = nextItems.length
+      ? replaceFieldOptions.map(option => option.value).filter(field => nextItems.every(item => hasRevisionField(item, field)))
+      : [];
     const nextFields = isFirstImport
       ? [...supported]
       : selectedFields.value.filter(field => supported.includes(field));
@@ -242,11 +299,9 @@ async function importFile(event: Event) {
     revisionItems.value = nextItems;
     availableFields.value = supported;
     selectedFields.value = nextFields;
-    revisionKeyword.value = "";
-    revisionPreviewVisible.value = true;
-    await nextTick();
-    appendedEntries.forEach(item => revisionTable.value?.toggleRowSelection(item, true));
-    ElMessage.success(`已加入导入池 ${appendedEntries.length} 条${duplicateCount ? `，跳过重复菜谱 ${duplicateCount} 条` : ""}`);
+    query.page = 1;
+    await loadPage();
+    ElMessage.success(`已加入当前列表 ${appendedEntries.length} 条修订菜谱${duplicateCount ? `，跳过已有 ${duplicateCount} 条` : ""}`);
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : "导入修订文件失败");
   }
@@ -278,7 +333,7 @@ function readRevisionEntries(document: unknown): RevisionEntry[] {
     const recipeContent = isRecord(source.recipeContent) ? source.recipeContent : content;
     const title = typeof recipeContent?.name === "string" ? recipeContent.name : `菜谱 ${recipeId}`;
     return {
-      key: `${recipeId}-${index}`,
+      key: `${recipeId}-${contentVersionId}`,
       recipeId: Number(recipeId),
       contentVersionId: Number(contentVersionId),
       title,
@@ -294,6 +349,13 @@ function hasRevisionField(item: RevisionEntry, field: AdminRecipeWikiReplaceFiel
   if (field === "tags") return Array.isArray(item.wiki.tags);
   if (field === "assistant.steps") return isRecord(item.wiki.assistant) && Array.isArray(item.wiki.assistant.steps);
   const content = item.recipeContent;
+  if (field === "ingredientRoles" && content) {
+    if (Array.isArray(content.ingredientRoles)) return true;
+    const ingredients = content.ingredients;
+    return Array.isArray(ingredients) && ingredients.length > 0 && ingredients.every(ingredient =>
+      isRecord(ingredient) && ["MAIN", "ACCOMPANIMENT", "SEASONING"].includes(String(ingredient.recipeRole))
+    );
+  }
   return Boolean(content && Object.prototype.hasOwnProperty.call(content, field));
 }
 
@@ -321,8 +383,30 @@ function buildRevisionFile(items: RevisionEntry[]) {
   return new File([JSON.stringify(buildRevisionDocument(items))], "recipe-wiki-revision.json", { type: "application/json" });
 }
 
-function handleRevisionSelection(value: RevisionEntry[]) {
-  selectedRevisionItems.value = value;
+function handlePageSelection(value: RecipeWikiPageRow[]) {
+  const pageKeys = new Set(pageRows.value.map(item => item.key));
+  const wikiSelection = new Map(
+    selected.value
+      .filter(item => !pageKeys.has(`wiki-${item.id}`))
+      .map(item => [`wiki-${item.id}`, item])
+  );
+  const revisionSelection = new Map(
+    selectedRevisionItems.value
+      .filter(item => !pageKeys.has(`revision-${item.recipeId}`))
+      .map(item => [`revision-${item.recipeId}`, item])
+  );
+  value.forEach(item => {
+    if (item.kind === "wiki") wikiSelection.set(item.key, item.wiki);
+    else revisionSelection.set(item.key, item.recipe);
+  });
+  selected.value = [...wikiSelection.values()];
+  selectedRevisionItems.value = [...revisionSelection.values()];
+}
+
+function canSelectRow(row: RecipeWikiPageRow) {
+  return row.kind !== "wiki"
+    || selected.value.some(item => item.id === row.wiki.id)
+    || selected.value.length < 100;
 }
 
 async function replaceRevisionItems(items: RevisionEntry[]) {
@@ -337,7 +421,6 @@ async function replaceRevisionItems(items: RevisionEntry[]) {
   saving.value = true;
   const resultItems: Array<{ recipeId: number; status: "REPLACED" | "REJECTED"; message: string | null }> = [];
   let replacedCount = 0;
-  let poolSaveFailed = false;
   try {
     const batches = [items.filter(item => item.recipe), items.filter(item => !item.recipe)].filter(batch => batch.length > 0);
     for (const batch of batches) {
@@ -346,16 +429,10 @@ async function replaceRevisionItems(items: RevisionEntry[]) {
       replacedCount += result.replacedCount;
       const succeededIds = new Set(result.items.filter(item => item.status === "REPLACED").map(item => item.recipeId));
       const nextItems = revisionItems.value.filter(item => !succeededIds.has(item.recipeId));
-      try {
-        await saveRevisionPool(nextItems, selectedFields.value);
-      } catch (error) {
-        poolSaveFailed = true;
-        throw error;
-      }
+      await saveRevisionPool(nextItems, selectedFields.value);
       revisionItems.value = nextItems;
       selectedRevisionItems.value = selectedRevisionItems.value.filter(item => !succeededIds.has(item.recipeId));
     }
-    revisionTable.value?.clearSelection();
     selectedRevisionItems.value = [];
     const rejected = resultItems.filter(item => item.status === "REJECTED");
     if (rejected.length) {
@@ -370,13 +447,8 @@ async function replaceRevisionItems(items: RevisionEntry[]) {
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : "替换菜谱内容失败";
-    if (poolSaveFailed && replacedCount) {
-      ElMessage.error(`服务端已替换 ${replacedCount} 条，但本地导入池保存失败：${message}。成功项仍留在池中，请修复后重新替换或删除`);
-    } else {
-      ElMessage.error(replacedCount ? `部分条目已替换；后续批次失败：${message}` : message);
-    }
+    ElMessage.error(replacedCount ? `部分条目已替换；后续批次失败：${message}` : message);
   } finally {
-    revisionTable.value?.clearSelection();
     selectedRevisionItems.value = [];
     if (replacedCount) await loadPage();
     saving.value = false;
@@ -397,8 +469,9 @@ async function deleteOneRevision(row: RevisionEntry) {
     selectedRevisionItems.value = selectedRevisionItems.value.filter(item => item.key !== row.key);
     availableFields.value = supported;
     selectedFields.value = nextFields;
+    await loadPage();
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : "删除导入池条目失败");
+    ElMessage.error(error instanceof Error ? error.message : "移除修订菜谱失败");
   }
 }
 
@@ -408,40 +481,24 @@ async function deleteSelectedRevisions() {
     return;
   }
   try {
-    await ElMessageBox.confirm(`从本次修订文件中移除选中的 ${selectedRevisionItems.value.length} 条？不会删除线上菜谱。`, "批量删除导入项", {
+    await ElMessageBox.confirm(`从当前列表中移除选中的 ${selectedRevisionItems.value.length} 条修订菜谱？不会修改正式菜谱。`, "批量移除修订项", {
       type: "warning", confirmButtonText: "移除选中项", cancelButtonText: "取消"
     });
     const keys = new Set(selectedRevisionItems.value.map(item => item.key));
     const nextItems = revisionItems.value.filter(item => !keys.has(item.key));
-    const supported = replaceFieldOptions.map(option => option.value).filter(field => nextItems.every(item => hasRevisionField(item, field)));
+    const supported = nextItems.length
+      ? replaceFieldOptions.map(option => option.value).filter(field => nextItems.every(item => hasRevisionField(item, field)))
+      : [];
     const nextFields = nextItems.length ? selectedFields.value.filter(field => supported.includes(field)) : [];
     await saveRevisionPool(nextItems, nextFields);
     revisionItems.value = nextItems;
     selectedRevisionItems.value = [];
     availableFields.value = supported;
     selectedFields.value = nextFields;
-    revisionTable.value?.clearSelection();
+    await loadPage();
   } catch (error) {
     if (error === "cancel" || error === "close") return;
-    ElMessage.error(error instanceof Error ? error.message : "移除导入条目失败");
-  }
-}
-
-function downloadJson(fileName: string, body: unknown) {
-  const url = URL.createObjectURL(new Blob([JSON.stringify(body, null, 2)], { type: "application/json;charset=utf-8" }));
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = fileName;
-  anchor.click();
-  URL.revokeObjectURL(url);
-}
-
-async function exportOne(row: AdminRecipeWikiSummary) {
-  try {
-    const document = await recipeApi.exportWiki(row.id);
-    downloadJson(`${row.title}-${row.id}-wiki.json`, document);
-  } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : "导出 Wiki 失败");
+    ElMessage.error(error instanceof Error ? error.message : "批量移除修订项失败");
   }
 }
 
@@ -482,6 +539,10 @@ async function dismissSelected() {
     ElMessage.warning("请先选择要删除的 Wiki 补充项");
     return;
   }
+  if (selected.value.length > 100) {
+    ElMessage.warning("一次最多移出 100 项，请减少选择");
+    return;
+  }
   const items = selected.value.map(row => ({ recipeId: row.id, expectedContentVersionId: row.contentVersionId }));
   try {
     await ElMessageBox.confirm(
@@ -491,6 +552,7 @@ async function dismissSelected() {
     );
     const result = await recipeApi.dismissWikiBatch(items, createOperationId());
     ElMessage.success(`已移除 ${result.dismissedCount} 项，处理 ${result.dismissedRequestCount} 条申请`);
+    tableRef.value?.clearSelection();
     selected.value = [];
     await loadPage();
   } catch (error) {
@@ -515,10 +577,6 @@ async function quickFill(row: AdminRecipeWikiSummary) {
   }
 }
 
-function handleSelectionChange(value: AdminRecipeWikiSummary[]) {
-  selected.value = value;
-}
-
 function ownerText(row: AdminRecipeWikiSummary) {
   if (row.sourceType === "PUBLIC_CONTENT_POOL") return "公共内容池";
   return row.ownerNickname ? `${row.ownerNickname}（UID ${row.ownerUid}）` : `UID ${row.ownerUid}`;
@@ -529,7 +587,7 @@ onMounted(() => {
     try {
       await restoreRevisionPool();
     } catch (error) {
-      ElMessage.error(error instanceof Error ? error.message : "恢复本地导入池失败");
+    ElMessage.error(error instanceof Error ? error.message : "恢复本地修订列表失败");
     } finally {
       revisionPoolLoaded.value = true;
     }
@@ -540,102 +598,105 @@ onMounted(() => {
 
 <template>
   <section class="page-stack">
+    <header class="wiki-page-heading"><h1>菜谱内容修订</h1></header>
     <div class="toolbar-panel page-toolbar">
       <el-input v-model="query.keyword" class="toolbar-search" placeholder="搜索菜谱名称或 ID" clearable @keyup.enter="search" @clear="search" />
       <el-button type="primary" @click="search">搜索</el-button>
-      <el-button type="danger" :disabled="!revisionPoolLoaded || !selected.length" @click="dismissSelected">批量删除</el-button>
-      <el-button type="primary" :icon="Upload" :disabled="!revisionPoolLoaded" :loading="saving" @click="openFilePicker">导入修订文件</el-button>
-      <el-button v-if="revisionItems.length" type="primary" plain @click="revisionPreviewVisible = true">查看修订预览（{{ revisionItems.length }}）</el-button>
-      <input ref="fileInput" class="hidden-file-input" type="file" accept="application/json,.json" @change="importFile" />
+      <el-button type="danger" :disabled="!revisionPoolLoaded || !selected.length" @click="dismissSelected">移出待补充（{{ selected.length }}/100）</el-button>
+      <el-button :disabled="!selectedRevisionItems.length" @click="deleteSelectedRevisions">移除选中修订</el-button>
+      <el-button type="primary" :disabled="!selectedRevisionItems.length || !selectedFields.length" :loading="saving" @click="replaceRevisionItems(selectedRevisionItems)">
+        批量替换（{{ selectedRevisionItems.length }}）
+      </el-button>
+      <el-button type="primary" :icon="Upload" :disabled="!revisionPoolLoaded || saving" @click="openFilePicker">导入修订文件</el-button>
+      <input ref="fileInput" class="hidden-file-input" type="file" accept="application/json,.json" multiple @change="importFile" />
+    </div>
+
+    <div class="revision-fields-panel">
+      <strong>替换字段</strong>
+      <el-checkbox-group v-model="selectedFields" class="revision-field-list" @change="persistSelectedFields">
+        <el-checkbox v-for="option in replaceFieldOptions" :key="option.value" :value="option.value" :disabled="!availableFields.includes(option.value)">
+          {{ option.label }}
+        </el-checkbox>
+      </el-checkbox-group>
     </div>
 
     <div v-if="!revisionPoolLoaded" v-loading="true" class="table-panel" />
 
     <div v-else v-loading="loading" class="table-panel">
-      <el-table :data="rows" row-key="id" @selection-change="handleSelectionChange">
-        <el-table-column type="selection" width="48" />
-        <el-table-column prop="title" label="菜谱" min-width="180" />
+      <el-table ref="tableRef" :data="pageRows" row-key="key" reserve-selection @selection-change="handlePageSelection">
+        <el-table-column type="selection" width="48" :selectable="canSelectRow" />
+        <el-table-column label="菜谱" min-width="200">
+          <template #default="{ row }">
+            <div>{{ row.kind === 'revision' ? row.recipe.title : row.wiki.title }}</div>
+            <small>菜谱 ID {{ row.kind === 'revision' ? row.recipe.recipeId : row.wiki.id }}</small>
+          </template>
+        </el-table-column>
         <el-table-column label="来源" min-width="180">
           <template #default="{ row }">
-            <el-tag v-if="row.sourceType === 'PUBLIC_CONTENT_POOL'" type="warning">公共内容池</el-tag>
-            <span v-else>{{ ownerText(row) }}</span>
+            <template v-if="row.kind === 'revision'"><el-tag type="success">修订文件</el-tag></template>
+            <template v-else>
+              <el-tag v-if="row.wiki.sourceType === 'PUBLIC_CONTENT_POOL'" type="warning">公共内容池</el-tag>
+              <span v-else>{{ ownerText(row.wiki) }}</span>
+            </template>
           </template>
         </el-table-column>
         <el-table-column label="Wiki 状态" width="120">
           <template #default="{ row }">
-            <el-tag :type="row.hasPendingRequest ? 'danger' : 'info'">{{ getStatusText(row.wikiStatus) }}</el-tag>
-            <span v-if="row.hasPendingRequest" class="request-mark">有申请</span>
+            <el-tag v-if="row.kind === 'revision'" type="info">待替换</el-tag>
+            <template v-else>
+              <el-tag :type="row.wiki.hasPendingRequest ? 'danger' : 'info'">{{ getStatusText(row.wiki.wikiStatus) }}</el-tag>
+              <span v-if="row.wiki.hasPendingRequest" class="request-mark">有申请</span>
+            </template>
           </template>
         </el-table-column>
         <el-table-column label="最近申请" min-width="190">
           <template #default="{ row }">
-            <div>{{ row.latestRequestAt ? formatDateTime(row.latestRequestAt) : "暂无" }}</div>
-            <small v-if="row.latestRequestUserUid">UID {{ row.latestRequestUserUid }}{{ row.latestRequestUserNickname ? ` · ${row.latestRequestUserNickname}` : "" }}</small>
+            <template v-if="row.kind === 'wiki'">
+              <div>{{ row.wiki.latestRequestAt ? formatDateTime(row.wiki.latestRequestAt) : "暂无" }}</div>
+              <small v-if="row.wiki.latestRequestUserUid">UID {{ row.wiki.latestRequestUserUid }}{{ row.wiki.latestRequestUserNickname ? ` · ${row.wiki.latestRequestUserNickname}` : "" }}</small>
+            </template>
+            <span v-else>—</span>
           </template>
         </el-table-column>
         <el-table-column label="操作" width="370" fixed="right">
           <template #default="{ row }">
-            <el-button v-if="row.hasImportWiki" link type="success" @click="quickFill(row)">从导入数据补充</el-button>
-            <el-button link type="primary" :icon="Download" @click="exportOne(row)">导出</el-button>
-            <el-button link type="danger" @click="reject(row)">拒绝</el-button>
-            <el-button link type="danger" @click="dismiss(row)">删除</el-button>
+            <template v-if="row.kind === 'revision'">
+              <el-button link type="primary" :disabled="!selectedFields.length" :loading="saving" @click="replaceOneRevision(row.recipe)">替换</el-button>
+              <el-button link type="danger" @click="deleteOneRevision(row.recipe)">移除</el-button>
+            </template>
+            <template v-else>
+              <el-button v-if="row.wiki.hasImportWiki" link type="success" @click="quickFill(row.wiki)">从导入数据修订</el-button>
+              <el-button link type="danger" @click="reject(row.wiki)">拒绝</el-button>
+              <el-button link type="danger" @click="dismiss(row.wiki)">移除</el-button>
+            </template>
           </template>
         </el-table-column>
-        <template #empty><el-empty description="暂无待补充 Wiki 的 ACTIVE 菜谱" /></template>
+        <template #empty><el-empty description="当前列表为空；可导入修订文件或查看待处理 Wiki" /></template>
       </el-table>
       <div class="table-footer">
-        <span>共 {{ total }} 条</span>
+        <span>待处理 Wiki {{ total }} 条 · 当前列表修订 {{ revisionItems.length }} 条</span>
         <el-pagination
-          v-model:current-page="query.page"
-          v-model:page-size="query.pageSize"
+          :current-page="query.page"
+          :page-size="query.pageSize"
           layout="total, sizes, prev, pager, next"
           :total="total"
           :page-sizes="[20, 50, 100]"
-          @current-change="loadPage"
-          @size-change="search"
+          @current-change="changePage"
+          @size-change="changePageSize"
         />
       </div>
     </div>
-
-    <el-drawer v-model="revisionPreviewVisible" title="修订文件预览" size="78%">
-      <div class="revision-fields-panel">
-        <span>替换字段</span>
-        <el-checkbox-group v-model="selectedFields" class="revision-field-list" @change="persistSelectedFields">
-          <el-checkbox v-for="option in replaceFieldOptions" :key="option.value" :value="option.value" :disabled="!availableFields.includes(option.value)">
-            {{ option.label }}
-          </el-checkbox>
-        </el-checkbox-group>
-      </div>
-      <div class="revision-toolbar">
-        <el-input v-model="revisionKeyword" class="toolbar-search" placeholder="搜索导入项名称或 ID" clearable />
-        <el-button type="danger" :disabled="!selectedRevisionItems.length" @click="deleteSelectedRevisions">移除选中项</el-button>
-        <el-button type="primary" :disabled="!selectedRevisionItems.length || !selectedFields.length" :loading="saving" @click="replaceRevisionItems(selectedRevisionItems)">批量替换</el-button>
-      </div>
-      <el-table ref="revisionTable" :data="visibleRevisionItems" row-key="key" :reserve-selection="true" @selection-change="handleRevisionSelection">
-        <el-table-column type="selection" width="48" />
-        <el-table-column prop="recipeId" label="菜谱 ID" width="120" />
-        <el-table-column prop="contentVersionId" label="正文版本 ID" width="140" />
-        <el-table-column prop="title" label="菜谱" min-width="180" />
-        <el-table-column label="操作" width="150" fixed="right">
-          <template #default="{ row }">
-            <el-button link type="primary" :disabled="!selectedFields.length" :loading="saving" @click="replaceOneRevision(row)">替换</el-button>
-            <el-button link type="danger" @click="deleteOneRevision(row)">删除</el-button>
-          </template>
-        </el-table-column>
-        <template #empty><el-empty description="导入池为空，请导入修订文件" /></template>
-      </el-table>
-    </el-drawer>
   </section>
 </template>
 
 <style scoped>
 .hidden-file-input { display: none; }
+.wiki-page-heading h1 { margin: 0; font-size: 22px; color: #292524; }
 .page-toolbar { flex-wrap: wrap; gap: 12px; }
 .toolbar-search { width: 240px; }
-.revision-fields-panel { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 12px; margin-bottom: 16px; color: #57534e; font-size: 13px; }
+.revision-fields-panel { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; color: #57534e; font-size: 13px; }
 .revision-field-list { display: flex; flex-wrap: wrap; gap: 0 12px; }
 .revision-field-list :deep(.el-checkbox) { margin-right: 0; }
-.revision-toolbar { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
 .request-mark { display: block; margin-top: 4px; color: #b45309; font-size: 12px; }
 .table-footer { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-top: 16px; }
 </style>
