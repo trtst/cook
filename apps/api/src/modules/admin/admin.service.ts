@@ -6632,6 +6632,56 @@ export class AdminService {
       if (!Array.isArray(roleRows) || roleRows.length !== next.ingredients.length) {
         throw new BadRequestException("食材角色列表必须与当前菜谱食材逐行对应");
       }
+      let fullRecipeRoleIndexes: number[] | null = null;
+      if (!Array.isArray(raw.ingredientRoles)) {
+        const currentIds = [...new Set(next.ingredients.map(ingredient => ingredient.ingredientId))];
+        const currentIngredients = await tx.ingredient.findMany({
+          where: { id: { in: currentIds }, ownerId: null },
+          select: {
+            id: true,
+            name: true,
+            searchKey: true,
+            aliases: true,
+            mergedFrom: {
+              where: { ownerId: null },
+              select: { name: true, searchKey: true, aliases: true }
+            }
+          }
+        });
+        const ingredientTerms = new Map(currentIngredients.map(ingredient => [
+          ingredient.id,
+          new Set([
+            ingredient.name,
+            ingredient.searchKey,
+            ...ingredient.aliases,
+            ...ingredient.mergedFrom.flatMap(source => [source.name, source.searchKey, ...source.aliases])
+          ].map(buildSearchKey))
+        ]));
+        const candidateIndexes = roleRows.map((row, rowIndex) => {
+          const roleRow = row as Record<string, unknown>;
+          if (typeof roleRow.name !== "string") throw new BadRequestException(`第 ${rowIndex + 1} 个食材角色缺少食材名称`);
+          const key = buildSearchKey(roleRow.name);
+          return next.ingredients.flatMap((ingredient, index) =>
+            ingredientTerms.get(ingredient.ingredientId)?.has(key) ? [index] : []
+          );
+        });
+        if (candidateIndexes.every((indexes, index) => indexes.includes(index))) {
+          fullRecipeRoleIndexes = candidateIndexes.map((_indexes, index) => index);
+        } else if (candidateIndexes.every(indexes => indexes.length === 1)
+          && new Set(candidateIndexes.map(indexes => indexes[0])).size === candidateIndexes.length) {
+          fullRecipeRoleIndexes = candidateIndexes.map(indexes => indexes[0]!);
+        } else {
+          const mismatchIndex = candidateIndexes.findIndex(indexes => indexes.length !== 1);
+          const duplicateTargetIndex = candidateIndexes.findIndex((indexes, index) =>
+            candidateIndexes.some((other, otherIndex) => otherIndex !== index && other[0] === indexes[0])
+          );
+          const index = mismatchIndex >= 0 ? mismatchIndex : duplicateTargetIndex;
+          const row = roleRows[Math.max(index, 0)] as Record<string, unknown>;
+          const incomingName = typeof row?.name === "string" ? row.name : "未知食材";
+          const currentName = next.ingredients[Math.max(index, 0)]?.ingredientName ?? "未知食材";
+          throw new ConflictException(`第 ${Math.max(index, 0) + 1} 个食材角色“${incomingName}”无法唯一匹配当前菜谱食材“${currentName}”`);
+        }
+      }
       next.ingredients = next.ingredients.map((ingredient, index) => {
         const row = roleRows[index];
         if (!row || typeof row !== "object" || Array.isArray(row)) throw new BadRequestException(`第 ${index + 1} 个食材角色格式不正确`);
@@ -6640,13 +6690,15 @@ export class AdminService {
           if (roleRow.ingredientId !== ingredient.ingredientId || roleRow.ingredientName !== ingredient.ingredientName) {
             throw new ConflictException(`第 ${index + 1} 个食材角色与当前正文不匹配`);
           }
-        } else if (typeof roleRow.name !== "string" || buildSearchKey(roleRow.name) !== buildSearchKey(ingredient.ingredientName)) {
-          throw new ConflictException(`第 ${index + 1} 个食材角色与当前正文不匹配`);
         }
         if (roleRow.recipeRole !== "MAIN" && roleRow.recipeRole !== "ACCOMPANIMENT" && roleRow.recipeRole !== "SEASONING") {
           throw new BadRequestException(`第 ${index + 1} 个食材必须标注主料、配料或调味料角色`);
         }
-        return { ...ingredient, recipeRole: roleRow.recipeRole };
+        const roleSourceIndex = fullRecipeRoleIndexes
+          ? fullRecipeRoleIndexes.findIndex(currentIndex => currentIndex === index)
+          : index;
+        const roleSource = roleRows[roleSourceIndex] as Record<string, unknown>;
+        return { ...ingredient, recipeRole: roleSource.recipeRole as typeof ingredient.recipeRole };
       });
     }
     if (selectedFields.has("steps")) {
