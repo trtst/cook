@@ -1,4 +1,4 @@
-import { requestData, uploadForm, type OperationId, type UUID } from "./http";
+import { requestData, uploadForm, type OperationId, type PageResult, type UUID } from "./http";
 
 export type HomeTopicStatus = "DRAFT" | "PUBLISHED" | "UNLISTED";
 export type HomeTopicWeekday = "MONDAY" | "TUESDAY" | "WEDNESDAY" | "THURSDAY" | "FRIDAY" | "SATURDAY" | "SUNDAY";
@@ -73,6 +73,8 @@ export interface HomeTopicRecipeStatsFacet {
 
 export interface HomeTopicRecipeStatsDimension {
   confirmedCount: number;
+  coverageApplicable: boolean;
+  notApplicableCount: number;
   missingCount: number;
   coverageRate: number;
   values: HomeTopicRecipeStatsFacet[];
@@ -100,6 +102,18 @@ export interface HomeTopicRecipeStatsSnapshot {
 }
 
 export interface HomeTopicRecipeStatsResponse { snapshot: HomeTopicRecipeStatsSnapshot | null }
+
+export type HomeTopicRecipeStatsDimensionKey = keyof HomeTopicRecipeStatsSnapshot["facets"] | "nutrition";
+
+export interface HomeTopicRecipeStatsMissingRecipe {
+  id: UUID;
+  title: string;
+  coverImageUrl: string | null;
+}
+
+export interface HomeTopicRecipeStatsMissingRecipesResponse extends PageResult<HomeTopicRecipeStatsMissingRecipe> {
+  checkedAt: string;
+}
 
 export interface HomeTopicMenuCheckResponse {
   topicId: UUID;
@@ -235,6 +249,11 @@ export const homeTopicsApi = {
   },
   getRecipeStats() {
     return requestData<HomeTopicRecipeStatsResponse>("/admin/home-topics/statistics");
+  },
+  getMissingRecipeStats(query: { dimension: HomeTopicRecipeStatsDimensionKey; value?: string; page: number; pageSize: number }) {
+    return requestData<HomeTopicRecipeStatsMissingRecipesResponse>("/admin/home-topics/statistics/missing-recipes", {
+      query
+    });
   },
   getMenuCheck(topicId: UUID) {
     return requestData<HomeTopicMenuCheckResponse>(`/admin/home-topics/${encodeURIComponent(String(topicId))}/menu-check`);

@@ -128,6 +128,12 @@ const router = createRouter({
           meta: { title: "系统菜谱" }
         },
         {
+          path: "recipes/statistics",
+          name: "recipe-library-statistics",
+          component: () => import("@/pages/RecipeLibraryStatisticsPage.vue"),
+          meta: { title: "菜谱库统计" }
+        },
+        {
           path: "recipes/image-generation",
           name: "image-generation",
           component: () => import("@/pages/ImageGenerationPage.vue"),
@@ -137,7 +143,7 @@ const router = createRouter({
           path: "recipes/wiki",
           name: "recipe-wiki",
           component: () => import("@/pages/RecipeWikiPage.vue"),
-          meta: { title: "Wiki 补充" }
+          meta: { title: "菜谱内容修订" }
         },
         {
           path: "recipes/imports",

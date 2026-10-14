@@ -20,7 +20,6 @@ const total = ref(0);
 const blockedRecipeCount = ref(0);
 const blockedView = ref(false);
 const exporting = ref(false);
-const exportingWikiRevision = ref(false);
 const confirmingCandidates = ref(false);
 const syncingImportedContent = ref(false);
 let requestId = 0;
@@ -205,82 +204,35 @@ async function syncSelectedImportedContent() {
 }
 
 async function exportFilteredRecipes() {
-  // 无选择时按当前筛选条件分页导出；有选择时只导出跨页保留的菜谱。
   if (exporting.value) return;
-  exporting.value = true;
-  try {
-    const filters = {
-      categoryId: query.categoryId || undefined,
-      keyword: query.keyword.trim() || undefined,
-      status: query.status || undefined
-    };
-    let page = await recipeApi.exportImages({ ...filters, page: 1, pageSize: 100 });
-    const allItems = [...page.items];
-    while (page.hasNext) {
-      page = await recipeApi.exportImages({ ...filters, page: page.page + 1, pageSize: page.pageSize });
-      allItems.push(...page.items);
-    }
-    const items = selectedRecipes.value.size > 0
-      ? allItems.filter(item => selectedRecipes.value.has(item.recipeId))
-      : allItems;
-    if (!items.length) {
-      ElMessage.info("当前筛选没有可导出的菜谱");
-      return;
-    }
-    const exportData = Object.fromEntries(items.map(item => [String(item.recipeId), {
-      contentVersionId: item.contentVersionId,
-      title: item.title,
-      description: item.description,
-      keywords: item.keywords,
-      tips: item.tips,
-      steps: item.steps,
-      wikiSteps: item.wikiSteps
-    }]));
-    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json;charset=utf-8" });
-    const downloadUrl = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = downloadUrl;
-    link.download = `recipes-${new Date().toISOString().replace(/[:.]/gu, "-")}.json`;
-    link.click();
-    window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 0);
-    ElMessage.success(`已导出 ${items.length} 道菜谱`);
-  } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : "导出菜谱失败");
-  } finally {
-    exporting.value = false;
-  }
-}
-
-async function exportWikiRevision() {
-  if (exportingWikiRevision.value) return;
   if (selectedRecipes.value.size > 100) {
-    ElMessage.warning("一次最多导出 100 道菜谱 Wiki，请减少勾选数量");
+    ElMessage.warning("一次最多导出 100 道菜谱，请减少勾选数量");
     return;
   }
-  exportingWikiRevision.value = true;
+  exporting.value = true;
   try {
-    const result = await recipeApi.exportWikiRevision(selectedRecipes.value.size
+    const result = await recipeApi.exportFullJson(selectedRecipes.value.size
       ? { recipeIds: Array.from(selectedRecipes.value) }
       : {
           categoryId: query.categoryId || undefined,
           keyword: query.keyword.trim() || undefined
         });
     if (!result.recipes.length) {
-      ElMessage.info("当前筛选没有可修订的 READY Wiki");
+      ElMessage.info("当前筛选没有可导出的菜谱");
       return;
     }
     const blob = new Blob([JSON.stringify(result, null, 2)], { type: "application/json;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = `recipe-wiki-revision-${new Date().toISOString().slice(0, 10)}.json`;
+    anchor.download = `recipes-full-${new Date().toISOString().slice(0, 10)}.json`;
     anchor.click();
     window.setTimeout(() => URL.revokeObjectURL(url), 0);
-    ElMessage.success(`已导出 ${result.recipes.length} 道菜谱的 Wiki 修订文件`);
+    ElMessage.success(`已导出 ${result.recipes.length} 道完整菜谱`);
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : "导出 Wiki 修订文件失败");
+    ElMessage.error(error instanceof Error ? error.message : "导出菜谱失败");
   } finally {
-    exportingWikiRevision.value = false;
+    exporting.value = false;
   }
 }
 
@@ -419,8 +371,7 @@ onMounted(() => {
         <el-button text @click="toggleCurrentPageSelection">
           {{ allCurrentPageRecipesSelected ? "取消本页全选" : "全选当前页" }}
         </el-button>
-        <el-button :icon="Download" :loading="exporting" @click="exportFilteredRecipes">批量导出</el-button>
-        <el-button :icon="Download" :loading="exportingWikiRevision" :disabled="blockedView || (query.status !== '' && query.status !== 'ACTIVE') || exporting || confirmingCandidates || syncingImportedContent" @click="exportWikiRevision">导出 Wiki 修订文件</el-button>
+        <el-button :icon="Download" :loading="exporting" :disabled="blockedView || (query.status !== '' && query.status !== 'ACTIVE') || confirmingCandidates || syncingImportedContent" @click="exportFilteredRecipes">批量导出</el-button>
         <el-button class="toolbar-main-action" type="primary" :icon="Plus" @click="openCreate">新增系统菜谱</el-button>
       </div>
     </div>

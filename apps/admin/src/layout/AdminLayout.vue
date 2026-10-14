@@ -39,6 +39,7 @@ const activeMenu = computed(() => {
   if (
     route.path.startsWith("/recipes/") &&
     route.path !== "/recipes/list" &&
+    route.path !== "/recipes/statistics" &&
     route.path !== "/recipes/reports" &&
     route.path !== "/recipes/categories" &&
     route.path !== "/recipes/wiki" &&
@@ -138,8 +139,9 @@ function triggerHeaderRefresh() {
           </template>
           <el-menu-item index="/recipes/categories">系统菜谱分类</el-menu-item>
           <el-menu-item index="/recipes/list">系统菜谱</el-menu-item>
+          <el-menu-item index="/recipes/statistics">菜谱库统计</el-menu-item>
           <el-menu-item index="/recipes/image-generation">图片生成</el-menu-item>
-          <el-menu-item index="/recipes/wiki">Wiki 补充</el-menu-item>
+          <el-menu-item index="/recipes/wiki">菜谱内容修订</el-menu-item>
           <el-menu-item index="/recipes/imports">菜谱导入中心</el-menu-item>
           <el-menu-item index="/recipes/pending">待审核菜谱</el-menu-item>
           <el-menu-item index="/recipes/reports">菜谱举报</el-menu-item>

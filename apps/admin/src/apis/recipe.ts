@@ -71,27 +71,10 @@ export interface AdminRecipeWikiDismissBatchResult {
 
 export interface AdminRecipeWikiQuery extends PageQuery {
   keyword?: string;
+  excludeRecipeIds?: string;
 }
 
-export interface AdminRecipeWikiExportDocument {
-  schemaVersion: "recipe.wiki.v1";
-  recipeId: UUID;
-  contentVersionId: UUID;
-  recipeContent: {
-    ingredientRoles: Array<{ ingredientId: UUID; ingredientName: string; recipeRole: RecipeIngredientRole | null }>;
-  };
-  wiki: {
-    tags: Array<{ tagCode: string; tagValue: string }>;
-    assistant: { steps: RecipeImportAssistantStepDraft[] };
-  };
-}
-
-export interface AdminRecipeWikiBatchExportDocument {
-  schemaVersion: "recipe.wiki.batch.v1";
-  recipes: Array<Omit<AdminRecipeWikiExportDocument, "schemaVersion">>;
-}
-
-export interface AdminRecipeWikiRevisionExportDocument {
+export interface AdminRecipeFullExportDocument {
   schemaVersion: "recipe.import.batch.v1";
   recipes: Array<{
     recipe: {
@@ -107,7 +90,7 @@ export interface AdminRecipeWikiRevisionExportDocument {
         duration: string;
         tips: string;
         keywords: string[];
-        ingredients: Array<{ name: string; quantity: string | null; unit: string | null; fuzzyText: "适量" | null; categoryCode: string | null; recipeRole: RecipeIngredientRole }>;
+        ingredients: Array<{ name: string; quantity: string | null; unit: string | null; fuzzyText: "适量" | null; categoryCode: string | null; recipeRole: RecipeIngredientRole | null }>;
         tools: Array<{ name: string }>;
         steps: Array<{ text: string; imageUrl: string | null; imagePrompt: string | null }>;
       };
@@ -128,6 +111,7 @@ export interface AdminRecipeWikiImportResult {
 export type AdminRecipeWikiReplaceField =
   | "name"
   | "story"
+  | "baseServings"
   | "difficulty"
   | "duration"
   | "tips"
@@ -205,17 +189,6 @@ export interface AdminRecipeImageUploadResult {
     width: number;
     height: number;
   };
-}
-
-export interface AdminRecipeImageExportItem {
-  recipeId: UUID;
-  contentVersionId: UUID;
-  title: string;
-  description: string;
-  keywords: string[];
-  tips: string;
-  steps: Array<{ order: number; imagePrompt: string | null }>;
-  wikiSteps: Array<{ order: number; imagePrompt: string | null }>;
 }
 
 export interface AdminRecipeDetail {
@@ -644,27 +617,13 @@ export const recipeApi = {
       idempotencyKey: operationId
     });
   },
-  exportImages(query: Pick<AdminRecipeQuery, "page" | "pageSize" | "keyword" | "status" | "categoryId">) {
-    return requestData<PageResult<AdminRecipeImageExportItem>>("/admin/recipes/export", {
-      query: { ...query }
-    });
-  },
   listWiki(query: AdminRecipeWikiQuery) {
     return requestData<PageResult<AdminRecipeWikiSummary>>("/admin/recipe-wiki", {
       query: { ...query }
     });
   },
-  exportWiki(recipeId: UUID) {
-    return requestData<AdminRecipeWikiExportDocument>(`/admin/recipe-wiki/${encodeURIComponent(String(recipeId))}/export`);
-  },
-  exportWikiBatch(recipeIds: UUID[]) {
-    return requestData<AdminRecipeWikiBatchExportDocument>("/admin/recipe-wiki/export", {
-      method: "POST",
-      body: { recipeIds }
-    });
-  },
-  exportWikiRevision(body: { recipeIds?: UUID[]; categoryId?: UUID; keyword?: string }) {
-    return requestData<AdminRecipeWikiRevisionExportDocument>("/admin/recipes/wiki-revision-export", {
+  exportFullJson(body: { recipeIds?: UUID[]; categoryId?: UUID; keyword?: string }) {
+    return requestData<AdminRecipeFullExportDocument>("/admin/recipes/full-export", {
       method: "POST",
       body
     });

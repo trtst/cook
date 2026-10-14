@@ -235,6 +235,9 @@ function formatFacetRows(rows: HomeTopicRecipeStatsSnapshot["facets"]["allIngred
 }
 
 function formatCoverage(dimension: HomeTopicRecipeStatsSnapshot["facets"]["allIngredients"]) {
+  if (dimension.notApplicableCount) {
+    return `含有 ${dimension.confirmedCount} 道 · 无需此类食材 ${dimension.notApplicableCount} 道 · 缺失 ${dimension.missingCount} 道（${(dimension.coverageRate * 100).toFixed(1)}%）`;
+  }
   return `覆盖 ${dimension.confirmedCount} / 缺失 ${dimension.missingCount}（${(dimension.coverageRate * 100).toFixed(1)}%）`;
 }
 
