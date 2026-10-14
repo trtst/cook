@@ -41,14 +41,16 @@
             <view v-if="(loading || !loaded) && !items.length" class="history-list">
               <view v-for="index in 4" :key="index" class="history-card">
                 <view class="history-card__cover">
-                  <Skeleton width="280rpx" height="210rpx" radius="var(--radius-xs)" />
+                  <Skeleton width="100%" height="100%" radius="var(--radius-xs)" />
                 </view>
-                <view class="history-card__main history-card__main--skeleton">
-                  <view class="history-card__title">
+                <view class="history-card__main">
+                  <view class="history-card__title history-card__title--skeleton">
                     <Skeleton width="72%" height="32rpx" radius="8rpx" />
                   </view>
                   <Skeleton width="120rpx" height="24rpx" radius="8rpx" />
-                  <Skeleton width="80%" height="24rpx" radius="8rpx" />
+                  <view class="history-card__footer">
+                    <Skeleton width="140rpx" height="24rpx" radius="8rpx" />
+                  </view>
                 </view>
               </view>
             </view>
@@ -71,46 +73,25 @@
               <view
                 v-for="item in items"
                 :key="item.id"
-                class="history-card-wrap"
-                :class="{ 'history-card-wrap--open': openHistoryId === item.id }"
-                @touchstart="onTouchStart($event, item)"
-                @touchmove="onTouchMove($event, item)"
-                @touchend="onTouchEnd"
-                @touchcancel="onTouchEnd"
+                class="history-card"
+                hover-class="history-card--pressed"
+                hover-stay-time="100"
+                @click="openItem(item)"
               >
-                <view class="history-card__actions">
-                  <view class="history-card__action history-card__action--plan" @click.stop="openPlanSheet(item)">
-                    <text class="cookfont icon-add-plan history-card__action-icon" />
-                    <text class="history-card__action-label">添加到计划</text>
-                  </view>
-                  <view
-                    v-if="item.sourceType !== 'MY'"
-                    class="history-card__action history-card__action--private"
-                    @click.stop="openPrivateSheet(item)"
-                  >
-                    <text class="cookfont icon-add-list history-card__action-icon" />
-                    <text class="history-card__action-label">添加到私房菜</text>
-                  </view>
-                  <view class="history-card__action history-card__action--delete" @click.stop="deleteHistory(item)">
-                    <text class="cookfont icon-close history-card__action-icon" />
-                    <text class="history-card__action-label">删除</text>
-                  </view>
+                <view class="history-card__cover">
+                  <image v-if="item.coverImageUrl" class="history-card__image" :src="item.coverImageUrl" mode="aspectFill" />
+                  <ImageEmpty v-else class="history-card__image history-card__image--empty" copy="封面图" ratio="fill" />
                 </view>
-                <view
-                  class="history-card"
-                  :style="{ transform: `translateX(-${openHistoryId === item.id ? actionWidth(item) : 0}rpx)` }"
-                  hover-class="history-card--pressed"
-                  hover-stay-time="100"
-                  @click="openItem(item)"
-                >
-                  <view class="history-card__cover">
-                    <image v-if="item.coverImageUrl" class="history-card__image" :src="item.coverImageUrl" mode="aspectFill" />
-                    <ImageEmpty v-else class="history-card__image history-card__image--empty" copy="封面图" ratio="fill" />
-                  </view>
-                  <view class="history-card__main">
-                    <text class="history-card__title">{{ item.title }}</text>
-                    <text class="history-card__source">{{ sourceText(item.sourceType) }}</text>
+                <view class="history-card__main">
+                  <text class="history-card__title">{{ item.title }}</text>
+                  <text class="history-card__source">{{ sourceText(item.sourceType) }}</text>
+                  <view class="history-card__footer">
                     <text class="history-card__time">{{ formatViewTime(item.lastViewedAt) }}</text>
+                    <text
+                      class="history-card__delete"
+                      :class="{ 'history-card__delete--disabled': actionLoadingId === item.id }"
+                      @click.stop="deleteHistory(item)"
+                    >{{ actionLoadingId === item.id ? "删除中" : "删除" }}</text>
                   </view>
                 </view>
               </view>
@@ -127,20 +108,6 @@
         </scroll-view>
       </view>
     </view>
-    <AddToPlanSheet
-      :visible="planSheetVisible"
-      :items="planSheetItems"
-      success-toast-placement="bottom"
-      @close="closePlanSheet"
-    />
-    <AddToPrivateSheet
-      v-if="privateSource"
-      :visible="privateSheetVisible"
-      :source-recipe-id="privateSource.recipeId"
-      :source-version-id="privateSource.versionId"
-      @close="closePrivateSheet"
-      @success="handlePrivateSuccess"
-    />
   </Layout>
 </template>
 
@@ -165,8 +132,6 @@ import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
 import { formatDateTimeSecond } from "@/utils/date";
 import { createOperationId } from "@/utils/operation-id";
-import AddToPlanSheet from "@/components/Recipe/AddToPlanSheet.vue";
-import AddToPrivateSheet from "@/components/Recipe/AddToPrivateSheet.vue";
 
 const pageStyle = usePageScrollStyle();
 const { themeVars, themeClasses } = useTheme();
@@ -201,14 +166,7 @@ const page = ref(1);
 const pageSize = ref(20);
 const hasNext = ref(false);
 const loadedMoreOnce = ref(false);
-const openHistoryId = ref<UUID | null>(null);
 const actionLoadingId = ref<UUID | null>(null);
-const planSheetVisible = ref(false);
-const privateSheetVisible = ref(false);
-const planSheetItems = ref<Array<{ recipeId: UUID; recipeVersionId?: UUID }>>([]);
-const privateSource = ref<{ recipeId: UUID; versionId: UUID } | null>(null);
-let touchStart: { x: number; y: number; itemId: UUID } | null = null;
-let lastSwipeAt = 0;
 
 onShow(() => {
   if (sessionStore.isLoggedIn) void loadPage(true);
@@ -222,7 +180,6 @@ async function loadPage(reset = true) {
   if (!sessionStore.isLoggedIn) return false;
   if (loading.value || loadingMore.value) return false;
 
-  if (reset) openHistoryId.value = null;
   if (reset) loading.value = true;
   else loadingMore.value = true;
   errorText.value = "";
@@ -282,77 +239,14 @@ function sourceText(sourceType: RecipeViewHistoryItem["sourceType"]) {
 }
 
 function formatViewTime(value: string) {
-  return formatDateTimeSecond(value, "刚刚");
+  return formatDateTimeSecond(value, "刚刚").slice(0, 10);
 }
 
 function openItem(item: RecipeViewHistoryItem) {
-  if (Date.now() - lastSwipeAt < 350) return;
-  if (openHistoryId.value !== null) {
-    openHistoryId.value = null;
-    return;
-  }
   if (!item.isAvailable || !item.recipeId) return;
   void uniPlatform.navigation.navigateTo(
     `/pages_recipe/detail/index?recipeId=${encodeURIComponent(String(item.recipeId))}&kind=${item.sourceType === "MY" ? "my" : "inspiration"}`
   );
-}
-
-function actionWidth(item: RecipeViewHistoryItem) {
-  return (item.sourceType === "MY" ? 2 : 3) * 130;
-}
-
-function onTouchStart(event: TouchEvent, item: RecipeViewHistoryItem) {
-  const touch = event.touches[0];
-  if (!touch) return;
-  touchStart = { x: touch.clientX, y: touch.clientY, itemId: item.id };
-}
-
-function onTouchMove(event: TouchEvent, item: RecipeViewHistoryItem) {
-  if (!touchStart || touchStart.itemId !== item.id) return;
-  const touch = event.touches[0];
-  if (!touch) return;
-  const deltaX = touch.clientX - touchStart.x;
-  const deltaY = touch.clientY - touchStart.y;
-  if (Math.abs(deltaX) < 12 || Math.abs(deltaX) < Math.abs(deltaY)) return;
-  lastSwipeAt = Date.now();
-  if (deltaX < 0) openHistoryId.value = item.id;
-  else if (openHistoryId.value === item.id) openHistoryId.value = null;
-}
-
-function onTouchEnd() {
-  touchStart = null;
-}
-
-async function openPlanSheet(item: RecipeViewHistoryItem) {
-  if (!item.recipeId || !item.isAvailable || actionLoadingId.value !== null) return;
-  actionLoadingId.value = item.id;
-  try {
-    const recipeVersionId = item.sourceType === "INSPIRATION"
-      ? (await recipeApi.getRecipeDetail(item.recipeId)).contentVersionId
-      : undefined;
-    planSheetItems.value = [{ recipeId: item.recipeId, ...(recipeVersionId ? { recipeVersionId } : {}) }];
-    planSheetVisible.value = true;
-    openHistoryId.value = null;
-  } catch (error) {
-    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "菜谱加载失败", icon: "none" });
-  } finally {
-    actionLoadingId.value = null;
-  }
-}
-
-async function openPrivateSheet(item: RecipeViewHistoryItem) {
-  if (!item.recipeId || !item.isAvailable || item.sourceType === "MY" || actionLoadingId.value !== null) return;
-  actionLoadingId.value = item.id;
-  try {
-    const detail = await recipeApi.getRecipeDetail(item.recipeId);
-    privateSource.value = { recipeId: item.recipeId, versionId: detail.contentVersionId };
-    privateSheetVisible.value = true;
-    openHistoryId.value = null;
-  } catch (error) {
-    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "菜谱加载失败", icon: "none" });
-  } finally {
-    actionLoadingId.value = null;
-  }
 }
 
 async function deleteHistory(item: RecipeViewHistoryItem) {
@@ -360,7 +254,6 @@ async function deleteHistory(item: RecipeViewHistoryItem) {
   actionLoadingId.value = item.id;
   try {
     await recipeApi.deleteRecipeViewHistory(item.id, createOperationId());
-    openHistoryId.value = null;
     const visibleCount = items.value.length;
     if (await loadPage(true)) {
       while (hasNext.value && items.value.length < visibleCount) {
@@ -373,19 +266,6 @@ async function deleteHistory(item: RecipeViewHistoryItem) {
   } finally {
     actionLoadingId.value = null;
   }
-}
-
-function closePlanSheet() {
-  planSheetVisible.value = false;
-}
-
-function closePrivateSheet() {
-  privateSheetVisible.value = false;
-  privateSource.value = null;
-}
-
-function handlePrivateSuccess() {
-  closePrivateSheet();
 }
 
 async function automatorApplySession(snapshot: { token: string; uid?: number; expiresAt: string; refreshCheckedAt?: number }) {
@@ -459,7 +339,7 @@ defineExpose({
 }
 
 .notice,
-.history-card-wrap {
+.history-card {
   border-radius: var(--radius-xs);
   background: var(--material-card-bg);
   box-shadow: var(--material-card-shadow);
@@ -497,12 +377,13 @@ defineExpose({
 }
 
 .history-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-page);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 30rpx;
 }
 
 .inline-notice {
+  grid-column: 1 / -1;
   display: flex;
   justify-content: space-between;
   padding: 0 8rpx 4rpx;
@@ -510,71 +391,23 @@ defineExpose({
   font-size: var(--font-size-xs);
 }
 
-.history-card-wrap {
-  position: relative;
-  overflow: hidden;
-}
-
 .history-card {
-  position: relative;
-  z-index: 1;
   display: flex;
-  align-items: center;
-  min-height: 156rpx;
-  transition: transform 180ms ease;
-  background: var(--material-card-bg);
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .history-card--pressed {
   opacity: 0.82;
 }
 
-.history-card__actions {
-  position: absolute;
-  inset: 0 0 0 auto;
-  display: flex;
-  height: 100%;
-}
-
-.history-card__action {
-  display: flex;
-  width: 130rpx;
-  align-items: center;
-  justify-content: center;
-  flex-direction: column;
-  gap: 8rpx;
-  color: #fff;
-}
-
-.history-card__action--plan {
-  background: var(--color-primary);
-}
-
-.history-card__action--private {
-  background: var(--color-support-action);
-}
-
-.history-card__action--delete {
-  background: var(--color-danger, #c9544d);
-}
-
-.history-card__action-icon {
-  color: #fff;
-  font-size: 36rpx;
-}
-
-.history-card__action-label {
-  font-size: 19rpx;
-  line-height: 1.2;
-  text-align: center;
-}
-
 .history-card__cover {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 280rpx;
-  height: 210rpx;
+  width: 100%;
+  aspect-ratio: 3 / 4;
   flex-shrink: 0;
   overflow: hidden;
   border-radius: var(--radius-xs);
@@ -589,35 +422,60 @@ defineExpose({
 .history-card__main {
   box-sizing: border-box;
   display: flex;
-  flex: 1;
   flex-direction: column;
-  height: 210rpx;
+  flex: 1;
   min-width: 0;
-  padding: var(--space-md);
+  padding: 18rpx 16rpx 16rpx;
 }
 
 .history-card__title {
-  flex: 1;
-  min-height: 0;
   overflow: hidden;
   color: var(--color-text);
-  font-size: var(--font-size-lg);
+  font-size: 27rpx;
   font-weight: var(--font-weight-semibold);
   line-height: 1.4;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
-.history-card__main--skeleton {
-  gap: 10rpx;
+.history-card__title--skeleton {
+  display: block;
 }
 
-.history-card__source,
-.history-card__time {
+.history-card__source {
   flex-shrink: 0;
   margin-top: 10rpx;
   color: var(--color-text-tertiary);
   font-size: var(--font-size-xs);
+}
+
+.history-card__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8rpx;
+  margin-top: 14rpx;
+}
+
+.history-card__time,
+.history-card__delete {
+  color: var(--color-text-secondary);
+  font-size: 20rpx;
+  line-height: 1.5;
+}
+
+.history-card__time {
+  white-space: nowrap;
+}
+
+.history-card__delete {
+  flex: 0 0 auto;
+  color: var(--color-state-danger-text);
+}
+
+.history-card__delete--disabled {
+  opacity: 0.56;
 }
 
 </style>

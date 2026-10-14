@@ -475,7 +475,7 @@ function toRecipeItem(item: MyRecipeSummary): DisplayItem {
 		coverImageUrl: resolveCoverImageUrl(item.coverImageUrl),
 		meta: `${item.category?.name || "未分类"} · ${item.difficultyText || "未设置难度"} · ${item.durationText || "未设置时长"}`,
 		updatedAt: item.updatedAt,
-		updatedAtText: formatDateTimeSecond(item.updatedAt),
+		updatedAtText: formatDateTimeSecond(item.updatedAt).slice(0, 10),
 		raw: item
 	};
 }
@@ -485,9 +485,9 @@ function toDraftItem(item: RecipeDraftSummary): DisplayItem {
 		id: item.id,
 		title: item.title || "未命名草稿",
 		coverImageUrl: resolveCoverImageUrl(item.coverImageUrl),
-		meta: `${item.category?.name ?? "未选分类"} · 草稿版本 ${item.version}`,
+		meta: `${item.category?.name ? `${item.category.name} · ` : ""}草稿版本 ${item.version}`,
 		updatedAt: item.updatedAt,
-		updatedAtText: formatDateTimeSecond(item.updatedAt),
+		updatedAtText: formatDateTimeSecond(item.updatedAt).slice(0, 10),
 		raw: item
 	};
 }
@@ -502,7 +502,8 @@ function toDraftItem(item: RecipeDraftSummary): DisplayItem {
 
 .list-nav {
 	width: 100%;
-	align-items: flex-start;
+	min-height: 64rpx;
+	align-items: center;
 	gap: 18rpx;
 }
 
@@ -527,10 +528,11 @@ function toDraftItem(item: RecipeDraftSummary): DisplayItem {
 	color: var(--color-text);
 	font-size: 24rpx;
 	font-weight: var(--font-weight-semibold);
-	line-height: 60rpx;
+	line-height: 1;
 }
 
 .tabs {
+	align-items: center;
 	flex: 1;
 	gap: 24rpx;
 	min-width: 0;
@@ -605,13 +607,14 @@ function toDraftItem(item: RecipeDraftSummary): DisplayItem {
 }
 
 .list {
-	display: flex;
-	flex-direction: column;
-	gap: var(--space-page);
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 30rpx;
 }
 
 .card {
 	overflow: hidden;
+	min-width: 0;
 	border-radius: var(--radius-xs);
 	background: var(--material-card-bg);
 	box-shadow: var(--material-card-shadow);
@@ -619,8 +622,22 @@ function toDraftItem(item: RecipeDraftSummary): DisplayItem {
 	backdrop-filter: var(--material-card-filter);
 }
 
+:deep(.card .recipe-list-row) {
+	display: flex;
+	flex-direction: column;
+	align-items: stretch;
+	gap: 0;
+}
+
+:deep(.card .recipe-list-row__cover) {
+	flex: 0 0 auto;
+	width: 100%;
+	aspect-ratio: 3 / 4;
+}
+
 :deep(.card .recipe-list-row__main) {
-	padding: 20rpx 20rpx 20rpx 0;
+	flex: 1;
+	padding: 18rpx 16rpx 16rpx;
 }
 
 :deep(.card .recipe-list-row__footer) {
@@ -628,6 +645,15 @@ function toDraftItem(item: RecipeDraftSummary): DisplayItem {
 	flex-direction: column;
 	align-items: flex-start;
 	gap: 8rpx;
+}
+
+:deep(.card .recipe-list-row__title) {
+	font-size: 27rpx;
+}
+
+:deep(.card .recipe-list-row__meta) {
+	min-height: 3.2em;
+	font-size: 20rpx;
 }
 
 .card__action-row {
@@ -641,7 +667,7 @@ function toDraftItem(item: RecipeDraftSummary): DisplayItem {
 .card__tail,
 .card__delete {
 	color: var(--color-text-secondary);
-	font-size: 22rpx;
+	font-size: 20rpx;
 	line-height: 1.5;
 }
 
