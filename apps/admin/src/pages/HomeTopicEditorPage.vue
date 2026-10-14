@@ -145,6 +145,22 @@ function createForm(): TopicForm {
   };
 }
 
+function disablePeriodDate(date: Date) {
+  return date.getDay() !== 1;
+}
+
+function updatePeriodEnd(value: string | null) {
+  const current = form.value;
+  if (!current) return;
+  if (!value) {
+    current.periodEndDate = "";
+    return;
+  }
+  const start = new Date(`${value}T00:00:00.000Z`);
+  start.setUTCDate(start.getUTCDate() + 6);
+  current.periodEndDate = start.toISOString().slice(0, 10);
+}
+
 function toDateTimeInput(value: string | null) {
   if (!value) return "";
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -278,6 +294,9 @@ function validateForm() {
   if (!current.description.trim()) throw new Error("专题描述不能为空");
   if (current.description.trim().length > 120) throw new Error("专题描述最多 120 个字");
   if (current.issueNo < 1) throw new Error("期数至少从 1 开始");
+  if (current.periodStartDate && new Date(`${current.periodStartDate}T00:00:00.000Z`).getUTCDay() !== 1) {
+    throw new Error("周刊周期必须从周一开始");
+  }
 }
 
 function saveBody(): CreateHomeTopicRequest {
@@ -286,6 +305,7 @@ function saveBody(): CreateHomeTopicRequest {
     title: current.title.trim(),
     subTitle: current.subTitle.trim() || null,
     issueNo: current.issueNo,
+    ...(current.periodStartDate ? { periodStartDate: current.periodStartDate } : {}),
     description: current.description.trim(),
     items: current.items.map(item => ({
       recipeId: item.id,
@@ -532,6 +552,11 @@ async function generateCover() {
     ElMessage.warning("请先填写本期标题");
     return;
   }
+  const savedTopic = findTopic(current.id);
+  if (savedTopic && current.periodStartDate !== savedTopic.periodStartDate) {
+    ElMessage.warning("请先保存周期，再生成封面图");
+    return;
+  }
   if (!current.periodStartDate || !current.periodEndDate) {
     ElMessage.warning("请先保存本期周刊周期");
     return;
@@ -644,7 +669,7 @@ onMounted(() => {
                 <span class="topic-hero__chip" :class="{ 'topic-hero__chip--listed': form.status === 'PUBLISHED' }">
                   {{ topicStatusText(form.status) }}
                 </span>
-                <span class="topic-hero__chip topic-hero__chip--plain">周期周一 {{ form.periodStartDate || "保存后分配" }}</span>
+                <span class="topic-hero__chip topic-hero__chip--plain">周期周一 {{ form.periodStartDate || "默认下周" }}</span>
               </div>
               <h4>{{ form.title || "未填写专题标题" }}</h4>
               <p>{{ form.description || "这里展示本期主题和编排方向。" }}</p>
@@ -706,6 +731,19 @@ onMounted(() => {
 
             <el-form-item label="期数">
               <el-input-number v-model="form.issueNo" :min="1" :step="1" controls-position="right" />
+            </el-form-item>
+
+            <el-form-item label="周刊周期">
+              <el-date-picker
+                v-model="form.periodStartDate"
+                type="date"
+                value-format="YYYY-MM-DD"
+                format="YYYY-MM-DD"
+                placeholder="选择周期周一（留空默认下周）"
+                :disabled-date="disablePeriodDate"
+                @change="updatePeriodEnd"
+              />
+              <p class="topic-form__hint">周期从周一开始，覆盖到周日；预约时间只控制发布时间。每个周期仅能有一期，更改周期后如封面含日期请重新生成。</p>
             </el-form-item>
 
             <el-form-item label="专题寄语">
@@ -1115,6 +1153,13 @@ onMounted(() => {
 .topic-form__row {
   display: grid;
   gap: 16px;
+}
+
+.topic-form__hint {
+  margin: 6px 0 0;
+  color: #6b7280;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .topic-form__row--half {
