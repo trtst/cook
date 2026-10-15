@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { RecipeContentSnapshot } from "../../contracts/types";
-import { buildAutoRecipeVersionTags, filterAutoRecipeVersionTags, buildImportedRecipeVersionTags } from "./recipe-version-tags";
+import { buildAutoRecipeVersionTags, filterAutoRecipeVersionTags, buildImportedRecipeVersionTags, inferRecipeVersionTagSnapshot } from "./recipe-version-tags";
 
 function content(name: string, ingredientId: number | null, ingredientName = "鸡蛋"): RecipeContentSnapshot {
   return {
@@ -119,4 +119,38 @@ test("imported tags become confirmed OPS facts without nutrition fields", () => 
     { tagCode: "DISH_ROLE", tagValue: "COLD_DISH", source: "OPS", status: "CONFIRMED", confidence: 1, sortOrder: 0, isLocked: true },
     { tagCode: "MEAL_TYPE", tagValue: "DINNER", source: "OPS", status: "CONFIRMED", confidence: 1, sortOrder: 1, isLocked: true }
   ]);
+});
+
+test("explicit spice wording takes precedence over ingredient heuristics", () => {
+  const recipe = content("干辣椒炒菜", 6101, "干辣椒");
+  recipe.ingredients[0] = { ...recipe.ingredients[0]!, recipeRole: "SEASONING" };
+  const facts = new Map([[6101, {
+    id: 6101,
+    proteinType: null,
+    categoryCode: "SEASONING",
+    isStaple: false,
+    isSpicyIngredient: true,
+    aliases: []
+  }]]);
+
+  assert.equal(inferRecipeVersionTagSnapshot({ ...recipe, story: "来源明确说明不辣" }, facts).spiceLevel, "NONE");
+  assert.equal(inferRecipeVersionTagSnapshot({ ...recipe, story: "来源明确说明微辣" }, facts).spiceLevel, "MILD");
+  assert.equal(inferRecipeVersionTagSnapshot({ ...recipe, story: "来源明确说明中辣" }, facts).spiceLevel, "MEDIUM");
+});
+
+test("ingredient names alone do not create a guessed spice level or spicy flavor", () => {
+  const recipe = content("干辣椒炒菜", 6101, "干辣椒");
+  recipe.ingredients[0] = { ...recipe.ingredients[0]!, recipeRole: "SEASONING" };
+  const inferred = inferRecipeVersionTagSnapshot(recipe, new Map([[6101, {
+    id: 6101,
+    proteinType: null,
+    categoryCode: "SEASONING",
+    isStaple: false,
+    isSpicyIngredient: true,
+    aliases: []
+  }]]));
+
+  assert.equal(inferred.spiceLevel, null);
+  assert.equal(inferred.flavorProfile.includes("SPICY"), false);
+  assert.equal(inferRecipeVersionTagSnapshot({ ...recipe, story: "成品酸辣开胃" }).spiceLevel, null);
 });

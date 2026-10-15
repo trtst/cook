@@ -76,15 +76,21 @@ const ingredientCategoryCodes = new Set([
   "DRIED_PRESERVED",
   "BEVERAGE_ALCOHOL"
 ]);
-const tagValues: Record<RecipeImportTagCode, Set<string>> = {
-  CUISINE: new Set(["SICHUAN_HUNAN", "JIANG_ZHE", "CANTONESE", "FUJIAN", "NORTHERN", "YUN_GUI", "TAIWAN", "FUSION", "OTHER"]),
+export const recipeImportTagValues: Record<RecipeImportTagCode, Set<string>> = {
+  CUISINE: new Set(["SICHUAN_HUNAN", "CANTONESE", "NORTHERN", "JIANG_ZHE", "LOCAL_SPECIAL", "HOME_STYLE"]),
   DISH_STYLE: new Set(["STIR_FRY", "COLD_DISH", "SOUP", "STAPLE_FOOD", "STEW", "STEAMED", "BRAISED", "FRIED", "BBQ", "HOT_POT", "SNACK"]),
   MEAL_TYPE: new Set(["BREAKFAST", "LUNCH", "AFTERNOON_TEA", "DINNER", "LATE_NIGHT"]),
   DISH_ROLE: new Set(["MAIN", "VEGETABLE", "COLD_DISH", "SOUP", "STAPLE"]),
   MAIN_PROTEIN_TYPE: new Set(["PORK", "CHICKEN", "BEEF", "LAMB", "DUCK", "FISH", "SEAFOOD", "EGG", "PLANT", "NONE"]),
-  FLAVOR_PROFILE: new Set(["LIGHT", "MILD", "SPICY", "SOUR", "SWEET"]),
+  FLAVOR_PROFILE: new Set(["LIGHT", "MILD", "SPICY", "SOUR", "SWEET", "UMAMI", "SALTY", "NUMBING"]),
   SPICE_LEVEL: new Set(["NONE", "MILD", "MEDIUM", "HOT"])
 };
+export const recipeImportMultiValueTagCodes = new Set<RecipeImportTagCode>([
+  "MEAL_TYPE",
+  "MAIN_PROTEIN_TYPE",
+  "FLAVOR_PROFILE",
+  "DISH_ROLE"
+]);
 const tagCodeText: Record<RecipeImportTagCode, string> = {
   CUISINE: "菜系",
   DISH_STYLE: "菜式",
@@ -94,7 +100,7 @@ const tagCodeText: Record<RecipeImportTagCode, string> = {
   FLAVOR_PROFILE: "风味",
   SPICE_LEVEL: "辣度"
 };
-const tagCodes = new Set<RecipeImportTagCode>(Object.keys(tagValues) as RecipeImportTagCode[]);
+const tagCodes = new Set<RecipeImportTagCode>(Object.keys(recipeImportTagValues) as RecipeImportTagCode[]);
 const actionByPhase: Record<RecipeImportAssistantPhase, Set<RecipeImportAssistantAction>> = {
   PREP: new Set(["SHOP", "WASH", "SOAK", "THAW", "CUT", "SLICE", "DICE", "SHRED", "MINCE", "MARINATE", "BLANCH", "MEASURE", "MIX", "OTHER"]),
   COOK: new Set(["BOIL", "SIMMER", "STEAM", "STIR_FRY", "PAN_FRY", "DEEP_FRY", "BRAISE", "ROAST", "BAKE", "PRESSURE_COOK", "REDUCE", "OTHER"]),
@@ -207,7 +213,7 @@ function parseTags(value: unknown, errors: RecipeImportIssue[]) {
     }
     addUnknownKeyIssues(item, tagKeys, field, errors);
     const code = item.tagCode as RecipeImportTagCode;
-    const allowedValues = tagValues[code];
+    const allowedValues = recipeImportTagValues[code];
     if (!allowedValues || !tagCodes.has(code)) {
       addIssue(errors, `${field}.tagCode`, "标签代码不支持");
       return;
@@ -221,8 +227,8 @@ function parseTags(value: unknown, errors: RecipeImportIssue[]) {
       addIssue(errors, `${field}.tagValue`, "同一标签值不能重复");
       return;
     }
-    if (code !== "MEAL_TYPE" && seenSingleCodes.has(code)) {
-      addIssue(errors, `${field}.tagCode`, "除餐次外，同一标签代码不能重复");
+    if (!recipeImportMultiValueTagCodes.has(code) && seenSingleCodes.has(code)) {
+      addIssue(errors, `${field}.tagCode`, "该标签代码只允许一个标签值");
       return;
     }
     seenValues.add(tagKey);
@@ -233,6 +239,10 @@ function parseTags(value: unknown, errors: RecipeImportIssue[]) {
     if (!tags.some(item => item.tagCode === code)) {
       addIssue(errors, "wiki.tags", `缺少 ${tagCodeText[code]} 标签`);
     }
+  }
+  const mainProteins = tags.filter(item => item.tagCode === "MAIN_PROTEIN_TYPE").map(item => item.tagValue);
+  if (mainProteins.includes("NONE") && mainProteins.length > 1) {
+    addIssue(errors, "wiki.tags", "MAIN_PROTEIN_TYPE=NONE 不能与其他主蛋白并存");
   }
   return tags;
 }

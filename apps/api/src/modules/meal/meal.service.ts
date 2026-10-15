@@ -4954,7 +4954,7 @@ export class MealService {
     const flavorTags = confirmedRandomTagValues(byCode.get("FLAVOR_PROFILE") ?? [], true);
     const spiceLevel = confirmedRandomTagValues(byCode.get("SPICE_LEVEL") ?? [], false)[0] ?? null;
     if (spiceLevel === "NONE" && !flavorTags.includes("NOT_SPICY")) flavorTags.push("NOT_SPICY");
-    if (spiceLevel === "MILD" && !flavorTags.includes("MILD")) flavorTags.push("MILD");
+    if (spiceLevel === "MILD" && !flavorTags.includes("SPICE_MILD")) flavorTags.push("SPICE_MILD");
 
     const primaryIngredientIds = confirmedRandomTagValues(byCode.get("PRIMARY_INGREDIENT") ?? [], true)
       .map(item => Number(item))

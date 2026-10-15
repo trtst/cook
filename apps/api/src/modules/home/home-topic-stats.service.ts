@@ -36,6 +36,22 @@ const dimensionTagMap: Partial<Record<HomeTopicRecipeStatsDimensionKey, RecipeVe
 };
 
 type IngredientRow = { ingredientId?: unknown; ingredientName?: unknown; name?: unknown };
+type PrimaryIngredientRow = { ingredientId: number; name: string };
+
+export function primaryIngredientNames(
+  primaryIngredientIds: readonly unknown[],
+  rows: readonly PrimaryIngredientRow[],
+  activeSystemIngredientIds: ReadonlySet<number>
+) {
+  const names = new Set<string>();
+  for (const rawId of primaryIngredientIds) {
+    const id = Number(rawId);
+    if (!Number.isInteger(id) || id < 1 || !activeSystemIngredientIds.has(id)) continue;
+    const ingredient = rows.find(item => item.ingredientId === id);
+    if (ingredient) names.add(ingredient.name);
+  }
+  return names;
+}
 
 function ingredientRows(value: Prisma.JsonValue) {
   if (!Array.isArray(value)) return [];
@@ -169,24 +185,26 @@ export class HomeTopicStatsService {
 
         const recipeIngredients = recipes.map(recipe => ingredientRows(recipe.currentVersion.ingredientsJson));
         const ingredientIds = [...new Set(recipeIngredients.flatMap(rows => rows.map(item => item.ingredientId)))];
+        const activeSystemIngredientIds = new Set<number>();
         const coreIngredientIds = new Set<number>();
         if (ingredientIds.length) {
-          const coreIngredients = await tx.ingredient.findMany({
+          const activeSystemIngredients = await tx.ingredient.findMany({
             where: {
               id: { in: ingredientIds },
               ownerId: null,
-              status: "ACTIVE",
-              categoryId: { in: coreIngredientCategoryIds }
+              status: "ACTIVE"
             },
-            select: { id: true }
+            select: { id: true, categoryId: true }
           });
-          for (const ingredient of coreIngredients) coreIngredientIds.add(ingredient.id);
+          for (const ingredient of activeSystemIngredients) {
+            activeSystemIngredientIds.add(ingredient.id);
+            if (coreIngredientCategoryIds.includes(ingredient.categoryId)) coreIngredientIds.add(ingredient.id);
+          }
         }
 
         for (const [index, recipe] of recipes.entries()) {
           const tags = recipe.currentVersion.versionTags;
           const currentIngredients = recipeIngredients[index] ?? [];
-          const recipeIngredientIds = new Set(currentIngredients.map(item => item.ingredientId));
           let isMatch: boolean;
           if (dimension === "nutrition") {
             const status = recipe.currentVersion.nutritionSnapshots[0]?.status ?? "NONE";
@@ -196,12 +214,11 @@ export class HomeTopicStatsService {
           } else if (selectedValue && dimension === "allIngredients") {
             isMatch = currentIngredients.some(item => coreIngredientIds.has(item.ingredientId) && item.name === selectedValue);
           } else if (selectedValue && dimension === "primaryIngredients") {
-            isMatch = tags.some(item =>
-              item.tagCode === "PRIMARY_INGREDIENT" &&
-              recipeIngredientIds.has(Number(item.tagValue)) &&
-              coreIngredientIds.has(Number(item.tagValue)) &&
-              currentIngredients.some(ingredient => ingredient.ingredientId === Number(item.tagValue) && ingredient.name === selectedValue)
-            );
+            isMatch = primaryIngredientNames(
+              tags.filter(item => item.tagCode === "PRIMARY_INGREDIENT").map(item => item.tagValue),
+              currentIngredients,
+              activeSystemIngredientIds
+            ).has(selectedValue);
           } else if (selectedValue && (dimension === "difficulties" || dimension === "durations")) {
             const fieldValue = dimension === "difficulties" ? recipe.currentVersion.difficulty : recipe.currentVersion.duration;
             isMatch = fieldValue === selectedValue;
@@ -211,11 +228,11 @@ export class HomeTopicStatsService {
           } else if (dimension === "allIngredients") {
             isMatch = !currentIngredients.some(item => coreIngredientIds.has(item.ingredientId));
           } else if (dimension === "primaryIngredients") {
-            isMatch = !tags.some(item =>
-              item.tagCode === "PRIMARY_INGREDIENT" &&
-              coreIngredientIds.has(Number(item.tagValue)) &&
-              recipeIngredientIds.has(Number(item.tagValue))
-            );
+            isMatch = primaryIngredientNames(
+              tags.filter(item => item.tagCode === "PRIMARY_INGREDIENT").map(item => item.tagValue),
+              currentIngredients,
+              activeSystemIngredientIds
+            ).size === 0;
           } else if (dimension === "difficulties") {
             isMatch = recipe.currentVersion.difficulty === null;
           } else if (dimension === "durations") {
@@ -373,18 +390,21 @@ export class HomeTopicStatsService {
 
       const recipeIngredientRows = recipes.map(recipe => ingredientRows(recipe.currentVersion.ingredientsJson));
       const ingredientIds = [...new Set(recipeIngredientRows.flatMap(rows => rows.map(item => item.ingredientId)))];
+      const activeSystemIngredientIds = new Set<number>();
       const coreIngredientIds = new Set<number>();
       if (ingredientIds.length) {
-        const coreIngredients = await db.ingredient.findMany({
+        const activeSystemIngredients = await db.ingredient.findMany({
           where: {
             id: { in: ingredientIds },
             ownerId: null,
-            status: "ACTIVE",
-            categoryId: { in: coreIngredientCategoryIds }
+            status: "ACTIVE"
           },
-          select: { id: true }
+          select: { id: true, categoryId: true }
         });
-        for (const ingredient of coreIngredients) coreIngredientIds.add(ingredient.id);
+        for (const ingredient of activeSystemIngredients) {
+          activeSystemIngredientIds.add(ingredient.id);
+          if (coreIngredientCategoryIds.includes(ingredient.categoryId)) coreIngredientIds.add(ingredient.id);
+        }
       }
 
       for (const [index, recipe] of recipes.entries()) {
@@ -395,13 +415,7 @@ export class HomeTopicStatsService {
         for (const name of ingredients) addCount(counts.allIngredients, name);
 
         const primaryTags = recipe.currentVersion.versionTags.filter(item => item.tagCode === "PRIMARY_INGREDIENT");
-        const primaryNames = new Set<string>();
-        for (const tag of primaryTags) {
-          const id = Number(tag.tagValue);
-          if (!coreIngredientIds.has(id)) continue;
-          const linkedIngredient = coreRows.find(item => item.ingredientId === id);
-          if (linkedIngredient) primaryNames.add(linkedIngredient.name);
-        }
+        const primaryNames = primaryIngredientNames(primaryTags.map(item => item.tagValue), rows, activeSystemIngredientIds);
         if (primaryNames.size) confirmed.primaryIngredients += 1;
         for (const name of primaryNames) addCount(counts.primaryIngredients, name);
 

@@ -164,6 +164,7 @@ import {
   parseJsonSource,
   readJsonSourcesFromFiles,
   rebuildJsonItemState,
+  recipeImportMultiValueTagCodes,
   type RecipeImportJsonSource
 } from "./recipe-import-json";
 import { parseRecipeWikiDocument, type RecipeWikiImportItem, type RecipeWikiReplaceField } from "./recipe-wiki-json";
@@ -5615,6 +5616,13 @@ export class AdminService {
         where: { recipeVersionId: recipe.currentVersionId, source: "OPS", tagCode: { in: [...recipeWikiTagCodes] } },
         select: { tagCode: true, tagValue: true }
       });
+      const effectiveMainProteins = new Set([
+        ...confirmedOpsTags.filter(tag => tag.tagCode === "MAIN_PROTEIN_TYPE").map(tag => tag.tagValue),
+        ...item.tags.filter(tag => tag.tagCode === "MAIN_PROTEIN_TYPE").map(tag => tag.tagValue)
+      ]);
+      if (effectiveMainProteins.has("NONE") && effectiveMainProteins.size > 1) {
+        throw new BadRequestException("MAIN_PROTEIN_TYPE=NONE 不能与其他主蛋白并存");
+      }
       const confirmedOpsTagKeys = new Set(confirmedOpsTags.map(tag => `${tag.tagCode}:${tag.tagValue}`));
       const candidateTags = item.tags.filter(tag => !confirmedOpsTagKeys.has(`${tag.tagCode}:${tag.tagValue}`));
       if (candidateTags.length) await tx.recipeVersionTag.createMany({
@@ -6793,10 +6801,17 @@ export class AdminService {
     const existingTagCodes = new Set(existingTags.map(tag => tag.tagCode));
     const existingTagKeys = new Set(existingTags.map(tag => `${tag.tagCode}:${tag.tagValue}`));
     const importedTags = !selectedFields.has("tags") ? [] : options.preserveExistingTags
-      ? item.tags.filter(tag => tag.tagCode === "MEAL_TYPE"
+      ? item.tags.filter(tag => recipeImportMultiValueTagCodes.has(tag.tagCode)
           ? !existingTagKeys.has(`${tag.tagCode}:${tag.tagValue}`)
           : !existingTagCodes.has(tag.tagCode))
       : item.tags;
+    const effectiveMainProteins = new Set([
+      ...existingTags.filter(tag => tag.tagCode === "MAIN_PROTEIN_TYPE").map(tag => tag.tagValue),
+      ...importedTags.filter(tag => tag.tagCode === "MAIN_PROTEIN_TYPE").map(tag => tag.tagValue)
+    ]);
+    if (effectiveMainProteins.has("NONE") && effectiveMainProteins.size > 1) {
+      throw new BadRequestException("MAIN_PROTEIN_TYPE=NONE 不能与其他主蛋白并存");
+    }
     if (importedTags.length) {
       await tx.recipeVersionTag.createMany({
         data: importedTags.map((tag, index) => ({
@@ -7959,7 +7974,9 @@ export class AdminService {
         YUN_GUI: "云贵菜",
         TAIWAN: "台湾菜",
         FUSION: "融合菜",
-        OTHER: "其他菜系（待人工确认）"
+        OTHER: "其他菜系（待人工确认）",
+        LOCAL_SPECIAL: "地方风味",
+        HOME_STYLE: "家常菜"
       },
       DISH_STYLE: {
         STIR_FRY: "炒菜",
@@ -8003,7 +8020,10 @@ export class AdminService {
         MILD: "温和",
         SPICY: "辛辣",
         SOUR: "酸味",
-        SWEET: "甜味"
+        SWEET: "甜味",
+        UMAMI: "鲜味",
+        SALTY: "咸味",
+        NUMBING: "麻味"
       },
       SPICE_LEVEL: {
         NONE: "不辣",

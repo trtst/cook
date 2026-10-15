@@ -50,7 +50,7 @@ function validDocument() {
     },
     wiki: {
       tags: [
-        { tagCode: "CUISINE", tagValue: "OTHER" },
+        { tagCode: "CUISINE", tagValue: "HOME_STYLE" },
         { tagCode: "DISH_STYLE", tagValue: "SOUP" },
         { tagCode: "MEAL_TYPE", tagValue: "DINNER" },
         { tagCode: "DISH_ROLE", tagValue: "SOUP" },
@@ -90,6 +90,54 @@ test("parses recipe.import.v1 and strictly matches ingredient and unit names", (
   assert.deepEqual(result.recipeBody.tools, [{ name: "汤锅" }]);
   assert.equal(result.recipeBody.tags?.find(item => item.tagCode === "DISH_ROLE")?.tagValue, "SOUP");
   assert.equal(result.recipeBody.assistantSteps?.[0]?.action, "BLANCH");
+});
+
+test("accepts the current cuisine taxonomy and documented multi-value tags", () => {
+  const document = validDocument() as Record<string, any>;
+  document.wiki.tags = [
+    { tagCode: "CUISINE", tagValue: "LOCAL_SPECIAL" },
+    { tagCode: "DISH_STYLE", tagValue: "SOUP" },
+    { tagCode: "MEAL_TYPE", tagValue: "DINNER" },
+    { tagCode: "DISH_ROLE", tagValue: "SOUP" },
+    { tagCode: "DISH_ROLE", tagValue: "STAPLE" },
+    { tagCode: "MAIN_PROTEIN_TYPE", tagValue: "SEAFOOD" },
+    { tagCode: "MAIN_PROTEIN_TYPE", tagValue: "PLANT" },
+    { tagCode: "FLAVOR_PROFILE", tagValue: "SOUR" },
+    { tagCode: "FLAVOR_PROFILE", tagValue: "SPICY" },
+    { tagCode: "SPICE_LEVEL", tagValue: "MILD" }
+  ];
+
+  const result = parseJsonSource(
+    { sourcePath: "multi-tags.json", jsonText: JSON.stringify(document) },
+    refs
+  );
+
+  assert.deepEqual(result.errorItems, []);
+  assert.deepEqual(result.recipeBody.tags?.filter(item => item.tagCode === "FLAVOR_PROFILE").map(item => item.tagValue), ["SOUR", "SPICY"]);
+});
+
+test("rejects legacy cuisine values outside the current six-value taxonomy", () => {
+  const document = validDocument() as Record<string, any>;
+  document.wiki.tags[0].tagValue = "OTHER";
+
+  const result = parseJsonSource(
+    { sourcePath: "legacy-cuisine.json", jsonText: JSON.stringify(document) },
+    refs
+  );
+
+  assert.equal(result.errorItems.some(item => item.field === "wiki.tags.0.tagValue"), true);
+});
+
+test("rejects NONE combined with another main protein", () => {
+  const document = validDocument() as Record<string, any>;
+  document.wiki.tags.push({ tagCode: "MAIN_PROTEIN_TYPE", tagValue: "NONE" });
+
+  const result = parseJsonSource(
+    { sourcePath: "conflicting-protein-tags.json", jsonText: JSON.stringify(document) },
+    refs
+  );
+
+  assert.equal(result.errorItems.some(item => /NONE 不能与其他主蛋白并存/.test(item.message)), true);
 });
 
 test("requires a recipe role on every imported ingredient", () => {

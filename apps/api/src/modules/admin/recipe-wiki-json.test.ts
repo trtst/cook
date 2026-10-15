@@ -129,3 +129,39 @@ test("rejects duplicate Wiki tags before persistence", () => {
   assert.equal(result.items.length, 1);
   assert.match(result.issues.map(item => item.message).join("\n"), /标签重复/);
 });
+
+test("rejects unsupported Wiki tag values and repeated single-value codes", () => {
+  const result = parseRecipeWikiDocument({
+    schemaVersion: "recipe.wiki.v1",
+    recipeId: 100,
+    contentVersionId: 200,
+    wiki: {
+      tags: [
+        { tagCode: "CUISINE", tagValue: "OTHER" },
+        { tagCode: "DISH_STYLE", tagValue: "SOUP" },
+        { tagCode: "DISH_STYLE", tagValue: "STEW" }
+      ],
+      assistant: { steps: [step] }
+    }
+  });
+
+  assert.match(result.issues.map(item => item.message).join(" "), /枚举值不支持/);
+  assert.match(result.issues.map(item => item.message).join(" "), /只允许一个标签值/);
+});
+
+test("rejects NONE combined with another main protein in Wiki revisions", () => {
+  const result = parseRecipeWikiDocument({
+    schemaVersion: "recipe.wiki.v1",
+    recipeId: 100,
+    contentVersionId: 200,
+    wiki: {
+      tags: [
+        { tagCode: "MAIN_PROTEIN_TYPE", tagValue: "NONE" },
+        { tagCode: "MAIN_PROTEIN_TYPE", tagValue: "PORK" }
+      ],
+      assistant: { steps: [step] }
+    }
+  });
+
+  assert.match(result.issues.map(item => item.message).join(" "), /NONE 不能与其他主蛋白并存/);
+});

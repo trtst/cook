@@ -227,7 +227,7 @@ const defaultSystemIngredients: SystemIngredientSeed[] = [
   { id: 4131, name: "海米", categoryName: "干货腌制", defaultUnitName: "克" },
   { id: 4132, name: "虾皮", categoryName: "干货腌制", defaultUnitName: "克" },
   { id: 4133, name: "干香菇", categoryName: "干货腌制", defaultUnitName: "克" },
-  { id: 4134, name: "干辣椒", categoryName: "干货腌制", defaultUnitName: "克" },
+  { id: 4134, name: "干辣椒", categoryName: "调味料", defaultUnitName: "克" },
   { id: 4135, name: "榨菜", categoryName: "干货腌制", defaultUnitName: "包" },
   { id: 4136, name: "酸菜", categoryName: "干货腌制", defaultUnitName: "包" },
   { id: 4137, name: "梅干菜", categoryName: "干货腌制", defaultUnitName: "克" },

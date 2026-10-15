@@ -36,7 +36,9 @@
 
 这两个属性描述食材本身，不描述它在某道菜中的主料、辅料或调味角色：`isStaple` 表示是否属于日常主食类食材（如米、面、薯类）；`isSpicyIngredient` 表示是否主要提供辣味（如辣椒及辣椒制品）。不符合对应定义时填 `false`。
 
-`categoryCode`、`isStaple` 和菜谱内的 `recipeRole` 互不替代。`isStaple: true` 不代表 `categoryCode` 必须是 `GRAINS_STAPLES`；一道菜里承担调味作用，也不代表食材主分类必须是 `SEASONING`。例如当前系统种子数据中的干辣椒分类为 `DRIED_PRESERVED`，在具体菜谱中仍可标注 `recipeRole: SEASONING`。已有系统食材必须沿用目标环境中的当前分类；不要根据单道菜谱用途或主食属性改动系统分类。
+`categoryCode`、`isStaple` 和菜谱内的 `recipeRole` 互不替代。`isStaple: true` 不代表 `categoryCode` 必须是 `GRAINS_STAPLES`；一道菜里承担调味作用，也不代表食材主分类必须是 `SEASONING`。项目统一将干辣椒作为调味料，系统分类为 `SEASONING`，在具体菜谱中通常标注 `recipeRole: SEASONING`。已有系统食材必须沿用目标环境中的当前分类；不要根据单道菜谱用途或主食属性改动系统分类。
+
+菜谱用料名称必须匹配启用中的系统食材标准名：使用“黑胡椒”和“白胡椒”，不使用“黑胡椒粉”或“白胡椒粉”。
 
 `ingredients` 数组内，所有正式名称和别名在去除首尾空白、统一大小写并移除空白后不得重复；正式名称也不能出现在自己的 `aliases` 中。
 

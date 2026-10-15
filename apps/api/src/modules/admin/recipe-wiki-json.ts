@@ -6,6 +6,7 @@ import type {
   RecipeImportTagDraft,
   UUID
 } from "../../contracts/types";
+import { recipeImportMultiValueTagCodes, recipeImportTagValues } from "./recipe-import-json";
 
 export interface RecipeWikiImportItem {
   recipeId: UUID;
@@ -36,15 +37,7 @@ export interface RecipeWikiDocumentResult {
   issues: RecipeImportIssue[];
 }
 
-const tagCodes = new Set([
-  "CUISINE",
-  "DISH_STYLE",
-  "MEAL_TYPE",
-  "DISH_ROLE",
-  "MAIN_PROTEIN_TYPE",
-  "FLAVOR_PROFILE",
-  "SPICE_LEVEL"
-]);
+const tagCodes = new Set(Object.keys(recipeImportTagValues));
 const phases = new Set<RecipeImportAssistantPhase>(["PREP", "COOK", "SERVE"]);
 const actions = new Set<RecipeImportAssistantAction>([
   "SHOP",
@@ -124,6 +117,7 @@ function parseItem(
     issue(issues, `${path}.wiki.tags`, "tags 必须是数组");
   } else if (needsTags && Array.isArray(wiki?.tags)) {
     const seenTags = new Set<string>();
+    const seenSingleTagCodes = new Set<string>();
     for (const [index, rawTag] of wiki.tags.entries()) {
       const tagPath = `${path}.wiki.tags.${index}`;
       if (!isRecord(rawTag)) {
@@ -136,14 +130,26 @@ function parseItem(
       if (!tagCodes.has(tagCode)) issue(issues, `${tagPath}.tagCode`, "Wiki 标签代码不支持");
       if (!tagValue) issue(issues, `${tagPath}.tagValue`, "Wiki 标签值不能为空");
       if (tagCode && tagValue && tagCodes.has(tagCode)) {
+        const code = tagCode as RecipeImportTagDraft["tagCode"];
+        if (!recipeImportTagValues[code]?.has(tagValue)) {
+          issue(issues, `${tagPath}.tagValue`, "Wiki 标签枚举值不支持");
+          continue;
+        }
         const tagKey = `${tagCode}:${tagValue}`;
         if (seenTags.has(tagKey)) {
           issue(issues, tagPath, "标签重复");
+        } else if (!recipeImportMultiValueTagCodes.has(code) && seenSingleTagCodes.has(tagCode)) {
+          issue(issues, `${tagPath}.tagCode`, "该 Wiki 标签代码只允许一个标签值");
         } else {
           seenTags.add(tagKey);
+          seenSingleTagCodes.add(tagCode);
           tags.push({ tagCode: tagCode as RecipeImportTagDraft["tagCode"], tagValue });
         }
       }
+    }
+    const mainProteins = tags.filter(item => item.tagCode === "MAIN_PROTEIN_TYPE").map(item => item.tagValue);
+    if (mainProteins.includes("NONE") && mainProteins.length > 1) {
+      issue(issues, `${path}.wiki.tags`, "MAIN_PROTEIN_TYPE=NONE 不能与其他主蛋白并存");
     }
   }
 

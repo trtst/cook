@@ -192,20 +192,22 @@ export function inferRecipeVersionTagSnapshot(
   const primaryIngredientIds = resolvePrimaryIngredientIds(content.ingredients, ingredientFacts);
 
   const flavorProfile = new Set<string>();
-  if (/不辣|清淡/.test(text)) flavorProfile.add("LIGHT");
-  if (/微辣/.test(text)) flavorProfile.add("MILD");
-  if (/麻辣|香辣|辣椒|辣子|剁椒|小米辣/.test(text)) flavorProfile.add("SPICY");
-  if (/酸|番茄|醋/.test(text)) flavorProfile.add("SOUR");
-  if (/甜|可乐|糖醋|蜂蜜/.test(text)) flavorProfile.add("SWEET");
+  if (/清淡/.test(text)) flavorProfile.add("LIGHT");
+  if (/温和|口味柔和/.test(text)) flavorProfile.add("MILD");
+  if (/麻辣|香辣|酸辣|辛辣|辣味突出|明显辣味/.test(text)) flavorProfile.add("SPICY");
+  if (/酸味|酸辣|酸汤|糖醋|醋溜/.test(text)) flavorProfile.add("SOUR");
+  if (/甜口|甜味|糖醋|蜜汁/.test(text)) flavorProfile.add("SWEET");
+  if (/鲜味突出|鲜香|咸鲜/.test(text)) flavorProfile.add("UMAMI");
+  if (/咸口|偏咸|咸味突出/.test(text)) flavorProfile.add("SALTY");
+  if (/麻味|麻香|麻辣/.test(text)) flavorProfile.add("NUMBING");
 
   let spiceLevel: RecipeVersionTagSnapshot["spiceLevel"] = null;
   const spicyIngredientCount = ingredientIds.filter(id => ingredientFacts.get(id)?.isSpicyIngredient).length;
-  if (/重辣|麻辣|香辣|辣椒|辣子|剁椒|小米辣/.test(text) || spicyIngredientCount >= 3) spiceLevel = "HOT";
-  else if (spicyIngredientCount >= 2) spiceLevel = "MEDIUM";
-  else if (spicyIngredientCount >= 1) spiceLevel = "MILD";
+  if (/重辣|特辣/.test(text)) spiceLevel = "HOT";
   else if (/中辣/.test(text)) spiceLevel = "MEDIUM";
   else if (/微辣/.test(text)) spiceLevel = "MILD";
-  else if (flavorProfile.has("LIGHT") || /不辣/.test(text)) spiceLevel = "NONE";
+  else if (/不辣/.test(text)) spiceLevel = "NONE";
+  else if (spicyIngredientCount === 0 && !/麻辣|香辣|酸辣|辛辣|辣味|辣椒|辣子|剁椒|小米辣/.test(text)) spiceLevel = "NONE";
 
   if (!primaryIngredientIds.length && normalizedNames.some(name => /鸡蛋|豆腐|番茄|土豆|白菜|青菜|黄瓜/.test(name))) {
     // No-op fallback; keep structured matching authoritative.
