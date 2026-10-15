@@ -2,7 +2,7 @@
 
 | 2026-10-15 | 修复后台菜谱导入条目新增食材时 `line` 为空导致保存被 DTO 拒绝的问题：保留原导入行文本；新增行在保存时根据食材名和精确/模糊用量生成非空文本。 | `apps/admin/src/pages/RecipeImportItemPage.vue`、`docs/plans/minor_change_log.md` | 静态核对保存 payload 已走新行文本构造；未运行测试或后台浏览器验收。 |
 
-| 2026-10-15 | 修复后台删除已下架菜谱时购物项外键置空与 CHECK 约束冲突：允许 `RECIPE / PLAN` 购物项在来源菜谱被删除后保留来源正文版本和快照，同时将 `sourceRecipeId` 置空。 | `apps/api/prisma/migrations/20261015110000_allow_detached_recipe_shopping_source/migration.sql`、`docs/plans/minor_change_log.md` | 根据 TEST API 堆栈、购物项 `sourceRecipeId` 外键 `ON DELETE SET NULL` 和 Pantry 对空菜谱 ID 的处理定位；`git diff --check` 通过；未运行测试、未执行迁移或重试删除。 |
+| 2026-10-15 | 修复后台删除已下架菜谱时购物项外键置空与 CHECK 约束冲突：允许 `RECIPE / PLAN` 购物项在来源菜谱被删除后保留来源正文版本和快照，同时将 `sourceRecipeId` 置空；保留 `MANUAL / EVENT` 已有约束分支。 | `apps/api/prisma/migrations/20261015110000_allow_detached_recipe_shopping_source/migration.sql`、`apps/api/prisma/migrations/20261015110100_refine_detached_recipe_shopping_source/migration.sql`、`docs/plans/minor_change_log.md` | 根据 TEST API 堆栈、购物项 `sourceRecipeId` 外键 `ON DELETE SET NULL` 和 Pantry 对空菜谱 ID 的处理定位；使用前向迁移收紧兼容分支；`git diff --check` 通过；未运行测试、未执行迁移或重试删除。 |
 
 | 2026-10-15 | 核心类别食材统计排除葱类（含葱花、葱段、葱末等，不含洋葱）、姜类、蒜类和小米辣；按系统食材名称及别名判断，只改变统计口径。 | `apps/api/src/modules/home/home-topic-stats.service.ts`、`docs/ingredient.md`、`docs/plans/recipe-library-statistics-missing-items-execution.md`、`docs/plans/minor_change_log.md` | 已更新本地规则与统计实现；未修改 TEST 菜谱或食材数据，TEST 统计快照需部署后重建；未运行测试。 |
 
