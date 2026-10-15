@@ -25,3 +25,8 @@ test("snapshot rebuild refreshes the visible statistics", () => {
   assert.match(page, /homeTopicsApi\.rebuildRecipeStats\(createOperationId\(\)\)/);
   assert.match(page, /snapshot\.value = result\.snapshot/);
 });
+
+test("statistics labels expose the updated cuisine taxonomy", () => {
+  assert.match(page, /LOCAL_SPECIAL: "地方风味"/);
+  assert.match(page, /HOME_STYLE: "家常菜"/);
+});

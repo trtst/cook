@@ -97,9 +97,9 @@ const tagCodeOptions: Array<{ value: RecipeImportTagCode; label: string }> = [
 ];
 const tagValueOptions: Record<RecipeImportTagCode, Array<{ value: string; label: string }>> = {
   CUISINE: [
-    { value: "SICHUAN_HUNAN", label: "川湘菜" }, { value: "JIANG_ZHE", label: "江浙菜" },
-    { value: "CANTONESE", label: "粤菜" }, { value: "FUJIAN", label: "闽菜" }, { value: "NORTHERN", label: "北方菜" },
-    { value: "YUN_GUI", label: "云贵菜" }, { value: "TAIWAN", label: "台湾菜" }, { value: "FUSION", label: "融合菜" }, { value: "OTHER", label: "其他菜系" }
+    { value: "SICHUAN_HUNAN", label: "川湘菜" }, { value: "CANTONESE", label: "粤菜" },
+    { value: "NORTHERN", label: "北方菜" }, { value: "JIANG_ZHE", label: "江浙菜" },
+    { value: "LOCAL_SPECIAL", label: "地方风味" }, { value: "HOME_STYLE", label: "家常菜" }
   ],
   DISH_STYLE: [
     { value: "STIR_FRY", label: "炒菜" }, { value: "COLD_DISH", label: "凉菜" }, { value: "SOUP", label: "汤羹" },
@@ -123,7 +123,8 @@ const tagValueOptions: Record<RecipeImportTagCode, Array<{ value: string; label:
   ],
   FLAVOR_PROFILE: [
     { value: "LIGHT", label: "清淡" }, { value: "MILD", label: "温和" }, { value: "SPICY", label: "辛辣" },
-    { value: "SOUR", label: "酸味" }, { value: "SWEET", label: "甜味" }
+    { value: "SOUR", label: "酸味" }, { value: "SWEET", label: "甜味" },
+    { value: "UMAMI", label: "鲜味" }, { value: "SALTY", label: "咸味" }, { value: "NUMBING", label: "麻味" }
   ],
   SPICE_LEVEL: [
     { value: "NONE", label: "不辣" }, { value: "MILD", label: "微辣" }, { value: "MEDIUM", label: "中辣" }, { value: "HOT", label: "重辣" }
@@ -1022,6 +1023,14 @@ function buildRecipeBody(): RecipeImportRecipeBodyUpdate {
 
 async function saveItem() {
   if (!detail.value) return;
+  const mainProteins = form.tags
+    .filter(item => item.tagCode === "MAIN_PROTEIN_TYPE")
+    .map(item => item.tagValue.trim())
+    .filter(Boolean);
+  if (mainProteins.includes("NONE") && mainProteins.length > 1) {
+    ElMessage.error("无主蛋白不能与其他主蛋白并存");
+    return;
+  }
   if (form.ingredients.some(item => !item.recipeRole)) {
     ElMessage.error("请为每条食材选择菜谱角色");
     return;

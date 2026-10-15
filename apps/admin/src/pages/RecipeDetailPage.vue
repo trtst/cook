@@ -174,7 +174,7 @@ const recipeImportTagCodes = new Set([
 function buildRecipeImportJson(source: AdminRecipeDetail) {
   const tags = source.wiki.tags
     .filter(tag => recipeImportTagCodes.has(tag.tagCode))
-    .filter((tag, index, all) => tag.tagCode === "MEAL_TYPE"
+    .filter((tag, index, all) => ["MEAL_TYPE", "MAIN_PROTEIN_TYPE", "FLAVOR_PROFILE", "DISH_ROLE"].includes(tag.tagCode)
       ? all.findIndex(item => item.tagCode === tag.tagCode && item.tagValue === tag.tagValue) === index
       : all.findIndex(item => item.tagCode === tag.tagCode) === index)
     .map(tag => ({ tagCode: tag.tagCode, tagValue: tag.tagValue }));
@@ -233,12 +233,12 @@ const recipeImportCategoryCodes = new Set([
   "BEVERAGE_ALCOHOL"
 ]);
 const recipeImportTagValues: Record<string, Set<string>> = {
-  CUISINE: new Set(["SICHUAN_HUNAN", "JIANG_ZHE", "CANTONESE", "FUJIAN", "NORTHERN", "YUN_GUI", "TAIWAN", "FUSION", "OTHER"]),
+  CUISINE: new Set(["SICHUAN_HUNAN", "CANTONESE", "NORTHERN", "JIANG_ZHE", "LOCAL_SPECIAL", "HOME_STYLE"]),
   DISH_STYLE: new Set(["STIR_FRY", "COLD_DISH", "SOUP", "STAPLE_FOOD", "STEW", "STEAMED", "BRAISED", "FRIED", "BBQ", "HOT_POT", "SNACK"]),
   MEAL_TYPE: new Set(["BREAKFAST", "LUNCH", "AFTERNOON_TEA", "DINNER", "LATE_NIGHT"]),
   DISH_ROLE: new Set(["MAIN", "VEGETABLE", "COLD_DISH", "SOUP", "STAPLE"]),
   MAIN_PROTEIN_TYPE: new Set(["PORK", "CHICKEN", "BEEF", "LAMB", "DUCK", "FISH", "SEAFOOD", "EGG", "PLANT", "NONE"]),
-  FLAVOR_PROFILE: new Set(["LIGHT", "MILD", "SPICY", "SOUR", "SWEET"]),
+  FLAVOR_PROFILE: new Set(["LIGHT", "MILD", "SPICY", "SOUR", "SWEET", "UMAMI", "SALTY", "NUMBING"]),
   SPICE_LEVEL: new Set(["NONE", "MILD", "MEDIUM", "HOT"])
 };
 const recipeImportAssistantActions: Record<string, Set<string>> = {
@@ -325,9 +325,15 @@ function validateRecipeImportJson(body: ReturnType<typeof buildRecipeImportJson>
     if (!values || !values.has(tag.tagValue)) return `导出 JSON 前请修正${wikiTagCodeTextOf(tag.tagCode)}标签`;
     const tagKey = `${tag.tagCode}:${tag.tagValue}`;
     if (seenTagValues.has(tagKey)) return "导出 JSON 前请删除重复业务标签";
-    if (tag.tagCode !== "MEAL_TYPE" && seenSingleTagCodes.has(tag.tagCode)) return "导出 JSON 前请删除重复业务标签代码";
+    if (!["MEAL_TYPE", "MAIN_PROTEIN_TYPE", "FLAVOR_PROFILE", "DISH_ROLE"].includes(tag.tagCode) && seenSingleTagCodes.has(tag.tagCode)) {
+      return "导出 JSON 前请删除重复业务标签代码";
+    }
     seenTagValues.add(tagKey);
     seenSingleTagCodes.add(tag.tagCode);
+  }
+  const mainProteins = tags.filter(tag => tag.tagCode === "MAIN_PROTEIN_TYPE").map(tag => tag.tagValue);
+  if (mainProteins.includes("NONE") && mainProteins.length > 1) {
+    return "导出 JSON 前请修正主蛋白标签：无主蛋白不能与其他主蛋白并存";
   }
   if (recipeImportRequiredTagCodes.some(code => !tags.some(tag => tag.tagCode === code))) {
     return "导出 JSON 前请补全业务标签";

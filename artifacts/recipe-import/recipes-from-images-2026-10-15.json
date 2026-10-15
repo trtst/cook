@@ -1,0 +1,242 @@
+{
+  "schemaVersion": "recipe.import.batch.v1",
+  "recipes": [
+    {
+      "recipe": {
+        "inspirationCategoryId": 6004,
+        "coverImageUrl": null,
+        "content": {
+          "name": "牛肉口蘑滑蛋",
+          "story": "牛肉片与口蘑先后滑炒，再加入鸡蛋液轻轻推至嫩滑凝固，最后以少量盐、白胡椒和小葱调味。",
+          "baseServings": null,
+          "difficulty": "EASY",
+          "duration": "WITHIN_15",
+          "tips": "炒蛋液时转小火，轻轻推动至嫩滑凝固；口蘑先炒至变软出水，再加入牛肉和蛋液。",
+          "keywords": ["滑蛋", "口蘑", "牛肉", "牛肉口蘑滑蛋"],
+          "ingredients": [
+            { "name": "鸡蛋", "quantity": "3", "unit": "个", "fuzzyText": null, "categoryCode": "MEAT_POULTRY_EGG", "recipeRole": "MAIN" },
+            { "name": "牛里脊", "quantity": null, "unit": null, "fuzzyText": "适量", "categoryCode": "MEAT_POULTRY_EGG", "recipeRole": "MAIN" },
+            { "name": "口蘑", "quantity": "150", "unit": "克", "fuzzyText": null, "categoryCode": "PRODUCE", "recipeRole": "ACCOMPANIMENT" },
+            { "name": "口蘑", "quantity": "120", "unit": "克", "fuzzyText": null, "categoryCode": "PRODUCE", "recipeRole": "ACCOMPANIMENT" },
+            { "name": "小葱", "quantity": "10", "unit": "克", "fuzzyText": null, "categoryCode": "PRODUCE", "recipeRole": "SEASONING" },
+            { "name": "姜蒜", "quantity": "3", "unit": "克", "fuzzyText": null, "categoryCode": "PRODUCE", "recipeRole": "SEASONING" },
+            { "name": "生抽", "quantity": "10", "unit": "克", "fuzzyText": null, "categoryCode": "SEASONING", "recipeRole": "SEASONING" },
+            { "name": "淀粉", "quantity": "5", "unit": "克", "fuzzyText": null, "categoryCode": "GRAINS_STAPLES", "recipeRole": "SEASONING" },
+            { "name": "食用油", "quantity": "8", "unit": "克", "fuzzyText": null, "categoryCode": "SEASONING", "recipeRole": "SEASONING" },
+            { "name": "食盐", "quantity": null, "unit": null, "fuzzyText": "适量", "categoryCode": "SEASONING", "recipeRole": "SEASONING" },
+            { "name": "白胡椒粉", "quantity": null, "unit": null, "fuzzyText": "适量", "categoryCode": "SEASONING", "recipeRole": "SEASONING" }
+          ],
+          "tools": [],
+          "steps": [
+            { "text": "牛肉切小片，加入生抽、淀粉和食用油抓匀，腌制10分钟。", "imageUrl": null, "imagePrompt": "牛肉薄片放在浅色碗中，表面裹有少量酱汁和淀粉，旁边备好食用油，真实中式备菜摄影，不出现文字" },
+            { "text": "口蘑切片，小葱切花，姜蒜切末。", "imageUrl": null, "imagePrompt": "切片口蘑、小葱葱花和姜蒜末分别摆放在小碟中，干净厨房台面，真实食材特写，不出现文字" },
+            { "text": "锅中少油，中火将口蘑炒至变软出水。", "imageUrl": null, "imagePrompt": "口蘑片在锅中受热变软并析出少量汁水，真实烹饪过程特写，不出现文字" },
+            { "text": "加入牛肉片滑炒至变色，盛出备用。", "imageUrl": null, "imagePrompt": "牛肉片在锅中快速滑炒至颜色改变，口蘑留在锅中，真实烹饪过程特写，不出现文字" },
+            { "text": "转小火倒入蛋液，轻轻推动至嫩滑凝固，再放回牛肉和口蘑。", "imageUrl": null, "imagePrompt": "嫩黄色蛋液在锅中缓慢凝固成柔软蛋块，牛肉和口蘑备在一旁，真实烹饪摄影，不出现文字" },
+            { "text": "加入少许盐、白胡椒和小葱，轻轻拌匀后装盘。", "imageUrl": null, "imagePrompt": "牛肉口蘑滑蛋盛在白色餐盘中，表面点缀葱花，真实家常菜成品摄影，不出现文字" }
+          ]
+        }
+      },
+      "wiki": {
+        "tags": [
+          { "tagCode": "CUISINE", "tagValue": "HOME_STYLE" },
+          { "tagCode": "DISH_STYLE", "tagValue": "STIR_FRY" },
+          { "tagCode": "MEAL_TYPE", "tagValue": "LUNCH" },
+          { "tagCode": "MEAL_TYPE", "tagValue": "DINNER" },
+          { "tagCode": "DISH_ROLE", "tagValue": "MAIN" },
+          { "tagCode": "MAIN_PROTEIN_TYPE", "tagValue": "BEEF" },
+          { "tagCode": "MAIN_PROTEIN_TYPE", "tagValue": "EGG" },
+          { "tagCode": "SPICE_LEVEL", "tagValue": "NONE" }
+        ],
+        "assistant": {
+          "steps": [
+            { "order": 1, "phase": "PREP", "action": "SLICE", "title": "腌好牛肉", "detail": "牛肉切薄片，与生抽、淀粉和食用油抓匀，静置10分钟。", "imageUrl": null, "imagePrompt": "浅色碗中的牛肉薄片均匀裹着腌料，呈现可下锅前的备菜状态，真实做饭指导摄影，不出现文字", "durationMinutes": 10, "durationText": "约10分钟" },
+            { "order": 2, "phase": "PREP", "action": "CUT", "title": "备好配料", "detail": "口蘑切片，小葱切成葱花，姜蒜切末；鸡蛋打散备用。", "imageUrl": null, "imagePrompt": "口蘑片、葱花、姜蒜末和一碗打散的鸡蛋依次摆在台面，真实做饭指导摄影，不出现文字", "durationMinutes": 5, "durationText": "约5分钟" },
+            { "order": 3, "phase": "COOK", "action": "STIR_FRY", "title": "炒软口蘑", "detail": "锅中放少量油，中火加热后下口蘑，炒到变软并有汁水析出。", "imageUrl": null, "imagePrompt": "锅内口蘑片刚刚炒软并带有汁水，呈现继续烹调前的状态，真实做饭指导摄影，不出现文字", "durationMinutes": 3, "durationText": "约3分钟" },
+            { "order": 4, "phase": "COOK", "action": "STIR_FRY", "title": "滑熟牛肉", "detail": "放入腌好的牛肉片，快速翻炒到表面变色后先盛出，避免久炒。", "imageUrl": null, "imagePrompt": "牛肉片在锅中快速翻动至表面变色，旁边可见炒软的口蘑，真实做饭指导摄影，不出现文字", "durationMinutes": 2, "durationText": "约2分钟" },
+            { "order": 5, "phase": "COOK", "action": "STIR_FRY", "title": "做成滑蛋", "detail": "把火力调小后倒入蛋液，缓慢推动；蛋液刚凝成柔软蛋块时放回牛肉和口蘑。", "imageUrl": null, "imagePrompt": "小火下蛋液形成柔软嫩滑的蛋块，牛肉与口蘑即将回锅，真实做饭指导摄影，不出现文字", "durationMinutes": 3, "durationText": "约3分钟" },
+            { "order": 6, "phase": "SERVE", "action": "SEASON", "title": "调味盛盘", "detail": "按图示加少许盐和白胡椒，撒上小葱，轻轻拌匀即可装盘。", "imageUrl": null, "imagePrompt": "牛肉口蘑滑蛋装入餐盘，蛋块柔软完整并点缀葱花，真实做饭指导摄影，不出现文字", "durationMinutes": 1, "durationText": "约1分钟" }
+          ]
+        }
+      }
+    },
+    {
+      "recipe": {
+        "inspirationCategoryId": 6003,
+        "coverImageUrl": null,
+        "content": {
+          "name": "香菜炒牛肉",
+          "story": "牛肉片经短暂腌制后大火快炒，再与蒜、姜、辣椒和香菜段翻匀，突出牛肉嫩滑与香菜清香。",
+          "baseServings": null,
+          "difficulty": "EASY",
+          "duration": "WITHIN_15",
+          "tips": "牛肉腌制后加少许油锁住水分，快炒时保持大火；香菜下锅后不要炒太久。",
+          "keywords": ["快炒牛肉", "香菜", "牛肉", "香菜炒牛肉"],
+          "ingredients": [
+            { "name": "牛肉", "quantity": "250", "unit": "克", "fuzzyText": null, "categoryCode": "MEAT_POULTRY_EGG", "recipeRole": "MAIN" },
+            { "name": "香菜", "quantity": null, "unit": null, "fuzzyText": "适量", "categoryCode": "PRODUCE", "recipeRole": "ACCOMPANIMENT" },
+            { "name": "大蒜", "quantity": "1", "unit": "大把", "fuzzyText": null, "categoryCode": "PRODUCE", "recipeRole": "SEASONING" },
+            { "name": "姜", "quantity": "3", "unit": "小块", "fuzzyText": null, "categoryCode": "PRODUCE", "recipeRole": "SEASONING" },
+            { "name": "辣椒", "quantity": "1", "unit": "根", "fuzzyText": null, "categoryCode": "PRODUCE", "recipeRole": "SEASONING" },
+            { "name": "生抽", "quantity": "1.5", "unit": "汤匙", "fuzzyText": null, "categoryCode": "SEASONING", "recipeRole": "SEASONING" },
+            { "name": "老抽", "quantity": "0.5", "unit": "汤匙", "fuzzyText": null, "categoryCode": "SEASONING", "recipeRole": "SEASONING" },
+            { "name": "白糖", "quantity": "1", "unit": "茶匙", "fuzzyText": null, "categoryCode": "SEASONING", "recipeRole": "SEASONING" },
+            { "name": "淀粉", "quantity": "1", "unit": "茶匙", "fuzzyText": null, "categoryCode": "GRAINS_STAPLES", "recipeRole": "SEASONING" },
+            { "name": "盐", "quantity": null, "unit": null, "fuzzyText": "适量", "categoryCode": "SEASONING", "recipeRole": "SEASONING" },
+            { "name": "料酒", "quantity": "1", "unit": "汤匙", "fuzzyText": null, "categoryCode": "SEASONING", "recipeRole": "SEASONING" },
+            { "name": "姜粉", "quantity": null, "unit": null, "fuzzyText": "适量", "categoryCode": "SEASONING", "recipeRole": "SEASONING" },
+            { "name": "蚝油", "quantity": null, "unit": null, "fuzzyText": "适量", "categoryCode": "SEASONING", "recipeRole": "SEASONING" },
+            { "name": "食用油", "quantity": "1", "unit": "汤匙", "fuzzyText": null, "categoryCode": "SEASONING", "recipeRole": "SEASONING" }
+          ],
+          "tools": [],
+          "steps": [
+            { "text": "牛肉切片，加入生抽、淀粉、料酒、盐和姜粉抓匀，腌制10分钟。", "imageUrl": null, "imagePrompt": "牛肉片放在碗中并均匀裹上酱汁与淀粉，真实中式备菜摄影，不出现文字" },
+            { "text": "大蒜、姜和辣椒切好，香菜切段。", "imageUrl": null, "imagePrompt": "切好的蒜、姜片、红辣椒圈和香菜段分别摆放在砧板旁，真实食材摄影，不出现文字" },
+            { "text": "锅中热油，放入牛肉大火快速滑炒至变色后盛出。", "imageUrl": null, "imagePrompt": "牛肉片在热锅中快速翻炒至变色，真实中式快炒过程，不出现文字" },
+            { "text": "用锅底油炒香蒜、姜和辣椒，加入牛肉，再放入老抽、蚝油和糖翻炒均匀。", "imageUrl": null, "imagePrompt": "蒜姜辣椒在锅中炒香，牛肉片回锅并裹上调味汁，真实烹饪摄影，不出现文字" },
+            { "text": "放入香菜段，大火翻炒约10秒，试味补盐后盛出。", "imageUrl": null, "imagePrompt": "香菜段刚加入牛肉锅中快速翻匀，保持鲜绿色泽，真实烹饪摄影，不出现文字" }
+          ]
+        }
+      },
+      "wiki": {
+        "tags": [
+          { "tagCode": "CUISINE", "tagValue": "HOME_STYLE" },
+          { "tagCode": "DISH_STYLE", "tagValue": "STIR_FRY" },
+          { "tagCode": "MEAL_TYPE", "tagValue": "LUNCH" },
+          { "tagCode": "MEAL_TYPE", "tagValue": "DINNER" },
+          { "tagCode": "DISH_ROLE", "tagValue": "MAIN" },
+          { "tagCode": "MAIN_PROTEIN_TYPE", "tagValue": "BEEF" }
+        ],
+        "assistant": {
+          "steps": [
+            { "order": 1, "phase": "PREP", "action": "MARINATE", "title": "腌制牛肉", "detail": "牛肉片加入生抽、淀粉、料酒、盐和姜粉抓匀，放置10分钟入味。", "imageUrl": null, "imagePrompt": "腌料均匀附着在牛肉片表面，牛肉集中放在浅口碗中，真实做饭指导摄影，不出现文字", "durationMinutes": 10, "durationText": "约10分钟" },
+            { "order": 2, "phase": "PREP", "action": "CUT", "title": "切好配料", "detail": "蒜和姜切片或切末，辣椒切段，香菜切成便于翻炒的段。", "imageUrl": null, "imagePrompt": "蒜姜辣椒与香菜段整齐分开放置，呈现可以直接下锅的备菜状态，真实做饭指导摄影，不出现文字", "durationMinutes": 4, "durationText": "约4分钟" },
+            { "order": 3, "phase": "COOK", "action": "STIR_FRY", "title": "快速炒牛肉", "detail": "锅烧热后放油，牛肉大火快速翻炒；看到表面变色就先盛出，避免炒老。", "imageUrl": null, "imagePrompt": "牛肉片在热锅中迅速变色并保持柔嫩，旁边留出盛出的空间，真实做饭指导摄影，不出现文字", "durationMinutes": 2, "durationText": "约2分钟" },
+            { "order": 4, "phase": "COOK", "action": "STIR_FRY", "title": "回锅调味", "detail": "用锅底油炒香蒜姜和辣椒，牛肉回锅后加入老抽、蚝油和糖，翻到均匀上色。", "imageUrl": null, "imagePrompt": "蒜姜辣椒香气升起，牛肉片在酱汁中翻匀并呈均匀棕色，真实做饭指导摄影，不出现文字", "durationMinutes": 2, "durationText": "约2分钟" },
+            { "order": 5, "phase": "SERVE", "action": "GARNISH", "title": "下香菜出锅", "detail": "香菜最后放入，大火翻约10秒即可；尝味后按图示补盐，立即盛出。", "imageUrl": null, "imagePrompt": "牛肉与鲜绿香菜刚刚拌匀并准备盛盘，香菜仍显鲜嫩，真实做饭指导摄影，不出现文字", "durationMinutes": 1, "durationText": "约1分钟" }
+          ]
+        }
+      }
+    },
+    {
+      "recipe": {
+        "inspirationCategoryId": 6001,
+        "coverImageUrl": null,
+        "content": {
+          "name": "清蒸蒜香排骨",
+          "story": "排骨浸泡去血水后用料酒、生抽、蚝油和调味料腌入味，再铺上蒜蓉蒸熟，出锅后以葱花和香油提香。",
+          "baseServings": null,
+          "difficulty": "EASY",
+          "duration": "WITHIN_15",
+          "tips": "排骨提前浸泡去血水，口感更清爽。\n蒜蓉不要蒸太久，以保留蒜香。\n蒸制时间不宜过长，保持嫩滑。\n喜欢清淡可减少生抽，增加蒸鱼豉油提鲜。",
+          "keywords": ["清蒸排骨", "蒜香排骨", "排骨", "清蒸蒜香排骨"],
+          "ingredients": [
+            { "name": "排骨", "quantity": "500", "unit": "克", "fuzzyText": null, "categoryCode": "MEAT_POULTRY_EGG", "recipeRole": "MAIN" },
+            { "name": "大蒜", "quantity": "1", "unit": "整头", "fuzzyText": null, "categoryCode": "PRODUCE", "recipeRole": "SEASONING" },
+            { "name": "小葱", "quantity": "1", "unit": "根", "fuzzyText": null, "categoryCode": "PRODUCE", "recipeRole": "SEASONING" },
+            { "name": "姜", "quantity": "1", "unit": "块", "fuzzyText": null, "categoryCode": "PRODUCE", "recipeRole": "SEASONING" },
+            { "name": "料酒", "quantity": "1", "unit": "汤匙", "fuzzyText": null, "categoryCode": "SEASONING", "recipeRole": "SEASONING" },
+            { "name": "生抽", "quantity": "2", "unit": "汤匙", "fuzzyText": null, "categoryCode": "SEASONING", "recipeRole": "SEASONING" },
+            { "name": "蚝油", "quantity": "1", "unit": "汤匙", "fuzzyText": null, "categoryCode": "SEASONING", "recipeRole": "SEASONING" },
+            { "name": "食盐", "quantity": null, "unit": null, "fuzzyText": "适量", "categoryCode": "SEASONING", "recipeRole": "SEASONING" },
+            { "name": "白胡椒粉", "quantity": null, "unit": null, "fuzzyText": "适量", "categoryCode": "SEASONING", "recipeRole": "SEASONING" },
+            { "name": "淀粉", "quantity": "1", "unit": "汤匙", "fuzzyText": null, "categoryCode": "GRAINS_STAPLES", "recipeRole": "SEASONING" },
+            { "name": "香油", "quantity": null, "unit": null, "fuzzyText": "适量", "categoryCode": "SEASONING", "recipeRole": "SEASONING" }
+          ],
+          "tools": [{ "name": "蒸锅" }],
+          "steps": [
+            { "text": "排骨浸泡清水30分钟，期间换水1至2次，去血水后沥干。", "imageUrl": null, "imagePrompt": "排骨浸在清水中，旁边备有换水用的清水容器，真实备菜场景，不出现文字" },
+            { "text": "加入料酒、生抽、蚝油、盐、白胡椒粉和淀粉抓匀，腌制20分钟。", "imageUrl": null, "imagePrompt": "排骨与酱汁和淀粉混合均匀，表面呈薄薄的腌料，真实备菜特写，不出现文字" },
+            { "text": "蒜切末，姜切片，葱切段；蒜蓉铺在排骨上。", "imageUrl": null, "imagePrompt": "蒜末铺在已腌制的排骨表面，旁边摆放姜片和葱段，真实备菜摄影，不出现文字" },
+            { "text": "水烧开后将排骨上锅，大火蒸12至15分钟，关火焖2分钟。", "imageUrl": null, "imagePrompt": "蒸锅中排骨正在蒸制，锅盖边缘升起蒸汽，真实中式烹饪摄影，不出现文字" },
+            { "text": "出锅后撒葱花，淋香油或热油，并可滴几滴生抽调味。", "imageUrl": null, "imagePrompt": "蒸熟排骨撒有葱花和蒜蓉，表面带少量油光，真实家常菜成品摄影，不出现文字" }
+          ]
+        }
+      },
+      "wiki": {
+        "tags": [
+          { "tagCode": "CUISINE", "tagValue": "HOME_STYLE" },
+          { "tagCode": "DISH_STYLE", "tagValue": "STEAMED" },
+          { "tagCode": "MEAL_TYPE", "tagValue": "LUNCH" },
+          { "tagCode": "MEAL_TYPE", "tagValue": "DINNER" },
+          { "tagCode": "DISH_ROLE", "tagValue": "MAIN" },
+          { "tagCode": "MAIN_PROTEIN_TYPE", "tagValue": "PORK" },
+          { "tagCode": "SPICE_LEVEL", "tagValue": "NONE" }
+        ],
+        "assistant": {
+          "steps": [
+            { "order": 1, "phase": "PREP", "action": "SOAK", "title": "浸泡去血水", "detail": "排骨放入清水浸泡30分钟，期间换水1至2次；捞出后充分沥干。", "imageUrl": null, "imagePrompt": "排骨经过浸泡和换水后放在滤篮中沥水，真实做饭指导摄影，不出现文字", "durationMinutes": 30, "durationText": "约30分钟" },
+            { "order": 2, "phase": "PREP", "action": "MARINATE", "title": "腌排骨", "detail": "加入料酒、生抽、蚝油、盐、白胡椒粉和淀粉，抓拌到排骨均匀裹料，静置20分钟。", "imageUrl": null, "imagePrompt": "排骨均匀裹有浅色腌料并静置在碗中，真实做饭指导摄影，不出现文字", "durationMinutes": 20, "durationText": "约20分钟" },
+            { "order": 3, "phase": "PREP", "action": "CUT", "title": "准备蒜葱姜", "detail": "蒜切成蒜末，姜切片，葱切段；把蒜末铺到排骨上。", "imageUrl": null, "imagePrompt": "蒜末覆盖在排骨上，姜片和葱段整齐放在旁边，真实做饭指导摄影，不出现文字", "durationMinutes": 5, "durationText": "约5分钟" },
+            { "order": 4, "phase": "COOK", "action": "STEAM", "title": "蒸熟排骨", "detail": "待蒸锅水沸腾后放入排骨，大火蒸12至15分钟，再关火焖2分钟。", "imageUrl": null, "imagePrompt": "沸水蒸锅内排骨蒸至熟透，蒸汽充足，真实做饭指导摄影，不出现文字", "durationMinutes": 15, "durationText": "约12至15分钟" },
+            { "order": 5, "phase": "SERVE", "action": "GARNISH", "title": "出锅提香", "detail": "撒上葱花，淋少量香油；也可按图示加几滴生抽后上桌。", "imageUrl": null, "imagePrompt": "清蒸排骨刚出锅，蒜蓉与葱花分布在排骨表面，真实做饭指导摄影，不出现文字", "durationMinutes": 1, "durationText": "约1分钟" }
+          ]
+        }
+      }
+    },
+    {
+      "recipe": {
+        "inspirationCategoryId": 6004,
+        "coverImageUrl": null,
+        "content": {
+          "name": "番茄金针菇瘦牛肉卷",
+          "story": "金针菇用瘦牛肉片卷起，与番茄、姜蒜同锅煮入味，成品汤汁酸鲜。",
+          "baseServings": null,
+          "difficulty": "EASY",
+          "duration": "WITHIN_15",
+          "tips": "牛肉片先回温后再腌制，卷金针菇时从一端卷起并用牙签固定；汤汁煮开后转中小火煮8至10分钟。",
+          "keywords": ["番茄牛肉卷", "金针菇牛肉卷", "番茄", "番茄金针菇瘦牛肉卷"],
+          "ingredients": [
+            { "name": "瘦牛肉片", "quantity": "200", "unit": "克", "fuzzyText": null, "categoryCode": "MEAT_POULTRY_EGG", "recipeRole": "MAIN" },
+            { "name": "金针菇", "quantity": "150", "unit": "克", "fuzzyText": null, "categoryCode": "PRODUCE", "recipeRole": "ACCOMPANIMENT" },
+            { "name": "番茄", "quantity": "300", "unit": "克", "fuzzyText": null, "categoryCode": "PRODUCE", "recipeRole": "ACCOMPANIMENT" },
+            { "name": "姜", "quantity": "10", "unit": "克", "fuzzyText": null, "categoryCode": "PRODUCE", "recipeRole": "SEASONING" },
+            { "name": "大蒜", "quantity": "6", "unit": "克", "fuzzyText": null, "categoryCode": "PRODUCE", "recipeRole": "SEASONING" },
+            { "name": "小葱", "quantity": "6", "unit": "克", "fuzzyText": null, "categoryCode": "PRODUCE", "recipeRole": "SEASONING" },
+            { "name": "生抽", "quantity": "2", "unit": "汤匙", "fuzzyText": null, "categoryCode": "SEASONING", "recipeRole": "SEASONING" },
+            { "name": "淀粉", "quantity": "1", "unit": "茶匙", "fuzzyText": null, "categoryCode": "GRAINS_STAPLES", "recipeRole": "SEASONING" },
+            { "name": "食用油", "quantity": "10", "unit": "克", "fuzzyText": null, "categoryCode": "SEASONING", "recipeRole": "SEASONING" },
+            { "name": "醋", "quantity": "10", "unit": "克", "fuzzyText": null, "categoryCode": "SEASONING", "recipeRole": "SEASONING" },
+            { "name": "料酒", "quantity": null, "unit": null, "fuzzyText": "适量", "categoryCode": "SEASONING", "recipeRole": "SEASONING" },
+            { "name": "白胡椒粉", "quantity": null, "unit": null, "fuzzyText": "适量", "categoryCode": "SEASONING", "recipeRole": "SEASONING" },
+            { "name": "蚝油", "quantity": null, "unit": null, "fuzzyText": "适量", "categoryCode": "SEASONING", "recipeRole": "SEASONING" },
+            { "name": "食盐", "quantity": null, "unit": null, "fuzzyText": "适量", "categoryCode": "SEASONING", "recipeRole": "SEASONING" },
+            { "name": "香油", "quantity": null, "unit": null, "fuzzyText": "适量", "categoryCode": "SEASONING", "recipeRole": "SEASONING" }
+          ],
+          "tools": [],
+          "steps": [
+            { "text": "牛肉片回温，金针菇去根洗净，番茄切小块，姜蒜切末，小葱切花。", "imageUrl": null, "imagePrompt": "洗净金针菇、番茄块、姜蒜末、葱花和回温牛肉片分别备好，真实厨房备菜摄影，不出现文字" },
+            { "text": "牛肉片加入淀粉、料酒、少许盐和白胡椒粉抓匀，腌制10分钟。", "imageUrl": null, "imagePrompt": "牛肉片表面裹有薄薄的淀粉腌料，置于浅色碗中，真实备菜摄影，不出现文字" },
+            { "text": "取适量金针菇放在牛肉片上，从一端卷起，用牙签固定。", "imageUrl": null, "imagePrompt": "金针菇束从牛肉片一端卷入并由牙签固定，真实备菜特写，不出现文字" },
+            { "text": "锅中刷油，放入姜蒜炒香，加入番茄块翻炒至出汁。", "imageUrl": null, "imagePrompt": "姜蒜末在锅中炒香后与番茄块一起翻炒，番茄开始出汁，真实烹饪摄影，不出现文字" },
+            { "text": "加入适量清水或高汤，放入牛肉卷，加生抽、蚝油和盐调味；煮开后转中小火煮8至10分钟。", "imageUrl": null, "imagePrompt": "番茄汤汁中整齐放入金针菇牛肉卷，汤面微沸，真实烹饪摄影，不出现文字" },
+            { "text": "汤汁浓稠后撒葱花，淋几滴香油，小心取出牙签即可装盘。", "imageUrl": null, "imagePrompt": "番茄金针菇牛肉卷盛在盘中，表面撒葱花并带有少量汤汁，真实成品摄影，不出现文字" }
+          ]
+        }
+      },
+      "wiki": {
+        "tags": [
+          { "tagCode": "CUISINE", "tagValue": "HOME_STYLE" },
+          { "tagCode": "DISH_STYLE", "tagValue": "STEW" },
+          { "tagCode": "MEAL_TYPE", "tagValue": "LUNCH" },
+          { "tagCode": "MEAL_TYPE", "tagValue": "DINNER" },
+          { "tagCode": "DISH_ROLE", "tagValue": "MAIN" },
+          { "tagCode": "MAIN_PROTEIN_TYPE", "tagValue": "BEEF" },
+          { "tagCode": "FLAVOR_PROFILE", "tagValue": "SOUR" },
+          { "tagCode": "FLAVOR_PROFILE", "tagValue": "UMAMI" },
+          { "tagCode": "SPICE_LEVEL", "tagValue": "NONE" }
+        ],
+        "assistant": {
+          "steps": [
+            { "order": 1, "phase": "PREP", "action": "CUT", "title": "准备食材", "detail": "牛肉片先回温；金针菇去根清洗，番茄切小块，姜蒜切末，小葱切花。", "imageUrl": null, "imagePrompt": "牛肉片回温后与洗净金针菇、番茄块、姜蒜末和葱花分区摆放，真实做饭指导摄影，不出现文字", "durationMinutes": 5, "durationText": "约5分钟" },
+            { "order": 2, "phase": "PREP", "action": "MARINATE", "title": "腌牛肉片", "detail": "牛肉片拌入淀粉、料酒、少许盐和白胡椒粉，抓匀后静置10分钟。", "imageUrl": null, "imagePrompt": "牛肉片均匀裹上薄薄腌料后在碗中静置，真实做饭指导摄影，不出现文字", "durationMinutes": 10, "durationText": "约10分钟" },
+            { "order": 3, "phase": "PREP", "action": "OTHER", "title": "卷好金针菇", "detail": "取适量金针菇放在每片牛肉上，从一边卷起并用牙签固定，避免烹煮时散开。", "imageUrl": null, "imagePrompt": "数个金针菇牛肉卷整齐摆放，牙签横向固定卷口，真实做饭指导摄影，不出现文字", "durationMinutes": 5, "durationText": "约5分钟" },
+            { "order": 4, "phase": "COOK", "action": "STIR_FRY", "title": "炒香番茄底", "detail": "锅中刷少量油，先放姜蒜炒出香味，再加入番茄翻炒到汁水析出。", "imageUrl": null, "imagePrompt": "番茄块在姜蒜香味的热锅中逐渐变软并释出汁水，真实做饭指导摄影，不出现文字", "durationMinutes": 4, "durationText": "约4分钟" },
+            { "order": 5, "phase": "COOK", "action": "SIMMER", "title": "煮熟牛肉卷", "detail": "加适量清水或高汤并放入牛肉卷，以生抽、蚝油和盐调味；煮沸后转中小火，保持微沸8至10分钟。", "imageUrl": null, "imagePrompt": "牛肉卷浸在番茄汤汁中以小火微沸，卷形完整，真实做饭指导摄影，不出现文字", "durationMinutes": 10, "durationText": "约8至10分钟" },
+            { "order": 6, "phase": "SERVE", "action": "GARNISH", "title": "收汁装盘", "detail": "待汤汁略浓后撒葱花并淋几滴香油，取出牙签后盛盘。", "imageUrl": null, "imagePrompt": "番茄金针菇牛肉卷去掉牙签后盛盘，表面点缀葱花并有薄层汤汁，真实做饭指导摄影，不出现文字", "durationMinutes": 2, "durationText": "约2分钟" }
+          ]
+        }
+      }
+    }
+  ]
+}

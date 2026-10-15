@@ -67,6 +67,25 @@ test("published recipe Wiki displays cuisine and dish style in Chinese", () => {
   assert.match(adminServiceFile, /STAPLE_FOOD: "主食"/);
 });
 
+test("recipe JSON import and export follow the current cuisine and multi-tag contract", () => {
+  assert.match(itemPage, /LOCAL_SPECIAL[\s\S]*HOME_STYLE/);
+  const cuisineOptions = itemPage.match(/CUISINE: \[([\s\S]*?)\n  \],/);
+  assert.ok(cuisineOptions, "import editor should declare cuisine options");
+  assert.deepEqual(
+    [...cuisineOptions[1].matchAll(/value: "([^"]+)"/g)].map(match => match[1]),
+    ["SICHUAN_HUNAN", "CANTONESE", "NORTHERN", "JIANG_ZHE", "LOCAL_SPECIAL", "HOME_STYLE"]
+  );
+  assert.doesNotMatch(cuisineOptions[1], /FUJIAN|YUN_GUI|TAIWAN|FUSION|OTHER/);
+  assert.match(apiFile, /CUISINE: new Set\(\["SICHUAN_HUNAN", "CANTONESE", "NORTHERN", "JIANG_ZHE", "LOCAL_SPECIAL", "HOME_STYLE"\]\)/);
+  assert.match(apiFile, /"MAIN_PROTEIN_TYPE",\s*"FLAVOR_PROFILE",\s*"DISH_ROLE"/);
+  assert.match(itemPage, /function addTag\(\)\s*\{\s*form\.tags\.push/);
+  assert.match(detailPage, /\["MEAL_TYPE", "MAIN_PROTEIN_TYPE", "FLAVOR_PROFILE", "DISH_ROLE"\]\.includes\(tag\.tagCode\)/);
+  assert.match(detailPage, /CUISINE: new Set\(\["SICHUAN_HUNAN", "CANTONESE", "NORTHERN", "JIANG_ZHE", "LOCAL_SPECIAL", "HOME_STYLE"\]\)/);
+  assert.match(itemPage, /无主蛋白不能与其他主蛋白并存/);
+  assert.match(detailPage, /MAIN_PROTEIN_TYPE=NONE/);
+  assert.match(adminServiceFile, /recipeImportMultiValueTagCodes\.has\(tag\.tagCode\)/);
+});
+
 test("clearing an imported remote image removes the source URL", () => {
   assert.match(itemPage, /form\.coverImageUrl = null/);
   assert.match(itemPage, /step\.imageUrl = null/);

@@ -52,6 +52,8 @@ const labelMaps: Partial<Record<FacetKey, Record<string, string>>> = {
     CANTONESE: "粤菜",
     NORTHERN: "北方菜",
     JIANG_ZHE: "江浙",
+    LOCAL_SPECIAL: "地方风味",
+    HOME_STYLE: "家常菜",
     FUSION: "融合菜",
     FUJIAN: "闽菜",
     TAIWAN: "台湾菜"
