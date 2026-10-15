@@ -23,7 +23,7 @@
         <text class="assistant-state__desc">这道菜暂时只有按菜谱做饭的沉浸模式。</text>
         <button class="assistant-button assistant-button--ghost" @click="openCookMode">按菜谱做饭</button>
       </view>
-      <view v-else-if="errorText" class="assistant-state assistant-state--error">
+      <view v-else-if="errorText" class="assistant-state assistant-state--error page-state--error">
         <text class="assistant-state__title">{{ errorText }}</text>
         <button class="assistant-button assistant-button--ghost" @click="retryLoad">重试</button>
       </view>
@@ -356,6 +356,8 @@ defineExpose({
 }
 
 .assistant-state--error {
+  margin: 0;
+  padding: 0;
   color: var(--color-text-primary);
 }
 

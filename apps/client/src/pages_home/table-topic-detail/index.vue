@@ -8,8 +8,8 @@
 
     <scroll-view scroll-y class="topic-scroll" :show-scrollbar="false" @scroll="handleScroll">
       <view class="topic-page">
-        <view v-if="loading && !topic" class="topic-state" :style="pagePaddingStyle">加载中...</view>
-        <view v-else-if="errorText" class="topic-state topic-state--error" :style="pagePaddingStyle" @click="reload">{{ errorText }}</view>
+        <view v-if="loading && !topic" class="topic-state page-state--centered">加载中...</view>
+        <view v-else-if="errorText" class="topic-state topic-state--error page-state--centered page-state--error" @click="reload">{{ errorText }}</view>
 
         <template v-else-if="topic">
           <view class="topic-hero">
@@ -210,6 +210,8 @@ function openTopicTarget() {
 }
 
 .topic-state--error {
+  margin: 0;
+  padding: 0;
   color: var(--color-state-danger-text);
 }
 

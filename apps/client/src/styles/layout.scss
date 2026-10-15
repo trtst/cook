@@ -14,3 +14,29 @@ page {
     var(--tabbar-top-fade-gap)
   );
 }
+
+/* 用于整页只剩加载/失败提示时，将状态放在视口中央。 */
+.page-state--centered {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
+  text-align: center;
+}
+
+.page-state--error {
+  flex-direction: column;
+  gap: 20rpx;
+}
+
+.page-state--error::before {
+  content: "\e61b";
+  font-family: "cookfont";
+  font-size: 72rpx;
+  font-style: normal;
+  line-height: 1;
+  color: inherit;
+}

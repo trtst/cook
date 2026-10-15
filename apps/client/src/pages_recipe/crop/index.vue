@@ -11,7 +11,7 @@
     :navbar-placeholder="false"
   >
     <view v-if="loading" class="crop-state" :style="cropPageStyle">图片加载中...</view>
-    <view v-else-if="errorText" class="crop-state crop-state--error" :style="cropPageStyle" @click="reloadSource">{{ errorText }}</view>
+    <view v-else-if="errorText" class="crop-state crop-state--error page-state--error" :style="cropPageStyle" @click="reloadSource">{{ errorText }}</view>
 
     <view v-else class="crop-page" :style="cropPageStyle">
       <view class="crop-stage" :style="cropStageStyle">
@@ -800,6 +800,8 @@ function resetCropState() {
 }
 
 .crop-state--error {
+  margin: 0;
+  padding: 0;
   color: var(--color-state-danger-text);
 }
 

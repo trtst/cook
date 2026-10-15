@@ -79,12 +79,14 @@ const props = defineProps<{
 const FLAVOR_LABELS: Record<string, string> = {
   LIGHT: "清淡",
   NOT_SPICY: "不辣",
-  MILD: "微辣",
+  MILD: "温和",
+  SPICE_MILD: "微辣",
   SPICY: "辣味",
   SOUR: "酸口",
   SWEET: "甜口",
-  SALTY: "咸鲜",
-  UMAMI: "鲜味"
+  UMAMI: "鲜味",
+  SALTY: "咸味",
+  NUMBING: "麻味"
 };
 
 const emit = defineEmits<{

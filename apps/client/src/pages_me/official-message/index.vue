@@ -28,7 +28,7 @@
           @click="openLogin"
         />
 
-        <view v-else-if="errorText" class="detail-state detail-state--error" :style="pageBodyStyle" @click="reload">
+        <view v-else-if="errorText" class="detail-state detail-state--error page-state--centered page-state--error" @click="reload">
           <text class="detail-state__title">消息加载失败</text>
           <text class="detail-state__text">{{ errorText }}</text>
           <text class="detail-state__action">点击重试</text>
@@ -276,6 +276,11 @@ defineExpose({
 
 .detail-state__action {
   color: var(--color-support-action);
+}
+
+.detail-state--error.page-state--centered {
+  margin: 0;
+  padding: 0;
 }
 
 .detail-hero {

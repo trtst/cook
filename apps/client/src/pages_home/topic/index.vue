@@ -13,8 +13,8 @@
       @scroll="handleTopicScroll"
     >
       <view id="topic-top" class="topic-body">
-        <view v-if="loading && !topic" class="topic-state">加载中...</view>
-        <view v-else-if="errorText" class="topic-state topic-state--error" @click="reload">{{ errorText }}</view>
+        <view v-if="loading && !topic" class="topic-state page-state--centered">加载中...</view>
+        <view v-else-if="errorText" class="topic-state topic-state--error page-state--centered page-state--error" @click="reload">{{ errorText }}</view>
         <view v-else-if="!topic" class="topic-empty" :style="emptyStyle">
           <Empty :art="emptyStateArt" title="本周灵感还在准备中" description="新的菜谱推荐准备好后，会第一时间出现在这里。" />
         </view>
@@ -505,6 +505,8 @@ function formatWeekRange(value: { periodStartDate: string; periodEndDate: string
 }
 
 .topic-state--error {
+  margin: 0;
+  padding: 0;
   color: var(--color-support-action);
 }
 

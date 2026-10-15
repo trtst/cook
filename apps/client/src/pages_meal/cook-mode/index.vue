@@ -58,7 +58,7 @@
 
     <view v-else class="cook-mode-page" :class="{ 'cook-mode-page--immersive': isImmersive }">
       <view v-if="loading" class="cook-mode-state">加载中...</view>
-      <view v-else-if="errorText" class="cook-mode-state cook-mode-state--error" @click="loadData">
+      <view v-else-if="errorText" class="cook-mode-state cook-mode-state--error page-state--error" @click="loadData">
         <text>{{ errorText }}</text>
         <button v-if="isAssistantMode" class="cook-mode-state__switch" @click.stop="switchToOriginal">切换到普通做饭</button>
       </view>
@@ -1185,7 +1185,12 @@ defineExpose({
 }
 
 .cook-mode-state--error {
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
   color: var(--color-state-danger-text);
+  text-align: center;
 }
 
 .cook-mode-state__switch {

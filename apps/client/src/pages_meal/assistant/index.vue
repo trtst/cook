@@ -15,7 +15,7 @@
         <text class="assistant-banner__title">{{ tipsText }}</text>
       </view>
       <view v-if="loading && !planDetail" class="assistant-state">加载中...</view>
-      <view v-else-if="errorText && !planDetail" class="assistant-state assistant-state--error" @click="loadDetail">
+      <view v-else-if="errorText && !planDetail" class="assistant-state assistant-state--error page-state--error" @click="loadDetail">
         {{ errorText }}
       </view>
       <view v-else-if="!planDetail" class="assistant-empty">
@@ -546,11 +546,18 @@ defineExpose({
 }
 
 .assistant-state {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
   padding: 56rpx var(--space-page);
   color: var(--color-text-secondary);
+  text-align: center;
 }
 
 .assistant-state--error {
+  margin: 0;
+  padding: 0;
   color: var(--color-state-danger-text);
 }
 

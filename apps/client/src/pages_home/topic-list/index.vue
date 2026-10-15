@@ -7,9 +7,9 @@
     <view class="history-nav-backdrop" :style="navBackdropStyle" />
 
     <scroll-view scroll-y class="history-scroll" :show-scrollbar="false" @scroll="handleScroll" @scrolltolower="loadNextPage">
-      <view class="history-page" :style="pagePaddingStyle">
-        <view v-if="loading && !items.length" class="history-state">加载中...</view>
-        <view v-else-if="errorText" class="history-state history-state--error" @click="retryHistory">{{ errorText }}</view>
+      <view class="history-page" :style="items.length || (!loading && !errorText) ? pagePaddingStyle : undefined">
+        <view v-if="loading && !items.length" class="history-state page-state--centered">加载中...</view>
+        <view v-else-if="errorText" class="history-state history-state--error page-state--centered page-state--error" @click="retryHistory">{{ errorText }}</view>
         <view v-else-if="!items.length" class="history-empty" :style="emptyStyle">
           <Empty :art="emptyStateArt" title="还没有往期周刊" description="新的周刊发布后，会在这里留下记录。" />
         </view>
@@ -191,7 +191,13 @@ function formatDateLabel(value: string) {
 }
 
 .history-state--error {
+  margin: 0;
+  padding: 0;
   color: var(--color-state-danger-text);
+}
+
+.history-state.page-state--centered {
+  min-height: 100vh;
 }
 
 .history-empty {

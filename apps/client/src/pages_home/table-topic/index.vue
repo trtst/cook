@@ -7,9 +7,9 @@
     <view class="topic-nav-backdrop" :style="navBackdropStyle" />
 
     <scroll-view scroll-y class="topic-scroll" :show-scrollbar="false" @scroll="handleScroll">
-      <view class="topic-page" :style="pagePaddingStyle">
-        <view v-if="loading && !items.length" class="topic-state">加载中...</view>
-        <view v-else-if="errorText && !items.length" class="topic-state topic-state--error" @click="reload">{{ errorText }}</view>
+      <view class="topic-page" :style="items.length || (!loading && !errorText) ? pagePaddingStyle : undefined">
+        <view v-if="loading && !items.length" class="topic-state page-state--centered">加载中...</view>
+        <view v-else-if="errorText && !items.length" class="topic-state topic-state--error page-state--centered page-state--error" @click="reload">{{ errorText }}</view>
         <view v-else-if="!items.length" class="topic-empty" :style="emptyStyle">
           <Empty
             :art="emptyStateArt"
@@ -192,7 +192,13 @@ function openTopic(topicId: number) {
 }
 
 .topic-state--error {
+  margin: 0;
+  padding: 0;
   color: var(--color-state-danger-text);
+}
+
+.topic-state.page-state--centered {
+  min-height: 100vh;
 }
 
 .topic-list {
