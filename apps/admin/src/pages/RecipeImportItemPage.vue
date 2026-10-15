@@ -972,6 +972,16 @@ function clearStepImage(index: number) {
   replaceStepPreviewUrl(step, null);
 }
 
+function buildIngredientLine(item: EditIngredientRow) {
+  const sourceLine = item.line.trim();
+  if (sourceLine) return sourceLine;
+
+  const amount = item.amount.kind === "FUZZY"
+    ? item.amount.text.trim()
+    : [item.amount.quantity.trim(), resolveUnitDraftText(item)].filter(Boolean).join(" ");
+  return [resolveIngredientDraftName(item), amount].filter(Boolean).join(" ");
+}
+
 function buildRecipeBody(): RecipeImportRecipeBodyUpdate {
   return {
     inspirationCategoryId: form.inspirationCategoryId || null,
@@ -986,7 +996,7 @@ function buildRecipeBody(): RecipeImportRecipeBodyUpdate {
     coverImageKey: form.coverImageKey || null,
     coverImageTempKey: form.coverImageTempKey,
     ingredients: form.ingredients.map(item => ({
-      line: item.line.trim(),
+      line: buildIngredientLine(item),
       ingredientName: resolveIngredientDraftName(item),
       ingredientId: item.ingredientId || null,
       quantity: item.amount.kind === "EXACT" ? (item.amount.quantity.trim() || null) : null,

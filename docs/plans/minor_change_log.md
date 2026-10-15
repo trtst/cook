@@ -1,5 +1,9 @@
 # 项目变更记录
 
+| 2026-10-15 | 修复后台菜谱导入条目新增食材时 `line` 为空导致保存被 DTO 拒绝的问题：保留原导入行文本；新增行在保存时根据食材名和精确/模糊用量生成非空文本。 | `apps/admin/src/pages/RecipeImportItemPage.vue`、`docs/plans/minor_change_log.md` | 静态核对保存 payload 已走新行文本构造；未运行测试或后台浏览器验收。 |
+
+| 2026-10-15 | 核心类别食材统计排除葱类（含葱花、葱段、葱末等，不含洋葱）、姜类、蒜类和小米辣；按系统食材名称及别名判断，只改变统计口径。 | `apps/api/src/modules/home/home-topic-stats.service.ts`、`docs/ingredient.md`、`docs/plans/recipe-library-statistics-missing-items-execution.md`、`docs/plans/minor_change_log.md` | 已更新本地规则与统计实现；未修改 TEST 菜谱或食材数据，TEST 统计快照需部署后重建；未运行测试。 |
+
 | 2026-10-15 | 扩充菜谱主要风味枚举，新增 `UMAMI`（鲜味）、`SALTY`（咸味）和 `NUMBING`（麻味）；补充各风味标签判定边界及辣度 `NONE` 的依据，避免按单个食材机械推断。同步 API JSON 导入、Admin 导入/详情标签选项与展示、随机菜单标签文案。另修正标签推断中“不辣/清淡”“微辣/温和”的混用，收紧酸甜风味的自动识别条件；随机菜单把辣度微辣与温和风味分开展示。 | `docs/plans/recipe-admin-json-conversion.md`、`apps/api/src/modules/admin/recipe-import-json.ts`、`apps/admin/src/pages/RecipeImportItemPage.vue`、`apps/admin/src/pages/RecipeDetailPage.vue`、`apps/api/src/modules/admin/admin.service.ts`、`apps/api/src/modules/recipe/recipe-version-tags.ts`、`apps/api/src/modules/meal/meal.service.ts`、`apps/client/src/pages_meal/components/RandomSlotCard.vue`、`apps/client/src/pages_meal/random/style.test.ts`、`docs/plans/minor_change_log.md` | API、Admin 与 Client type-check、`git diff --check` 通过；未运行测试或后台导入预览。 |
 
 | 2026-10-15 | 对齐菜谱食材标准名与分类：使用“黑胡椒”“白胡椒”，不使用“黑胡椒粉”“白胡椒粉”；干辣椒归为 `SEASONING`，同步菜谱/食材 JSON 规范、系统种子数据及部署迁移。 | `docs/plans/recipe-admin-json-conversion.md`、`docs/plans/ingredient-admin-json-conversion.md`、`apps/api/prisma/seed.ts`、`apps/api/prisma/migrations/20261015100000_reclassify_dried_chili/migration.sql` | 已更新规范与种子示例；增加前向数据迁移，待数据库部署验证；修订 JSON 已按标准名和分类重出并完成结构核对。 |
