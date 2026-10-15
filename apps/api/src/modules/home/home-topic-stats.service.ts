@@ -22,6 +22,17 @@ const scope = "PUBLIC_INSPIRATION";
 const operationType = "admin-home-topic-stats:rebuild";
 const pageSize = 500;
 const coreIngredientCategoryIds = [5001, 5002, 5003, 5004];
+const excludedCoreIngredientNames = new Set([
+  "葱", "小葱", "香葱", "大葱", "葱花", "葱段", "葱末", "葱白", "葱丝", "葱粒",
+  "姜", "生姜", "姜片", "姜末", "姜丝", "姜块", "姜蓉", "姜汁",
+  "蒜", "大蒜", "蒜末", "蒜片", "蒜瓣", "蒜泥", "蒜蓉", "蒜粒",
+  "小米辣", "小米椒", "小米辣椒"
+]);
+const excludedCoreIngredientForms = [
+  { roots: ["葱", "小葱", "香葱", "大葱"], forms: new Set(["花", "段", "末", "白", "丝", "粒", "碎", "丁", "圈", "叶", "绿"]) },
+  { roots: ["姜", "生姜"], forms: new Set(["片", "末", "丝", "块", "蓉", "汁"]) },
+  { roots: ["蒜", "大蒜"], forms: new Set(["末", "片", "瓣", "泥", "蓉", "粒"]) }
+];
 const tagFacetMap: Partial<Record<RecipeVersionTagCode, keyof HomeTopicRecipeStatsSnapshot["facets"]>> = {
   CUISINE: "cuisines",
   DISH_STYLE: "dishStyles",
@@ -37,6 +48,16 @@ const dimensionTagMap: Partial<Record<HomeTopicRecipeStatsDimensionKey, RecipeVe
 
 type IngredientRow = { ingredientId?: unknown; ingredientName?: unknown; name?: unknown };
 type PrimaryIngredientRow = { ingredientId: number; name: string };
+
+function isExcludedCoreIngredient(ingredient: { name: string; aliases: string[] }) {
+  return [ingredient.name, ...ingredient.aliases].some(name => {
+    const normalized = name.trim().replace(/\s+/g, "");
+    if (excludedCoreIngredientNames.has(normalized)) return true;
+    return excludedCoreIngredientForms.some(({ roots, forms }) => roots.some(root =>
+      normalized.startsWith(root) && forms.has(normalized.slice(root.length))
+    ));
+  });
+}
 
 export function primaryIngredientNames(
   primaryIngredientIds: readonly unknown[],
@@ -194,11 +215,13 @@ export class HomeTopicStatsService {
               ownerId: null,
               status: "ACTIVE"
             },
-            select: { id: true, categoryId: true }
+            select: { id: true, categoryId: true, name: true, aliases: true }
           });
           for (const ingredient of activeSystemIngredients) {
             activeSystemIngredientIds.add(ingredient.id);
-            if (coreIngredientCategoryIds.includes(ingredient.categoryId)) coreIngredientIds.add(ingredient.id);
+            if (coreIngredientCategoryIds.includes(ingredient.categoryId) && !isExcludedCoreIngredient(ingredient)) {
+              coreIngredientIds.add(ingredient.id);
+            }
           }
         }
 
@@ -399,11 +422,13 @@ export class HomeTopicStatsService {
             ownerId: null,
             status: "ACTIVE"
           },
-          select: { id: true, categoryId: true }
+          select: { id: true, categoryId: true, name: true, aliases: true }
         });
         for (const ingredient of activeSystemIngredients) {
           activeSystemIngredientIds.add(ingredient.id);
-          if (coreIngredientCategoryIds.includes(ingredient.categoryId)) coreIngredientIds.add(ingredient.id);
+          if (coreIngredientCategoryIds.includes(ingredient.categoryId) && !isExcludedCoreIngredient(ingredient)) {
+            coreIngredientIds.add(ingredient.id);
+          }
         }
       }
 
