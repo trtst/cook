@@ -3,8 +3,8 @@ import { requestData, uploadForm, type OperationId, type PageResult, type UUID }
 export type HomeTopicStatus = "DRAFT" | "PUBLISHED" | "UNLISTED";
 export type HomeTopicWeekday = "MONDAY" | "TUESDAY" | "WEDNESDAY" | "THURSDAY" | "FRIDAY" | "SATURDAY" | "SUNDAY";
 export const homeTopicWeekdays: Array<{ value: HomeTopicWeekday; label: string }> = [
-  { value: "MONDAY", label: "周一" }, { value: "TUESDAY", label: "周二" }, { value: "WEDNESDAY", label: "周三" },
-  { value: "THURSDAY", label: "周四" }, { value: "FRIDAY", label: "周五" }, { value: "SATURDAY", label: "周六" }, { value: "SUNDAY", label: "周日" }
+  { value: "SUNDAY", label: "周日" }, { value: "MONDAY", label: "周一" }, { value: "TUESDAY", label: "周二" },
+  { value: "WEDNESDAY", label: "周三" }, { value: "THURSDAY", label: "周四" }, { value: "FRIDAY", label: "周五" }, { value: "SATURDAY", label: "周六" }
 ];
 
 export interface HomeTopicRecipeItem {

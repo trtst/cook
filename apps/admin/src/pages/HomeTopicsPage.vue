@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
-import { Delete, Plus, Refresh, Upload } from "@element-plus/icons-vue";
+import { Delete, Plus, Upload } from "@element-plus/icons-vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { useRouter } from "vue-router";
-import { homeTopicsApi, type AdminHomeTopicItem, type AdminHomeTopicsResponse, type HomeTopicStatus, type HomeTopicTodosResponse, type HomeTopicRecipeItem, type HomeTopicRecipeStatsSnapshot, type HomeTopicBatchImportInput, type HomeTopicBatchPreviewResponse, type HomeTopicBatchImportResponse } from "@/apis/home-topics";
+import { homeTopicsApi, type AdminHomeTopicItem, type AdminHomeTopicsResponse, type HomeTopicStatus, type HomeTopicBatchImportInput, type HomeTopicBatchPreviewResponse, type HomeTopicBatchImportResponse } from "@/apis/home-topics";
 import { adminAppConfig } from "@/apis/config";
 import { useAdminHeaderRefresh } from "@/composables/useAdminHeader";
 import { formatDateTime } from "@/utils/date";
@@ -17,14 +17,6 @@ const scheduleInput = ref("");
 const scheduleTarget = ref<AdminHomeTopicItem | null>(null);
 const deleteBusyId = ref<number | null>(null);
 const topics = ref<AdminHomeTopicItem[]>([]);
-const todos = ref<HomeTopicTodosResponse["items"]>([]);
-const todoTotal = ref(0);
-const todoCandidates = ref<HomeTopicRecipeItem[]>([]);
-const todoSearch = ref("");
-const todoTarget = ref<HomeTopicTodosResponse["items"][number] | null>(null);
-const todoBusyId = ref<number | null>(null);
-const stats = ref<HomeTopicRecipeStatsSnapshot | null>(null);
-const statsBusy = ref(false);
 const importDialogOpen = ref(false);
 const importJson = ref("");
 const previewSource = ref("");
@@ -108,8 +100,15 @@ function toShanghaiDateInput(value: string) {
 
 function openSchedule(item: AdminHomeTopicItem) {
   scheduleTarget.value = item;
-  scheduleInput.value = toShanghaiDateInput(item.scheduledPublishAt ?? new Date(Date.now() + 60 * 60 * 1000).toISOString());
+  scheduleInput.value = toShanghaiDateInput(item.scheduledPublishAt ?? defaultScheduleInstant(item.periodStartDate));
   scheduleDialogOpen.value = true;
+}
+
+function defaultScheduleInstant(periodStartDate: string) {
+  const date = new Date(`${periodStartDate}T00:00:00.000Z`);
+  if (date.getUTCDay() === 1) date.setUTCDate(date.getUTCDate() - 1);
+  const dateText = date.toISOString().slice(0, 10);
+  return new Date(`${dateText}T00:00:00+08:00`).toISOString();
 }
 
 async function saveSchedule() {
@@ -162,29 +161,12 @@ async function cancelSchedule(item: AdminHomeTopicItem) {
 async function loadPage() {
   loading.value = true;
   try {
-    const [result, todoResult, statsResult] = await Promise.all([homeTopicsApi.getTopics(), homeTopicsApi.getTodos(), homeTopicsApi.getRecipeStats()]);
+    const result = await homeTopicsApi.getTopics();
     assignResponse(result);
-    todos.value = todoResult.items;
-    todoTotal.value = todoResult.total;
-    stats.value = statsResult.snapshot;
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : "加载本周灵感失败");
   } finally {
     loading.value = false;
-  }
-}
-
-async function rebuildStats() {
-  if (statsBusy.value) return;
-  statsBusy.value = true;
-  try {
-    const result = await homeTopicsApi.rebuildRecipeStats(createOperationId());
-    stats.value = result.snapshot;
-    ElMessage.success(`统计已更新，共 ${result.snapshot.totalPublicRecipes} 道可用菜谱`);
-  } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : "重新统计失败，原统计仍保留");
-  } finally {
-    statsBusy.value = false;
   }
 }
 
@@ -230,54 +212,8 @@ async function commitBatchImport() {
   }
 }
 
-function formatFacetRows(rows: HomeTopicRecipeStatsSnapshot["facets"]["allIngredients"]["values"]) {
-  return rows.slice(0, 12).map(item => `${item.value} ${item.count}（${(item.shareOfTotal * 100).toFixed(1)}%）`).join("、");
-}
-
-function formatCoverage(dimension: HomeTopicRecipeStatsSnapshot["facets"]["allIngredients"]) {
-  if (dimension.notApplicableCount) {
-    return `含有 ${dimension.confirmedCount} 道 · 无需此类食材 ${dimension.notApplicableCount} 道 · 缺失 ${dimension.missingCount} 道（${(dimension.coverageRate * 100).toFixed(1)}%）`;
-  }
-  return `覆盖 ${dimension.confirmedCount} / 缺失 ${dimension.missingCount}（${(dimension.coverageRate * 100).toFixed(1)}%）`;
-}
-
 function batchIssue(issueIndex: number) {
   return importBatch.value?.issues[issueIndex - 1] ?? null;
-}
-
-async function searchTodoReplacement(todo: HomeTopicTodosResponse["items"][number]) {
-  todoTarget.value = todo;
-  try {
-    const result = await homeTopicsApi.searchRecipes(todoSearch.value.trim() || undefined);
-    todoCandidates.value = result.items;
-  } catch (error) { ElMessage.error(error instanceof Error ? error.message : "搜索替代菜失败"); }
-}
-
-async function replaceTodo(todo: HomeTopicTodosResponse["items"][number], recipe: HomeTopicRecipeItem) {
-  todoBusyId.value = todo.itemId;
-  try {
-    await homeTopicsApi.replaceItem(todo.itemId, recipe.id, todo.topicVersion, createOperationId());
-    todos.value = todos.value.filter(item => item.itemId !== todo.itemId);
-    todoTarget.value = null;
-    ElMessage.success("已替换失效菜谱");
-    await loadPage();
-  } catch (error) { ElMessage.error(error instanceof Error ? error.message : "替换失败"); }
-  finally { todoBusyId.value = null; }
-}
-
-async function dismissTodo(todo: HomeTopicTodosResponse["items"][number]) {
-  try {
-    await ElMessageBox.confirm(`忽略后会保存处置记录，《${todo.topicTitle}》${todo.weekday}的失效菜将不再出现在待办中。`, "忽略待办", { type: "warning" });
-  } catch { return; }
-  todoBusyId.value = todo.itemId;
-  try {
-    const updatedTopic = await homeTopicsApi.dismissTodo(todo.itemId, todo.topicVersion, createOperationId());
-    patchTopic(updatedTopic);
-    todos.value = todos.value.filter(item => item.itemId !== todo.itemId);
-    todoTotal.value = Math.max(0, todoTotal.value - 1);
-    ElMessage.success("已忽略并记录");
-  } catch (error) { ElMessage.error(error instanceof Error ? error.message : "忽略失败"); }
-  finally { todoBusyId.value = null; }
 }
 
 function weekdayLabel(value: string) {
@@ -382,28 +318,6 @@ onMounted(() => {
         </div>
       </div>
 
-      <section class="surface-panel stats-panel">
-        <div class="todo-panel__head">
-          <div><h4>共享菜谱统计</h4><p>供运营和 Codex 选题参考；核心食材仅统计已匹配的系统食材分类 5001–5004。</p></div>
-          <el-button :icon="Refresh" :loading="statsBusy" @click="rebuildStats">重新统计</el-button>
-        </div>
-        <div v-if="stats" class="stats-summary">
-          <strong>{{ stats.totalPublicRecipes }} 道公开菜谱</strong>
-          <span>快照 {{ stats.snapshotId }}</span>
-          <span>生成于 {{ formatDateTime(stats.generatedAt) }}</span>
-        </div>
-        <el-empty v-else description="尚无统计快照，请先重新统计" :image-size="48" />
-        <div v-if="stats" class="stats-facets">
-          <p><strong>主要食材</strong>{{ formatFacetRows(stats.facets.primaryIngredients.values) || "暂无确认数据" }} · {{ formatCoverage(stats.facets.primaryIngredients) }}</p>
-          <p><strong>核心食材</strong>{{ formatFacetRows(stats.facets.allIngredients.values) || "暂无数据" }} · {{ formatCoverage(stats.facets.allIngredients) }}</p>
-          <p><strong>菜系</strong>{{ formatFacetRows(stats.facets.cuisines.values) || "暂无确认数据" }} · {{ formatCoverage(stats.facets.cuisines) }}</p>
-          <p><strong>菜式/做法</strong>{{ formatFacetRows(stats.facets.dishStyles.values) || "暂无确认数据" }} · {{ formatCoverage(stats.facets.dishStyles) }}</p>
-          <p><strong>菜品角色</strong>{{ formatFacetRows(stats.facets.dishRoles.values) || "暂无确认数据" }} · {{ formatCoverage(stats.facets.dishRoles) }}；蛋白 {{ formatFacetRows(stats.facets.proteins.values) || "暂无确认数据" }} · {{ formatCoverage(stats.facets.proteins) }}</p>
-          <p><strong>难度/时长</strong>{{ formatFacetRows(stats.facets.difficulties.values) || "暂无数据" }} · {{ formatCoverage(stats.facets.difficulties) }}；{{ formatFacetRows(stats.facets.durations.values) || "暂无数据" }} · {{ formatCoverage(stats.facets.durations) }}</p>
-          <p><strong>营养数据</strong>有分析 {{ stats.nutrition.hasNutritionAnalysis }} 道；完整 {{ stats.nutrition.statusCounts.COMPLETE }} · 估算 {{ stats.nutrition.statusCounts.ESTIMATED }} · 不足 {{ stats.nutrition.statusCounts.INSUFFICIENT }} · 无分析 {{ stats.nutrition.statusCounts.NONE }}；热量 {{ stats.nutrition.fieldCoverage.calories }}、蛋白 {{ stats.nutrition.fieldCoverage.protein }}、脂肪 {{ stats.nutrition.fieldCoverage.fat }}、碳水 {{ stats.nutrition.fieldCoverage.carbohydrate }} 道有值</p>
-        </div>
-      </section>
-
       <el-dialog v-model="importDialogOpen" title="导入共享周刊 JSON" width="820px" destroy-on-close>
         <p class="import-help">粘贴 Codex 生成的 schemaVersion 2 JSON。预览会检查统计快照、日期、每日菜单、菜谱当前公开状态和固定版本；导入仅创建草稿，不会预约或上架。</p>
         <el-input v-model="importJson" type="textarea" :rows="14" placeholder="粘贴完整 JSON 批次" spellcheck="false" />
@@ -445,33 +359,6 @@ onMounted(() => {
           <el-button @click="importDialogOpen = false">关闭</el-button>
           <el-button type="primary" :disabled="importableCount < 1" :loading="importBusy" @click="commitBatchImport">导入 {{ importableCount }} 期为草稿</el-button>
         </template>
-      </el-dialog>
-
-      <section class="surface-panel todo-panel">
-        <div class="todo-panel__head"><div><h4>失效菜谱待办</h4><p>忽略后会保留操作者与菜谱项记录。</p></div><strong>{{ todoTotal }}</strong></div>
-        <div v-if="todos.length" class="todo-list">
-          <article v-for="todo in todos" :key="todo.itemId" class="todo-row">
-            <div><strong>{{ todo.topicTitle }} · {{ weekdayLabel(todo.weekday) }}</strong><p>第 {{ todo.issueNo }} 期 · {{ todo.periodStartDate }} · {{ todo.recipeName }}</p></div>
-            <div class="todo-row__actions">
-              <el-button size="small" @click="openEdit(todo.topicId)">查看周刊</el-button>
-              <el-button size="small" type="primary" @click="searchTodoReplacement(todo)">替换菜谱</el-button>
-              <el-button size="small" :loading="todoBusyId === todo.itemId" @click="dismissTodo(todo)">忽略并记录</el-button>
-            </div>
-          </article>
-        </div>
-        <el-empty v-else description="暂无待处理的失效菜谱" :image-size="56" />
-      </section>
-
-      <el-dialog :model-value="Boolean(todoTarget)" title="选择替代菜谱" width="620px" @close="todoTarget = null" @closed="todoCandidates = []">
-        <p v-if="todoTarget" class="todo-dialog__summary">{{ todoTarget.topicTitle }} · {{ todoTarget.weekday }} · {{ todoTarget.recipeName }}</p>
-        <div class="todo-dialog__search"><el-input v-model="todoSearch" placeholder="菜名、食材或菜谱 ID" @keyup.enter="todoTarget && searchTodoReplacement(todoTarget)" /><el-button @click="todoTarget && searchTodoReplacement(todoTarget)">搜索</el-button></div>
-        <div class="todo-candidates">
-          <article v-for="recipe in todoCandidates" :key="recipe.id" class="todo-candidate">
-            <span>{{ recipe.title }}</span>
-            <el-button size="small" type="primary" :loading="todoTarget ? todoBusyId === todoTarget.itemId : false" @click="todoTarget && replaceTodo(todoTarget, recipe)">替换</el-button>
-          </article>
-          <el-empty v-if="!todoCandidates.length" description="搜索可公开菜谱后选择替代项" :image-size="48" />
-        </div>
       </el-dialog>
 
       <section v-if="hasTopics" class="surface-panel topic-list">
@@ -595,43 +482,6 @@ onMounted(() => {
   background: linear-gradient(180deg, #ffffff, #fbfdff);
 }
 
-.stats-panel {
-  gap: 12px;
-}
-
-.stats-summary {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 18px;
-  color: #6b7280;
-  font-size: 12px;
-}
-
-.stats-summary strong {
-  color: #1f2937;
-  font-size: 16px;
-}
-
-.stats-facets {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px 20px;
-}
-
-.stats-facets p {
-  margin: 0;
-  color: #6b7280;
-  font-size: 12px;
-  line-height: 1.7;
-}
-
-.stats-facets strong {
-  display: block;
-  margin-bottom: 2px;
-  color: #374151;
-}
-
 .import-help {
   margin: 0 0 12px;
   color: #6b7280;
@@ -700,8 +550,9 @@ onMounted(() => {
 }
 
 .topic-row__cover {
-  width: 96px;
-  height: 128px;
+  width: 132px;
+  aspect-ratio: 4 / 3;
+  height: auto;
   border-radius: 16px;
   object-fit: cover;
   background: #f3f4f6;
@@ -792,13 +643,9 @@ onMounted(() => {
     display: grid;
   }
 
-  .stats-facets {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
   .topic-row__cover {
     width: 100%;
-    height: 180px;
+    height: auto;
   }
 
   .topic-row__actions {

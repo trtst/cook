@@ -42,7 +42,7 @@ const imageBusy = ref(false);
 const searchBusy = ref(false);
 const searchReady = ref(false);
 const statusBusy = ref(false);
-const selectedWeekday = ref<HomeTopicWeekday>("MONDAY");
+const selectedWeekday = ref<HomeTopicWeekday>("SUNDAY");
 const scheduleInput = ref("");
 const scheduleDialogOpen = ref(false);
 const previewVisible = ref(false);
@@ -61,10 +61,15 @@ const apiOrigin = resolveApiOrigin();
 const canSave = computed(() => Boolean(form.value) && !saveBusy.value && !imageBusy.value);
 const isCreateMode = computed(() => !form.value?.id);
 const editorIssueText = computed(() => (form.value ? `第 ${form.value.issueNo} 期` : ""));
-const groupedItems = computed(() => homeTopicWeekdays.map(day => ({
-  ...day,
-  items: (form.value?.items ?? []).filter(item => item.weekday === day.value).sort((left, right) => left.sort - right.sort)
-})));
+const groupedItems = computed(() => {
+  const current = form.value;
+  const startDay = current?.periodStartDate ? new Date(`${current.periodStartDate}T00:00:00.000Z`).getUTCDay() : 0;
+  const orderedDays = startDay === 1 ? [...homeTopicWeekdays.slice(1), homeTopicWeekdays[0]!] : homeTopicWeekdays;
+  return orderedDays.map(day => ({
+    ...day,
+    items: (form.value?.items ?? []).filter(item => item.weekday === day.value).sort((left, right) => left.sort - right.sort)
+  }));
+});
 const menuCheckStale = computed(() => Boolean(menuCheck.value && form.value?.id && (menuCheck.value.topicId !== form.value.id || menuCheck.value.topicVersion !== form.value.version)));
 
 useAdminHeaderRefresh(() => {
@@ -146,7 +151,10 @@ function createForm(): TopicForm {
 }
 
 function disablePeriodDate(date: Date) {
-  return date.getDay() !== 1;
+  if (date.getDay() === 0) return false;
+  if (date.getDay() !== 1 || !form.value?.id) return true;
+  const savedPeriod = topics.value.find(item => item.id === form.value?.id)?.periodStartDate;
+  return savedPeriod !== `${date.getFullYear()}-${`${date.getMonth() + 1}`.padStart(2, "0")}-${`${date.getDate()}`.padStart(2, "0")}`;
 }
 
 function updatePeriodEnd(value: string | null) {
@@ -178,9 +186,20 @@ function toDateTimeInput(value: string | null) {
 }
 
 function openScheduleDialog() {
-  const nextTime = form.value?.scheduledPublishAt ?? new Date(Date.now() + 60 * 60 * 1000).toISOString();
+  const nextTime = form.value?.scheduledPublishAt ?? defaultScheduleInstant(form.value?.periodStartDate);
   scheduleInput.value = toDateTimeInput(nextTime);
   scheduleDialogOpen.value = true;
+}
+
+function defaultScheduleInstant(periodStartDate?: string) {
+  const date = periodStartDate ? new Date(`${periodStartDate}T00:00:00.000Z`) : new Date(Date.now() + 8 * 60 * 60 * 1000);
+  if (date.getUTCDay() === 1) date.setUTCDate(date.getUTCDate() - 1);
+  else if (!periodStartDate || date.getUTCDay() !== 0) {
+    const daysUntilSunday = date.getUTCDay() === 0 ? 7 : 7 - date.getUTCDay();
+    date.setUTCDate(date.getUTCDate() + daysUntilSunday);
+  }
+  const dateText = date.toISOString().slice(0, 10);
+  return new Date(`${dateText}T00:00:00+08:00`).toISOString();
 }
 
 function nextIssueNo() {
@@ -294,8 +313,11 @@ function validateForm() {
   if (!current.description.trim()) throw new Error("专题描述不能为空");
   if (current.description.trim().length > 120) throw new Error("专题描述最多 120 个字");
   if (current.issueNo < 1) throw new Error("期数至少从 1 开始");
-  if (current.periodStartDate && new Date(`${current.periodStartDate}T00:00:00.000Z`).getUTCDay() !== 1) {
-    throw new Error("周刊周期必须从周一开始");
+  const periodWeekday = current.periodStartDate ? new Date(`${current.periodStartDate}T00:00:00.000Z`).getUTCDay() : 0;
+  const savedPeriod = current.id ? topics.value.find(item => item.id === current.id)?.periodStartDate : undefined;
+  const unchangedLegacyMonday = periodWeekday === 1 && savedPeriod === current.periodStartDate;
+  if (current.periodStartDate && periodWeekday !== 0 && !unchangedLegacyMonday) {
+    throw new Error("周刊周期必须从周日开始；已有周一开始的周刊可保留原日期");
   }
 }
 
@@ -309,7 +331,7 @@ function saveBody(): CreateHomeTopicRequest {
     description: current.description.trim(),
     items: current.items.map(item => ({
       recipeId: item.id,
-      weekday: item.weekday ?? "MONDAY",
+      weekday: item.weekday ?? "SUNDAY",
       sortOrder: item.sort,
       recommendNote: item.recommendNote?.trim() || null
     }))
@@ -626,7 +648,7 @@ onMounted(() => {
         <div>
           <h3>{{ isCreateMode ? "新建专题" : "编辑专题" }}</h3>
           <p class="section-panel__hint">
-            {{ isCreateMode ? "先保存为草稿，再按周一至周日编排菜单并发布或预约发布。" : "按北京时间自然周维护共享菜单；发布前需覆盖七天。" }}
+            {{ isCreateMode ? "先保存为草稿，再按周日至周六编排菜单并发布或预约发布。" : "按北京时间自然周维护共享菜单；发布前需覆盖七天。" }}
           </p>
         </div>
         <div class="header-actions">
@@ -670,7 +692,7 @@ onMounted(() => {
                 <span class="topic-hero__chip" :class="{ 'topic-hero__chip--listed': form.status === 'PUBLISHED' }">
                   {{ topicStatusText(form.status) }}
                 </span>
-                <span class="topic-hero__chip topic-hero__chip--plain">周期周一 {{ form.periodStartDate || "默认下周" }}</span>
+                <span class="topic-hero__chip topic-hero__chip--plain">周期开始日 {{ form.periodStartDate || "默认下周日" }}</span>
               </div>
               <h4>{{ form.title || "未填写专题标题" }}</h4>
               <p>{{ form.description || "这里展示本期主题和编排方向。" }}</p>
@@ -740,11 +762,11 @@ onMounted(() => {
                 type="date"
                 value-format="YYYY-MM-DD"
                 format="YYYY-MM-DD"
-                placeholder="选择周期周一（留空默认下周）"
+                placeholder="选择周期周日（旧周刊可保留周一）"
                 :disabled-date="disablePeriodDate"
                 @change="updatePeriodEnd"
               />
-              <p class="topic-form__hint">周期从周一开始，覆盖到周日；预约时间只控制发布时间。每个周期仅能有一期，更改周期后如封面含日期请重新生成。</p>
+              <p class="topic-form__hint">新周刊从周日开始，覆盖到周六；旧周一开始的周刊可保留原日期。预约时间只控制发布时间。更改周期后如封面含日期请重新生成。</p>
             </el-form-item>
 
             <el-form-item label="专题寄语">
@@ -970,7 +992,8 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   width: 168px;
-  height: 126px;
+  aspect-ratio: 4 / 3;
+  height: auto;
   min-height: 0;
   border: 1px dashed rgba(47, 111, 78, 0.28);
   border-radius: 18px;
@@ -989,6 +1012,8 @@ onMounted(() => {
 }
 
 .topic-cover__image {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
