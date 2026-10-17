@@ -1,5 +1,9 @@
 # 项目变更记录
 
+| 2026-10-17 | 对齐随机菜位替换骨架与实际文案的标题、推荐理由、家中食材提示和标签高度，并将标题/理由的顶部间距设在外层容器，降低替换前后的卡片高度跳动；锁定/划掉提示接在推荐理由后，仅保留文字颜色。 | `apps/client/src/pages_meal/components/RandomSlotCard.vue`、`docs/plans/minor_change_log.md` | Client type-check、`git diff --check` 通过；未做微信端视觉验收。 |
+
+| 2026-10-17 | 随机搭配仅在启用“优先用家里食材”或明确选择对应食材约束时，才将“家里已有食材可用”作为推荐理由；未启用时改用其他推荐理由，避免与用户选择矛盾。 | `apps/api/src/modules/meal/meal.service.ts`、`docs/plans/minor_change_log.md` | API type-check、`git diff --check` 通过；未运行测试或做小程序界面验收。 |
+
 | 2026-10-17 | 本周灵感“往期回顾”明确默认展示 5 期；横向卡片列增加首尾内边距，避免首张贴左边、末张贴右边。 | `apps/client/src/pages_home/topic/index.vue`、`docs/plans/minor_change_log.md` | Client type-check、`git diff --check` 通过；未做微信开发者工具或真机视觉验收。 |
 
 | 2026-10-17 | 本周灵感列表移除共享菜谱统计和失效菜谱待办区块及对应页面交互；后台列表封面、编辑页封面预览与小程序本期详情封面统一按 4:3 展示。 | `apps/admin/src/pages/HomeTopicsPage.vue`、`apps/admin/src/pages/HomeTopicEditorPage.vue`、`apps/client/src/pages_home/topic/index.vue`、`apps/client/src/pages_home/topic/cover-contract.test.ts`、`docs/plans/minor_change_log.md` | Client/Admin type-check、`git diff --check` 通过；未运行自动化测试或进行后台/微信端视觉验收。 |

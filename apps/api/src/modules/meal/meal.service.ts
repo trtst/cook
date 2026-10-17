@@ -4823,6 +4823,7 @@ export class MealService {
       score,
       recommendationReason: this.resolveRandomRecommendationReason({
         fridgeFit,
+        useFridgeFirst,
         notRecentlyEaten,
         proteinComplementary,
         quick
@@ -4832,11 +4833,12 @@ export class MealService {
 
   private resolveRandomRecommendationReason(input: {
     fridgeFit: "HIGH" | "MEDIUM" | "LOW" | "UNKNOWN";
+    useFridgeFirst: boolean;
     notRecentlyEaten: boolean;
     proteinComplementary: boolean;
     quick: boolean;
   }) {
-    if (input.fridgeFit === "HIGH" || input.fridgeFit === "MEDIUM") return "家里已有食材可用";
+    if (input.useFridgeFirst && (input.fridgeFit === "HIGH" || input.fridgeFit === "MEDIUM")) return "家里已有食材可用";
     if (input.notRecentlyEaten) return "最近没吃";
     if (input.proteinComplementary) return "搭配互补";
     if (input.quick) return "做起来快";
