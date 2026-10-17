@@ -1,30 +1,38 @@
 <template>
   <view :class="['slot-card', `slot-card--${item.status.toLowerCase()}`]">
     <template v-if="item.status === 'REPLACING'">
+      <Skeleton class="slot-card__skeleton-cover" width="100%" height="360rpx" radius="var(--radius-md)" />
       <view class="slot-card__head">
         <view class="slot-card__head-main">
           <Skeleton width="90rpx" height="22rpx" />
           <Skeleton class="slot-card__skeleton-title" width="250rpx" height="34rpx" />
           <Skeleton class="slot-card__skeleton-reason" width="310rpx" height="22rpx" />
         </view>
-        <Skeleton width="122rpx" height="42rpx" radius="var(--radius-pill)" />
+        <Skeleton v-if="fridgePreferred" width="122rpx" height="42rpx" radius="var(--radius-pill)" />
       </view>
       <view class="slot-card__meta">
         <Skeleton v-for="index in 3" :key="index" width="130rpx" height="38rpx" radius="var(--radius-pill)" />
       </view>
-      <Skeleton class="slot-card__skeleton-note" width="220rpx" height="22rpx" />
+      <Skeleton v-if="fridgePreferred" class="slot-card__skeleton-note" width="220rpx" height="22rpx" />
       <view class="action-row">
         <Skeleton v-for="index in 3" :key="index" width="168rpx" height="64rpx" radius="var(--radius-pill)" />
       </view>
     </template>
     <template v-else>
+      <view class="slot-card__cover">
+        <ImageLoader :src="item.coverUrl" />
+      </view>
       <view class="slot-card__head">
         <view class="slot-card__head-main">
           <text class="slot-card__slot">{{ slotTypeLabel }}</text>
           <text class="slot-card__title">{{ item.title }}</text>
           <text class="slot-card__reason">{{ item.recommendationReason }}</text>
         </view>
-        <text class="slot-card__badge">{{ fridgeFitLabel }}</text>
+        <text v-if="fridgePreferred" class="slot-card__badge">{{ fridgeFitLabel }}</text>
+      </view>
+
+      <view v-if="item.status === 'LOCKED' || item.status === 'REMOVED'" class="slot-card__state-note">
+        {{ item.status === "LOCKED" ? "已锁定 · 再次搭配时会保留" : "已划掉 · 不会加入这桌计划" }}
       </view>
 
       <view class="slot-card__meta">
@@ -36,7 +44,7 @@
       <view class="action-row">
         <view
           class="action-pill action-pill--muted"
-          :class="{ 'action-pill--disabled': lockDisabled }"
+          :class="{ 'action-pill--disabled': lockDisabled, 'action-pill--locked': item.status === 'LOCKED' }"
           :hover-class="lockDisabled ? '' : 'action-pill--hover'"
           hover-stay-time="100"
           @click="toggleLock()"
@@ -45,7 +53,7 @@
         </view>
         <view
           class="action-pill action-pill--muted action-pill--subtle"
-          :class="{ 'action-pill--disabled': removeDisabled }"
+          :class="{ 'action-pill--disabled': removeDisabled, 'action-pill--removed': item.status === 'REMOVED' }"
           :hover-class="removeDisabled ? '' : 'action-pill--hover'"
           hover-stay-time="100"
           @click="removeSlot()"
@@ -69,25 +77,14 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import Skeleton from "@/components/Skeleton/Skeleton.vue";
+import ImageLoader from "@/components/ImageLoader.vue";
 import type { RandomSlotViewModel } from "../types/random";
 
 const props = defineProps<{
   item: RandomSlotViewModel;
+  fridgePreferred: boolean;
   disabled?: boolean;
 }>();
-
-const FLAVOR_LABELS: Record<string, string> = {
-  LIGHT: "清淡",
-  NOT_SPICY: "不辣",
-  MILD: "温和",
-  SPICE_MILD: "微辣",
-  SPICY: "辣味",
-  SOUR: "酸口",
-  SWEET: "甜口",
-  UMAMI: "鲜味",
-  SALTY: "咸味",
-  NUMBING: "麻味"
-};
 
 const emit = defineEmits<{
   toggleLock: [slotId: string];
@@ -156,24 +153,16 @@ const proteinLabel = computed(() => {
   }
 });
 
-const displayFlavorTags = computed(() => {
-  return props.item.flavorTags.flatMap(tag => {
-    const label = formatFlavorTag(tag);
-    return label ? [label] : [];
-  });
-});
-
 const metaTags = computed<string[]>(() => {
   return [
     sourceLabel.value,
     props.item.durationText,
-    props.item.servings ? `${props.item.servings}人份` : "",
     props.item.mainProteinType ? proteinLabel.value : "",
-    ...displayFlavorTags.value
   ].flatMap(tag => (tag ? [tag] : []));
 });
 
 const fridgeNote = computed(() => {
+  if (!props.fridgePreferred) return "";
   if (props.item.matchedIngredients.length) {
     const names = props.item.matchedIngredients.slice(0, 2).join("、");
     const suffix = props.item.matchedIngredients.length > 2 ? "等" : "";
@@ -193,15 +182,6 @@ const interactionDisabled = computed(() => props.disabled || props.item.status =
 const lockDisabled = computed(() => interactionDisabled.value);
 const removeDisabled = computed(() => props.disabled || props.item.status === "REPLACING" || props.item.status === "LOCKED");
 const changeDisabled = computed(() => interactionDisabled.value || props.item.status === "LOCKED");
-
-function formatFlavorTag(tag: string) {
-  const value = tag.trim();
-  if (!value) return "";
-  const key = value.toUpperCase();
-  if (FLAVOR_LABELS[key]) return FLAVOR_LABELS[key];
-  if (/^[A-Z0-9_]+$/.test(value)) return "";
-  return value;
-}
 
 function toggleLock() {
   if (interactionDisabled.value) return;
@@ -227,14 +207,51 @@ function replaceSlot() {
   box-shadow: var(--shadow-card);
 }
 
+.slot-card__cover,
+.slot-card__skeleton-cover {
+  display: block;
+  width: 100%;
+  height: 360rpx;
+  margin-bottom: 20rpx;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  background: var(--page-cover-fresh-bg);
+}
+
+.slot-card__cover :deep(.image-loader),
+.slot-card__cover :deep(.image-empty) {
+  width: 100%;
+  height: 100%;
+}
+
 .slot-card--locked {
-  box-shadow:
-    var(--shadow-card),
-    inset 0 0 0 1rpx var(--color-border-active);
+  background: var(--color-support-notice);
+  box-shadow: var(--shadow-card), inset 0 0 0 3rpx var(--color-border-active);
 }
 
 .slot-card--removed {
-  opacity: 0.72;
+  background: var(--color-state-danger-soft);
+  box-shadow: inset 0 0 0 2rpx var(--color-state-danger-border);
+}
+
+.slot-card--removed .slot-card__title {
+  color: var(--color-text-secondary);
+  text-decoration: line-through;
+}
+
+.slot-card__state-note {
+  margin-top: 16rpx;
+  padding: 12rpx 16rpx;
+  border-radius: var(--radius-sm);
+  background: var(--color-tag-primary-bg);
+  color: var(--color-tag-primary-text);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-heavy);
+}
+
+.slot-card--removed .slot-card__state-note {
+  background: var(--color-tag-danger-bg);
+  color: var(--color-state-danger-text);
 }
 
 .slot-card__head {
@@ -331,5 +348,19 @@ function replaceSlot() {
 
 .action-pill--disabled {
   opacity: 0.7;
+}
+
+.action-pill--locked {
+  border-color: var(--color-border-active);
+  background: var(--color-tag-primary-bg);
+  color: var(--color-tag-primary-text);
+  font-weight: var(--font-weight-heavy);
+}
+
+.action-pill--removed {
+  border-color: var(--color-state-danger-border);
+  background: var(--color-tag-danger-bg);
+  color: var(--color-state-danger-text);
+  font-weight: var(--font-weight-heavy);
 }
 </style>

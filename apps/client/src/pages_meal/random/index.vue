@@ -51,6 +51,7 @@
                   <RandomSlotCard
                     v-if="boardSlot.kind === 'RECIPE'"
                     :item="boardSlot.item"
+                    :fridge-preferred="state.conditions.fridgePreferred"
                     :disabled="slotActionLocked"
                     @toggle-lock="toggleSlotLock"
                     @remove="removeSlot"
