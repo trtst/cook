@@ -100,7 +100,30 @@
             <view class="cook-content cook-content--list cook-content-stage__face" :class="{ 'cook-content-stage__face--inactive': isImmersive }">
               <scroll-view v-if="isSingleListFlow" scroll-y class="cook-list-scroll" :show-scrollbar="false">
                 <view class="cook-list">
-                  <view class="cook-step-list">
+                  <template v-if="isAssistantMode">
+                    <view v-for="group in assistantPhaseGroups" :key="group.phase" class="cook-phase-group">
+                      <view class="cook-phase-group__heading">{{ group.title }}</view>
+                      <view class="cook-step-list">
+                        <view v-for="(item, index) in group.steps" :key="item.id" class="cook-step-card">
+                          <text v-if="item.dishTitle" class="cook-step-card__dish">{{ item.dishTitle }}</text>
+                          <view class="cook-step-card__index-row">
+                            <text class="cook-step-card__index">
+                              <text class="cook-step-card__index-current">{{ index + 1 }} </text>
+                              <text class="cook-step-card__index-total">{{ `/ ${group.steps.length}` }}</text>
+                            </text>
+                            <view v-if="item.durationText" class="cook-step-card__duration">
+                              <text class="cookfont icon-alarm cook-step-card__duration-icon" aria-hidden="true" />
+                              <text>{{ item.durationText }}</text>
+                            </view>
+                          </view>
+                          <image v-if="item.imageUrl" class="cook-step-card__image" :src="item.imageUrl" mode="widthFix" @click.stop="previewDishImages(group.steps, item.imageUrl)" />
+                          <text v-if="item.bodyText" class="cook-step-card__text">{{ item.bodyText }}</text>
+                          <text v-if="item.note" class="cook-step-card__note">{{ item.note }}</text>
+                        </view>
+                      </view>
+                    </view>
+                  </template>
+                  <view v-else class="cook-step-list">
                     <view v-for="(item, index) in listDishes[0]?.steps || []" :key="item.id" class="cook-step-card">
                       <view class="cook-step-card__index-row">
                         <text class="cook-step-card__index">
@@ -108,7 +131,7 @@
                           <text class="cook-step-card__index-total">{{ `/ ${(listDishes[0]?.steps || []).length}` }}</text>
                         </text>
                         <text v-if="item.phase" class="cook-step-card__phase">{{ phaseLabel(item.phase) }}</text>
-                        <view v-if="isAssistantMode && item.durationText" class="cook-step-card__duration">
+                        <view v-if="item.durationText" class="cook-step-card__duration">
                           <text class="cookfont icon-alarm cook-step-card__duration-icon" aria-hidden="true" />
                           <text>{{ item.durationText }}</text>
                         </view>
@@ -157,9 +180,9 @@
                     <view class="cook-slide__top">
                       <view class="cook-slide__top-left">
                         <view class="cook-slide__index">
-                          <NumberIcon class="cook-slide__index-current" :value="getDishStepIndex(index) + 1" />
+                          <NumberIcon class="cook-slide__index-current" :value="index + 1" />
                           <text class="cook-slide__index-separator">/</text>
-                          <NumberIcon class="cook-slide__index-total" :value="getDishStepCount(index)" />
+                          <NumberIcon class="cook-slide__index-total" :value="immersiveSteps.length" />
                         </view>
                         <view v-if="item.phase" class="cook-slide__meta">
                           <text class="cook-slide__phase">{{ phaseLabel(item.phase) }}</text>
@@ -284,12 +307,13 @@ const dishMenuOpen = ref(false);
 const requiresLogin = computed(() => sourceType.value === "plan");
 const isAssistantMode = computed(() => flowMode.value === "assistant");
 const isImmersive = computed(() => viewMode.value === "swiper");
-const hasMenuTabs = computed(() => sourceType.value === "plan" && menuTabs.value.length > 1);
+const hasMenuTabs = computed(() => sourceType.value === "plan" && !isAssistantMode.value && menuTabs.value.length > 1);
 const showMenuTabs = computed(() => !isImmersive.value && hasMenuTabs.value);
 const navbarBackgroundColor = computed(() => isImmersive.value
   ? "color-mix(in srgb, var(--color-overlay-medium) 44%, #000000)"
   : "var(--color-page)");
 const currentDishSteps = computed(() => {
+  if (isAssistantMode.value) return originalSteps.value;
   const tab = menuTabs.value[selectedDishIndex.value];
   if (!tab) return originalSteps.value;
   const filtered = originalSteps.value.filter(item => !item.dishKeys.length || item.dishKeys.includes(tab.key));
@@ -299,11 +323,20 @@ const steps = computed(() => (sourceType.value === "plan" ? currentDishSteps.val
 const visibleListSteps = computed(() => steps.value.filter(item => Boolean(item.imageUrl || item.bodyText)));
 const listDishes = computed(() => {
   if (sourceType.value !== "plan") return [{ key: "recipe", steps: visibleListSteps.value }];
+  if (isAssistantMode.value) return [{ key: "meal-assistant", steps: visibleListSteps.value }];
   return menuTabs.value.map(tab => ({
     key: tab.key,
     steps: originalSteps.value.filter(item => (!item.dishKeys.length || item.dishKeys.includes(tab.key)) && Boolean(item.imageUrl || item.bodyText))
   }));
 });
+const assistantPhaseGroups = computed(() => ([
+  { phase: "PREP" as const, title: "整桌备菜" },
+  { phase: "COOK" as const, title: "整桌烹饪" },
+  { phase: "SERVE" as const, title: "整桌上桌" }
+].map(group => ({
+  ...group,
+  steps: visibleListSteps.value.filter(item => item.phase === group.phase)
+})).filter(group => group.steps.length > 0)));
 const isSingleListFlow = computed(() => listDishes.value.length <= 1);
 const immersiveSteps = computed(() => (sourceType.value === "plan" ? originalSteps.value : steps.value));
 const currentIndex = computed(() => originalCurrentIndex.value);
@@ -518,7 +551,6 @@ function buildMealAssistantSteps(
   const allDishKeys = dishes.map(dish => `dish-${dish.dishId}`);
   return assistantSteps
     .slice()
-    .sort((left, right) => left.order - right.order)
     .map(item => {
       const dishKeys = item.dishIds.map(dishId => `dish-${dishId}`).filter(dishKey => dishMap.has(dishKey));
       const dishTitles = dishKeys.map(dishKey => dishMap.get(dishKey)?.title).filter((title): title is string => Boolean(title));
@@ -823,21 +855,6 @@ function syncDishFromImmersiveStep(index: number) {
   const localIndex = currentDishSteps.value.findIndex(item => item.id === currentImmersiveStep.id);
   originalCurrentIndex.value = localIndex >= 0 ? localIndex : 0;
   if (changed) void syncMenuVisual(nextDishIndex, true);
-}
-
-function getDishStepIndex(index: number) {
-  const step = immersiveSteps.value[index];
-  if (!step) return 0;
-  return immersiveSteps.value
-    .slice(0, index)
-    .filter(item => (step.dishKeys.length ? item.dishKeys.includes(step.dishKeys[0]) : item.dishKey === step.dishKey))
-    .length;
-}
-
-function getDishStepCount(index: number) {
-  const step = immersiveSteps.value[index];
-  if (!step) return 0;
-  return immersiveSteps.value.filter(item => (step.dishKeys.length ? item.dishKeys.includes(step.dishKeys[0]) : item.dishKey === step.dishKey)).length;
 }
 
 function getPlainTextSizeClass(text: string) {
@@ -1368,14 +1385,33 @@ defineExpose({
   gap: 24rpx;
 }
 
+.cook-phase-group + .cook-phase-group {
+  margin-top: 48rpx;
+}
+
+.cook-phase-group__heading {
+  padding: 28rpx 0 12rpx;
+  color: var(--color-text);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+}
+
 .cook-step-card {
   padding: 30rpx 0 0;
 }
 
 .cook-step-card__index,
+.cook-step-card__dish,
 .cook-step-card__text,
 .cook-step-card__note {
   display: block;
+}
+
+.cook-step-card__dish {
+  margin-bottom: 12rpx;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
 }
 
 .cook-step-card__index-row {

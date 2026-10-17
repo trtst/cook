@@ -124,7 +124,7 @@ if (!hasAutomatorRuntime && nodeTest) {
     nodeAssert.doesNotMatch(pageSource, /cook-slide__top-right/);
     nodeAssert.match(pageSource, /scroll-x/);
     nodeAssert.match(pageSource, /class="cook-toolbar__flow-scroll"/);
-    nodeAssert.match(pageSource, /const hasMenuTabs = computed\(\(\) => sourceType\.value === "plan" && menuTabs\.value\.length > 1\);/);
+    nodeAssert.match(pageSource, /const hasMenuTabs = computed\(\(\) => sourceType\.value === "plan" && !isAssistantMode\.value && menuTabs\.value\.length > 1\);/);
     nodeAssert.match(pageSource, /const showMenuTabs = computed\(\(\) => !isImmersive\.value && hasMenuTabs\.value\);/);
     nodeAssert.match(pageSource, /\.cook-mode-layout :deep\(\.navbar__fixed\)\s*\{[\s\S]*?transition: background-color 280ms ease;/);
     nodeAssert.doesNotMatch(pageSource, /cook-toolbar__main/);
@@ -298,7 +298,7 @@ if (!hasAutomatorRuntime && nodeTest) {
     nodeAssert.match(pageSource, /:navbar-background-color="navbarBackgroundColor"/);
     nodeAssert.match(pageSource, /\.cook-mode-layout :deep\(\.navbar__fixed\)\s*\{[\s\S]*?transition: background-color 280ms ease;/);
     nodeAssert.match(pageSource, /<view v-if="hasMenuTabs" class="cook-toolbar" :class="\{ 'cook-toolbar--immersive': isImmersive \}">/);
-    nodeAssert.match(pageSource, /const hasMenuTabs = computed\(\(\) => sourceType\.value === "plan" && menuTabs\.value\.length > 1\);/);
+    nodeAssert.match(pageSource, /const hasMenuTabs = computed\(\(\) => sourceType\.value === "plan" && !isAssistantMode\.value && menuTabs\.value\.length > 1\);/);
     nodeAssert.match(pageSource, /<view v-if="hasMenuTabs" class="cook-toolbar"[\s\S]*?<scroll-view[\s\S]*?class="cook-toolbar__flow-scroll"/);
     nodeAssert.doesNotMatch(pageSource, /const immersiveToolbarStyle = computed/);
     nodeAssert.doesNotMatch(pageSource, /height: "0px",/);
@@ -314,8 +314,8 @@ if (!hasAutomatorRuntime && nodeTest) {
 
   nodeTest("meal cook mode gives the current and total digit icons independent sizes", () => {
     nodeAssert.match(pageSource, /import NumberIcon from "@\/components\/NumberIcon\/NumberIcon\.vue";/);
-    nodeAssert.match(pageSource, /<NumberIcon class="cook-slide__index-current" :value="getDishStepIndex\(index\) \+ 1" \/>/);
-    nodeAssert.match(pageSource, /<NumberIcon class="cook-slide__index-total" :value="getDishStepCount\(index\)" \/>/);
+    nodeAssert.match(pageSource, /<NumberIcon class="cook-slide__index-current" :value="index \+ 1" \/>/);
+    nodeAssert.match(pageSource, /<NumberIcon class="cook-slide__index-total" :value="immersiveSteps\.length" \/>/);
     nodeAssert.match(pageSource, /\.cook-slide__index\s*\{\s*display: flex;[\s\S]*?color: var\(--color-overlay-text\);\s*font-size: 22rpx;/);
     nodeAssert.match(pageSource, /\.cook-slide__index\s*\{[\s\S]*?text-shadow: 0 2rpx 10rpx var\(--color-shadow-overlay\);/);
     nodeAssert.match(pageSource, /\.cook-slide__index-current\s*\{\s*font-size: 100rpx;\s*line-height: 80rpx;\s*font-style: italic;\s*\}/);
@@ -413,12 +413,14 @@ if (!hasAutomatorRuntime && nodeTest) {
     nodeAssert.match(pageSource, /background: linear-gradient\(to right, var\(--color-surface-muted\) 50%, var\(--color-overlay-control\) 50%\) no-repeat;/);
   });
 
-  nodeTest("meal cook mode hides redundant source and dish labels in both views", () => {
+  nodeTest("meal assistant list keeps combined steps and labels each dish", () => {
     nodeAssert.doesNotMatch(pageSource, /<text class="cook-slide__source">\{\{ item\.sourceTag \}\}<\/text>/);
     nodeAssert.doesNotMatch(pageSource, /<text v-if="item\.dishTitle" class="cook-slide__dish">\{\{ item\.dishTitle \}\}<\/text>/);
     nodeAssert.doesNotMatch(pageSource, /<text class="cook-step-card__source">\{\{ item\.sourceTag \}\}<\/text>/);
-    nodeAssert.doesNotMatch(pageSource, /<text v-if="item\.dishTitle" class="cook-step-card__dish">\{\{ item\.dishTitle \}\}<\/text>/);
-    nodeAssert.doesNotMatch(pageSource, /cook-step-card__source|cook-step-card__dish/);
+    nodeAssert.match(pageSource, /<text v-if="isAssistantMode && item\.dishTitle" class="cook-step-card__dish">\{\{ item\.dishTitle \}\}<\/text>/);
+    nodeAssert.match(pageSource, /if \(isAssistantMode\.value\) return originalSteps\.value;/);
+    nodeAssert.match(pageSource, /if \(isAssistantMode\.value\) return \[\{ key: "meal-assistant", steps: visibleListSteps\.value \}\];/);
+    nodeAssert.doesNotMatch(pageSource, /cook-step-card__source/);
   });
 
   nodeTest("meal cook mode keeps assistant step phase and alarm duration in one list header row", () => {
