@@ -2168,9 +2168,9 @@ interface ShoppingSharePreview {
 
 `POST /meal-plans/{planItemId}/start-cooking` 只允许计划 owner 对已确认菜单且没有关联饭局的计划调用；服务端校验计划需求均已标记为已买后写入 `cookingStartedAt`，并增加计划 `version`。重复调用返回已经记录的计划状态。`POST /meal-plans/{planItemId}/complete` 只允许计划 owner 在开始做饭后确认计划完成；关联饭局的计划仍由饭局完成流程推进。两个写接口均接受数字字符串幂等键。
 
-`POST /dining-events/{eventId}/preparations` 只允许饭局发起人在已确认菜单、尚未“已备齐”或开始做饭前，按当前预览返回的 `sourceKey` 设置或撤销本顿“家里有”；该确认只属于当前饭局，不写入长期食材状态。`POST /dining-events/{eventId}/prepare` 由发起人确认整顿已备齐，服务端写入 `ingredientsReadyAt`；`POST /dining-events/{eventId}/start-cooking` 仅在整顿已备齐或所有需求都已买/家里有时成功，并写入 `cookingStartedAt`。两者均要求菜单已确认并接受数字字符串幂等键。饭局完成接口在开始做饭后允许无接受参与人的饭局结束。
+`POST /dining-events/{eventId}/preparations` 只允许饭局发起人在已确认菜单、尚未“已备齐”或开始做饭前，按当前预览返回的 `sourceKey` 设置或撤销本顿“家里有”；该确认只属于当前饭局，不写入长期食材状态。`POST /dining-events/{eventId}/prepare` 由发起人直接确认整顿已备齐，服务端写入 `ingredientsReadyAt`；不要求先创建购物清单，也不要求逐项标记购买或家中已有。`POST /dining-events/{eventId}/start-cooking` 仅在整顿已备齐或所有需求都已买/家里有时成功，并写入 `cookingStartedAt`。两者均要求菜单已确认并接受数字字符串幂等键。饭局完成接口在开始做饭后允许无接受参与人的饭局结束。
 
-`GET /dining-events/{eventId}/shopping-gap` 只预览当前用户指定饭局的完整准备需求，不写入购物清单。服务端允许饭局发起人和状态为 `ACCEPTED` 的参与人读取；按当前菜单的固定菜谱版本生成需求，不读取或扣除冰箱库存。响应为 `ShoppingGapPreviewItem[]`，供饭局详情页展示当前饭局的食材、用量和准备状态；准备状态为 `OPEN / BOUGHT / HOME / READY`，分别代表待准备、已买、家里有和整顿已备齐。客户端采购预览不显示菜谱来源名。没有需求时返回空数组。对应的购物清单写入仍按饭局发起人和清单权限规则单独校验。
+`GET /dining-events/{eventId}/shopping-gap` 只预览当前用户指定饭局的完整准备需求，不写入购物清单。服务端允许饭局发起人和状态为 `ACCEPTED` 的参与人读取；按当前菜单的固定菜谱版本生成需求，不读取或扣除冰箱库存。响应为 `ShoppingGapPreviewItem[]`；饭局详情只展示食材和用量，采购清单展示逐项准备状态。准备状态为 `OPEN / BOUGHT / HOME / READY`，分别代表待准备、已买、家里有和整顿已备齐，并用于判断能否开始做饭。客户端预览不显示菜谱来源名。没有需求时返回空数组。对应的购物清单写入仍按饭局发起人和清单权限规则单独校验。
 
 准备需求合并规则当前保持：
 

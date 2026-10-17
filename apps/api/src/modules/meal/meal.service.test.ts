@@ -252,6 +252,57 @@ test("starting cooking requires all preparation items resolved and persists the 
   assert.ok(event.cookingStartedAt instanceof Date);
 });
 
+test("organizer can confirm an event prepared without shopping item checks", async () => {
+  const event: Record<string, any> = {
+    id: 83,
+    userId: 9,
+    status: "CONFIRMED",
+    scheduledAt: new Date(Date.now() + 60_000),
+    completedAt: null,
+    ingredientsReadyAt: null,
+    cookingStartedAt: null,
+    version: 1
+  };
+  let updated = false;
+  let gapPreviewCalled = false;
+  const tx = {
+    $queryRaw: async () => [],
+    idempotencyRecord: {
+      findFirst: async () => null,
+      create: async () => ({}),
+      updateMany: async () => ({ count: 1 })
+    },
+    diningEvent: {
+      update: async ({ data }: { data: Record<string, unknown> }) => {
+        updated = true;
+        Object.assign(event, data, { version: event.version + 1 });
+        return event;
+      }
+    }
+  };
+  const service = new MealService(
+    { $transaction: async <T>(callback: (db: typeof tx) => Promise<T>) => callback(tx) } as never,
+    {} as never,
+    {} as never,
+    {} as never,
+    {} as never,
+    {} as never,
+    { previewEventGap: async () => { gapPreviewCalled = true; return [{ preparationStatus: "OPEN" }]; } } as never
+  );
+  (service as any).loadDiningEventRow = async () => event;
+  (service as any).toDiningEventSummary = (row: typeof event) => ({
+    id: row.id,
+    ingredientsReadyAt: row.ingredientsReadyAt?.toISOString() ?? null
+  });
+
+  const result = await (service as any).markDiningEventPrepared(9, 83, "1004");
+
+  assert.equal(result.id, 83);
+  assert.ok(event.ingredientsReadyAt instanceof Date);
+  assert.equal(updated, true);
+  assert.equal(gapPreviewCalled, false);
+});
+
 test("empty random result uses the confirmed user rate-limit window", () => {
   assert.deepEqual(randomMenuEmptyLimitOptions(42), {
     key: "random-menu:empty:42",

@@ -1,5 +1,15 @@
 # 项目变更记录
 
+| 2026-10-17 | 饭局/计划详情移除逐项准备状态文案与“家里有”操作；清单承接逐项“家里有”，饭局详情“去采购”旁保留主理人专属“已备齐”快捷操作，无需创建清单或逐项标记。结束后更新家里食材入口继续移除。 | `apps/client/src/pages_meal/detail/index.vue`、`apps/client/src/pages_pantry/list-detail/index.vue`、`apps/api/src/modules/meal/meal.service.ts`、`docs/api-contract.md`、`docs/plans/meal-shopping-preparation-execution.md`、`docs/plans/minor_change_log.md` | Client/API/Admin type-check、饭局服务单测、受影响静态契约用例及 `git diff --check` 通过；未做微信开发者工具/真机验收。 |
+
+| 2026-10-17 | HomeTopic 封面副标题使用当前专题文案；统一 ImageField 封面比例，并为随机菜位补充封面、锁定/划掉状态及按需展示家中食材提示。 | `apps/admin/src/pages/ContentEditorPage.vue`、`apps/admin/src/pages/HomeTopicEditorPage.vue`、`apps/admin/src/utils/home-topic-cover.ts`、`apps/client/src/components/ImageField.vue`、`apps/client/src/pages_home/topic/cover-contract.test.ts`、`apps/client/src/pages_meal/components/RandomSlotCard.vue`、`apps/client/src/pages_meal/random/style.test.ts`、`docs/plans/minor_change_log.md` | Client/Admin type-check、受影响封面与随机页静态契约用例、`git diff --check` 通过；未做后台浏览器或微信端视觉验收。 |
+
+| 2026-10-17 | 炊火智厨列表视图按一个步骤序列展示多道菜，并为每步标注所属菜名；普通计划做饭流程仍按单菜切换。 | `apps/client/src/pages_meal/cook-mode/index.vue`、`apps/client/src/pages_meal/cook-mode/index.test.cjs`、`docs/plans/minor_change_log.md` | Client type-check、炊火智厨静态契约用例、`git diff --check` 通过；未做微信端视觉验收。 |
+
+| 2026-10-17 | 饭局封面上传遇到传输层失败时，在提示中展示 `uni.uploadFile` 返回的底层错误详情，避免只显示通用网络错误而无法区分域名白名单、网络或请求被拦截等原因。 | `apps/client/src/pages_meal/detail/index.vue`、`docs/plans/minor_change_log.md` | 静态核对只展示上传适配层的失败详情，不包含鉴权头；待重新构建并在开发者工具复现以获取具体错误。 |
+
+| 2026-10-17 | 移除饭局菜谱选择弹层中无意义的 `recipe-sheet__selection-bar` 提示文案和入口；保留底部操作区的选择数量及菜谱选择逻辑。 | `apps/client/src/pages_meal/detail/index.vue`、`docs/plans/minor_change_log.md` | 定点复核模板、计算值和样式已移除，`git diff --check` 通过；未运行测试或小程序界面验收。 |
+
 | 2026-10-15 | 修复后台菜谱导入条目新增食材时 `line` 为空导致保存被 DTO 拒绝的问题：保留原导入行文本；新增行在保存时根据食材名和精确/模糊用量生成非空文本。 | `apps/admin/src/pages/RecipeImportItemPage.vue`、`docs/plans/minor_change_log.md` | 静态核对保存 payload 已走新行文本构造；未运行测试或后台浏览器验收。 |
 
 | 2026-10-15 | 修复后台删除已下架菜谱时购物项外键置空与 CHECK 约束冲突：允许 `RECIPE / PLAN` 购物项在来源菜谱被删除后保留来源正文版本和快照，同时将 `sourceRecipeId` 置空；保留 `MANUAL / EVENT` 已有约束分支。 | `apps/api/prisma/migrations/20261015110000_allow_detached_recipe_shopping_source/migration.sql`、`apps/api/prisma/migrations/20261015110100_refine_detached_recipe_shopping_source/migration.sql`、`docs/plans/minor_change_log.md` | 根据 TEST API 堆栈、购物项 `sourceRecipeId` 外键 `ON DELETE SET NULL` 和 Pantry 对空菜谱 ID 的处理定位；使用前向迁移收紧兼容分支；`git diff --check` 通过；未运行测试、未执行迁移或重试删除。 |
@@ -2799,3 +2809,4 @@
 | 2026-10-14 | 修复 Wiki 静态契约与合并列表实现不一致；限制批量移出最多 100 项；同步 Admin API 索引并校验营养筛选值，缺失清单分页只保留当前页结果。 | `apps/admin/src/pages/RecipeWikiPage.vue`、`apps/admin/src/pages/recipe-wiki-layout.test.js`、`apps/admin/src/pages/recipe-library-statistics.test.js`、`apps/api/src/modules/home/home-topic-stats.service.ts`、`docs/api-index.md`、`docs/plans/minor_change_log.md` | Admin 静态契约 5/5、API/Admin type-check、`git diff --check` 通过；OpenAPI 校验受 sandbox `tsx` IPC `EPERM` 阻止；未部署或做真实 Admin 流程验收。 |
 | 2026-10-15 | 明确已有菜谱修复必须保留完整导出中的食材分类，不得改写 `categoryCode`。 | `docs/plans/recipe-admin-json-conversion.md`、`docs/plans/minor_change_log.md` | 按菜谱修复反馈补充规则；仅更新文档。 |
 | 2026-10-15 | 明确菜谱导入 JSON 的食材名称必须将“盐”标准化为“食盐”，避免把正文自然语言“加盐”与食材标准名混淆。 | `docs/plans/recipe-admin-json-conversion.md`、`docs/plans/minor_change_log.md` | 按菜谱转换反馈补充明确约束；`git diff --check` 通过。 |
+| 2026-10-17 | 本餐炊火智厨列表按整桌阶段合并所有菜谱 Wiki：先备菜，再烹饪，最后上桌；组内保留快照步骤顺序和菜品归属。沉浸模式保持快照原顺序，页码仅显示全局当前步骤/总步骤数。普通按菜谱做饭继续保留菜品切换。 | `apps/client/src/pages_meal/cook-mode/index.vue`、`apps/client/src/pages_meal/cook-mode/index.test.cjs`、`docs/plans/minor_change_log.md` | Client type-check、`git diff --check` 通过；未运行自动化测试或微信开发者工具/真机验收。 |

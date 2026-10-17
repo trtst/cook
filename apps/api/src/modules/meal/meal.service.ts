@@ -3122,10 +3122,6 @@ export class MealService {
       this.assertDiningEventPreparationOpen(current, false, true);
       let event: DiningEventRow | null = current;
       if (!current.ingredientsReadyAt) {
-        const preparationItems = await this.pantryService.previewEventGap(userId, eventId);
-        if (preparationItems.some(item => item.preparationStatus === "OPEN")) {
-          throw new ConflictException("请先将所有所需食材标记为已买或家里已有");
-        }
         await tx.diningEvent.update({
           where: { id: current.id },
           data: { ingredientsReadyAt: new Date(), version: { increment: 1 } }
