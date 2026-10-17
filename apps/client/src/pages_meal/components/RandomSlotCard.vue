@@ -5,18 +5,18 @@
       <view class="slot-card__head">
         <view class="slot-card__head-main">
           <Skeleton width="90rpx" height="22rpx" />
-          <Skeleton class="slot-card__skeleton-title" width="250rpx" height="34rpx" />
-          <Skeleton class="slot-card__skeleton-reason" width="310rpx" height="22rpx" />
+          <view class="slot-card__skeleton-title">
+            <Skeleton width="250rpx" height="40rpx" />
+          </view>
+          <view class="slot-card__skeleton-reason">
+            <Skeleton width="310rpx" height="33rpx" />
+          </view>
         </view>
         <Skeleton v-if="fridgePreferred" width="122rpx" height="42rpx" radius="var(--radius-pill)" />
       </view>
-      <view class="slot-card__meta">
-        <Skeleton v-for="index in 3" :key="index" width="130rpx" height="38rpx" radius="var(--radius-pill)" />
-      </view>
-      <Skeleton v-if="fridgePreferred" class="slot-card__skeleton-note" width="220rpx" height="22rpx" />
-      <view class="action-row">
-        <Skeleton v-for="index in 3" :key="index" width="168rpx" height="64rpx" radius="var(--radius-pill)" />
-      </view>
+      <Skeleton class="slot-card__meta" :count="3" width="130rpx" height="38rpx" radius="var(--radius-pill)" />
+      <Skeleton v-if="fridgePreferred" class="slot-card__skeleton-note" width="220rpx" height="33rpx" />
+      <Skeleton class="action-row" :count="3" width="168rpx" height="64rpx" radius="var(--radius-pill)" />
     </template>
     <template v-else>
       <view class="slot-card__cover">
@@ -24,15 +24,15 @@
       </view>
       <view class="slot-card__head">
         <view class="slot-card__head-main">
-          <text class="slot-card__slot">{{ slotTypeLabel }}</text>
+          <view class="slot-card__eyebrow">
+            <text class="slot-card__slot">{{ slotTypeLabel }}</text>
+          </view>
           <text class="slot-card__title">{{ item.title }}</text>
-          <text class="slot-card__reason">{{ item.recommendationReason }}</text>
+          <text class="slot-card__reason">
+            {{ item.recommendationReason }}<text v-if="item.status === 'LOCKED' || item.status === 'REMOVED'" class="slot-card__state-note"> · {{ item.status === "LOCKED" ? "已锁定 · 再次搭配时会保留" : "已划掉 · 不会加入这桌计划" }}</text>
+          </text>
         </view>
         <text v-if="fridgePreferred" class="slot-card__badge">{{ fridgeFitLabel }}</text>
-      </view>
-
-      <view v-if="item.status === 'LOCKED' || item.status === 'REMOVED'" class="slot-card__state-note">
-        {{ item.status === "LOCKED" ? "已锁定 · 再次搭配时会保留" : "已划掉 · 不会加入这桌计划" }}
       </view>
 
       <view class="slot-card__meta">
@@ -239,18 +239,19 @@ function replaceSlot() {
   text-decoration: line-through;
 }
 
+.slot-card__eyebrow {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 10rpx;
+  min-height: 22rpx;
+}
+
 .slot-card__state-note {
-  margin-top: 16rpx;
-  padding: 12rpx 16rpx;
-  border-radius: var(--radius-sm);
-  background: var(--color-tag-primary-bg);
   color: var(--color-tag-primary-text);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-heavy);
 }
 
 .slot-card--removed .slot-card__state-note {
-  background: var(--color-tag-danger-bg);
   color: var(--color-state-danger-text);
 }
 
@@ -267,10 +268,11 @@ function replaceSlot() {
 }
 
 .slot-card__slot {
-  display: block;
+  display: inline-block;
   color: var(--color-support-action);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-heavy);
+  line-height: 22rpx;
 }
 
 .slot-card__title {
@@ -287,6 +289,7 @@ function replaceSlot() {
   margin-top: 8rpx;
   color: var(--color-text-secondary);
   font-size: var(--font-size-xs);
+  line-height: var(--line-height-normal);
 }
 
 .slot-card__skeleton-title {
@@ -322,6 +325,7 @@ function replaceSlot() {
   padding: 8rpx 14rpx;
   border-radius: var(--radius-pill);
   font-size: var(--font-size-xs);
+  line-height: 22rpx;
 }
 
 .slot-card__meta-item {
