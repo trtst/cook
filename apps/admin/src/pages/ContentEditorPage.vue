@@ -668,6 +668,13 @@ onMounted(() => {
             <p class="content-preview__summary">{{ form.summary || "未设置摘要" }}</p>
             <p v-if="form.heroNote" class="content-preview__note">{{ form.heroNote }}</p>
             <img v-if="form.coverImageUrl" :src="form.coverImageUrl" alt="封面图预览" class="content-preview__cover" :class="{ 'content-preview__cover--article': form.type === 'ARTICLE' && !isOfficialMessage }" />
+            <div
+              v-else
+              class="content-preview__cover-empty"
+              :class="{ 'content-preview__cover-empty--article': form.type === 'ARTICLE' && !isOfficialMessage }"
+            >
+              封面图占位
+            </div>
           </template>
           <div class="content-preview__body" v-html="previewHtml" />
         </article>
@@ -743,6 +750,23 @@ onMounted(() => {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+.content-preview__cover-empty {
+  display: flex;
+  min-height: 180px;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed #dcdfe6;
+  border-radius: 12px;
+  background: #f8fafc;
+  color: #909399;
+  font-size: 13px;
+}
+
+.content-preview__cover-empty--article {
+  min-height: 0;
+  aspect-ratio: 4 / 3;
 }
 
 .cover-editor__empty {

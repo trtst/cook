@@ -8,6 +8,7 @@ const copyFont = "SC-Medium";
 
 interface HomeTopicCoverInput {
   title: string;
+  subTitle: string;
   periodStartDate: string;
   periodEndDate: string;
   miniCodeDataUrl: string;
@@ -100,6 +101,7 @@ function titleLines(context: CanvasRenderingContext2D, value: string, maxWidth: 
 
 export async function createHomeTopicCover(input: HomeTopicCoverInput) {
   const title = input.title.trim();
+  const subTitle = input.subTitle.trim() || "把日常三餐，过得有滋有味";
   if (!title) throw new Error("请先填写本期标题");
   if (!input.miniCodeDataUrl.startsWith("data:image/")) throw new Error("本期小程序码暂不可用，请稍后重试");
 
@@ -139,7 +141,7 @@ export async function createHomeTopicCover(input: HomeTopicCoverInput) {
   context.shadowBlur = 7;
   context.fillText(date, dateCenter, 131, 330);
 
-  const maxTitleWidth = 760;
+  const maxTitleWidth = 900;
   let fontSize = 92;
   let lines = titleLines(context, title, maxTitleWidth, fontSize);
   while (lines.length > 2 && fontSize > 58) {
@@ -160,7 +162,7 @@ export async function createHomeTopicCover(input: HomeTopicCoverInput) {
   context.fillRect(250, ruleY, 600, 5);
   context.fillStyle = "#fff0d1";
   context.font = `500 38px "${copyFont}", sans-serif`;
-  context.fillText("— 把日常三餐，过得有滋有味", 550, ruleY + 32, 720);
+  context.fillText(subTitle, 550, ruleY + 32, 900);
 
   context.textAlign = "left";
   context.fillStyle = "#fff0d1";

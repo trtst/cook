@@ -567,6 +567,7 @@ async function generateCover() {
     const miniCode = await homeTopicsApi.getTopicMiniCode(current.id);
     const file = await createHomeTopicCover({
       title: current.title,
+      subTitle: current.subTitle,
       periodStartDate: current.periodStartDate,
       periodEndDate: current.periodEndDate,
       miniCodeDataUrl: miniCode.miniCodeDataUrl
