@@ -2,6 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development or superpowers:executing-plans to implement this plan task-by-task. Track steps with checkbox (`- [ ]`) syntax.
 
+> 当前周期规则见 `docs/api-contract.md`：新期为周日至周六，默认预约时间为周期开始日周日 00:00；既有周一开始期保留原日期。下方已完成项记录此前方案，不覆盖当前规则。
+
 **Goal:** 把现有扁平 HomeTopic 改造成按北京时间自然周展示的共享周刊，支持七天编排、草稿/预约发布、历史浏览、朋友分享和失效菜谱运营待办。
 
 **Architecture:** 继续使用平台所有的 `HomeTopic` 与 `HomeTopicItem`；周期开始日、发布状态、菜品星期归属和待办处理状态由 API/数据库维护。后台负责按星期编排、发布和处理待办；独立 Worker 执行预约发布；小程序按 API 返回的日期和星期展示并提供原生朋友分享。本计划主体不实现个人周刊、服务端模型集成、会员、付费、炊火币或签到；文末单列已确认并实现的 Codex 批量选题补充阶段，其真实认证线上验收仍待完成。

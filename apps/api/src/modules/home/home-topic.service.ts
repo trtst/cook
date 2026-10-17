@@ -138,16 +138,15 @@ function readIngredientNames(value: Prisma.JsonValue) {
   return [...names];
 }
 
-const weekdays: HomeTopicWeekday[] = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"];
+const weekdays: HomeTopicWeekday[] = ["SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];
 const weekdayNames: Record<HomeTopicWeekday, string> = {
   MONDAY: "周一", TUESDAY: "周二", WEDNESDAY: "周三", THURSDAY: "周四", FRIDAY: "周五", SATURDAY: "周六", SUNDAY: "周日"
 };
 
 function scheduledPublishDate(periodStartDate: string) {
   const start = new Date(`${periodStartDate}T00:00:00.000Z`);
-  const sunday = new Date(start.getTime() - 24 * 60 * 60 * 1000);
-  const dateText = sunday.toISOString().slice(0, 10);
-  return new Date(`${dateText}T15:00:00+08:00`);
+  const dateText = start.toISOString().slice(0, 10);
+  return new Date(`${dateText}T00:00:00+08:00`);
 }
 
 @Injectable()
@@ -389,6 +388,9 @@ export class HomeTopicService {
   }
 
   async createTopic(adminId: UUID, operationId: OperationId, body: CreateHomeTopicRequest): Promise<AdminHomeTopicsResponse> {
+    if (body.periodStartDate && this.periodDate(body.periodStartDate).getUTCDay() !== 0) {
+      throw new BadRequestException("新周刊周期必须从周日开始");
+    }
     const data = this.topicData(body);
     const requestHash = hashText(JSON.stringify(data));
 
@@ -456,7 +458,6 @@ export class HomeTopicService {
       if (current.version !== body.expectedVersion) {
         throw new ConflictException("本周灵感专题已被更新，请刷新后重试");
       }
-
       const fromStatus = current.status as HomeTopicStatus;
       if (fromStatus !== body.status) {
         const now = new Date();
@@ -770,6 +771,16 @@ export class HomeTopicService {
       if (current.version !== body.expectedVersion) {
         throw new ConflictException("本周灵感专题已被更新，请刷新后重试");
       }
+      if (body.periodStartDate) {
+        const requestedDate = this.periodDate(body.periodStartDate);
+        const existingDate = isoDate(current.periodStartDate);
+        const isUnchangedLegacyMonday = requestedDate.getUTCDay() === 1
+          && isoDate(requestedDate) === existingDate
+          && current.periodStartDate.getUTCDay() === 1;
+        if (requestedDate.getUTCDay() !== 0 && !isUnchangedLegacyMonday) {
+          throw new BadRequestException("新周刊周期必须从周日开始；已有周一开始的周刊可保留原日期");
+        }
+      }
 
       const unavailableItems = current.items.filter(item => !this.isPublicTopicItem(item));
       const unavailableIds = new Set(unavailableItems.map(item => item.recipeId));
@@ -955,7 +966,7 @@ export class HomeTopicService {
       const periodEnd = new Date(periodStart.getTime() + 6 * 24 * 60 * 60 * 1000);
       const periodDate = isoDate(periodStart);
       const dayOfWeek = periodStart.getUTCDay();
-      if (dayOfWeek !== 1) errors.push("周期开始日必须是周一");
+      if (dayOfWeek !== 0) errors.push("周期开始日必须是周日");
       if (seenDates.has(periodDate)) errors.push("批次内存在重复周期");
       seenDates.add(periodDate);
       const existingTopicId = topicByDate.get(periodDate) ?? null;
@@ -969,13 +980,13 @@ export class HomeTopicService {
       const plannedPublishAt = new Date(issue.plannedPublishAt);
       const expectedPublishAt = scheduledPublishDate(issue.periodStartDate);
       if (Number.isNaN(plannedPublishAt.getTime()) || plannedPublishAt.getTime() !== expectedPublishAt.getTime()) {
-        errors.push("计划发布时间必须是该周期前一个周日 15:00（上海时间）");
+        errors.push("计划发布时间必须是周期开始日周日 00:00（上海时间）");
       }
 
       const dayMap = new Map(issue.days.map(day => [day.weekday, day]));
       const missingDays = weekdays.filter(day => !dayMap.has(day));
       if (issue.days.length !== 7 || missingDays.length) {
-        errors.push(`必须恰好提供周一至周日七天菜单${missingDays.length ? `，缺少${missingDays.map(day => weekdayNames[day]).join("、")}` : ""}`);
+        errors.push(`必须恰好提供周日至周六七天菜单${missingDays.length ? `，缺少${missingDays.map(day => weekdayNames[day]).join("、")}` : ""}`);
       }
       const issueRecipeIds = new Set<number>();
       let recipeCount = 0;
@@ -1122,7 +1133,6 @@ export class HomeTopicService {
   }
 
   private topicData(body: CreateHomeTopicRequest | UpdateHomeTopicRequest) {
-    if (body.periodStartDate) this.assertPeriodStartDate(body.periodStartDate);
     return {
       title: body.title.trim(),
       subTitle: cleanText(body.subTitle),
@@ -1136,11 +1146,6 @@ export class HomeTopicService {
         recommendNote: cleanText(item.recommendNote)
       }))
     };
-  }
-
-  private assertPeriodStartDate(value: string) {
-    const date = this.periodDate(value);
-    if (date.getUTCDay() !== 1) throw new BadRequestException("周刊周期必须从周一开始");
   }
 
   private periodDate(value: string) {
