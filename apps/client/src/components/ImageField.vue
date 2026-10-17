@@ -3,6 +3,7 @@
     class="image-field"
     :class="[
       `image-field--${variant}`,
+      variant === 'cover' ? `image-field--cover-ratio-${coverRatio}` : '',
       imageSrc ? 'image-field--filled' : 'image-field--empty',
       `image-field--preview-${previewMode}`,
       { 'image-field--tap': selectOnTap }
@@ -40,10 +41,12 @@ import ImageLoader from "@/components/ImageLoader.vue";
 
 type ImageFieldVariant = "cover" | "card";
 type ImagePreviewMode = "fill" | "natural";
+type ImageCoverRatio = "3-4" | "4-3";
 
 const props = withDefaults(defineProps<{
   imageSrc?: string;
   variant?: ImageFieldVariant;
+  coverRatio?: ImageCoverRatio;
   previewMode?: ImagePreviewMode;
   title: string;
   description?: string;
@@ -53,6 +56,7 @@ const props = withDefaults(defineProps<{
 }>(), {
   imageSrc: "",
   variant: "card",
+  coverRatio: "3-4",
   previewMode: "fill",
   description: "",
   clearText: "删除",
@@ -114,8 +118,18 @@ function handleFieldClick() {
 }
 
 .image-field--cover {
+  display: block;
+  width: 100%;
   border-radius: 0;
   box-shadow: none;
+}
+
+.image-field--cover-ratio-3-4 {
+  padding-top: 133.3333%;
+}
+
+.image-field--cover-ratio-4-3 {
+  padding-top: 75%;
 }
 
 .image-field--cover.image-field--empty {

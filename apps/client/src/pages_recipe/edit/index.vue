@@ -3377,8 +3377,6 @@ function nextSlotKey() {
 
 .hero__cover {
   position: relative;
-  width: 100%;
-  aspect-ratio: 3 / 4;
   overflow: hidden;
   border-radius: 0;
   box-shadow: none;
