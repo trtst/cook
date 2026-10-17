@@ -101,6 +101,22 @@
                 </view>
               </view>
 
+              <view v-if="preparationEvents.length" class="preparation-list">
+                <view class="preparation-list__heading">饭局准备</view>
+                <view v-for="state in preparationEvents" :key="state.event.id" class="preparation-event">
+                  <view class="preparation-event__main">
+                    <text class="preparation-event__title">{{ state.event.title }}</text>
+                    <text class="preparation-event__status">{{ eventPreparationSummary(state) }}</text>
+                  </view>
+                  <view
+                    v-if="canConfirmEventReady(state)"
+                    class="preparation-event__action"
+                    :class="{ 'preparation-event__action--disabled': Boolean(preparationPendingKey) || submitting }"
+                    @click.stop="markEventReady(state)"
+                  >{{ preparationPendingKey === `ready:${state.event.id}` ? "保存中..." : "整顿已备齐" }}</view>
+                </view>
+              </view>
+
               <transition-group v-if="groups.length" name="group-list" tag="view" class="group-list">
                 <view
                   v-for="group in groups"
@@ -174,6 +190,12 @@
                                   :class="{ 'item-origin__text--link': canOpenSource(source) }"
                                   @click.stop="openSource(source)"
                                 >{{ sourceEntryText(source) }}</text>
+                                <view
+                                  v-if="eventPreparationAction(group, source)"
+                                  class="item-origin__preparation"
+                                  :class="{ 'item-origin__preparation--disabled': Boolean(preparationPendingKey) || submitting }"
+                                  @click.stop="toggleEventIngredientHome(group, source)"
+                                >{{ eventPreparationActionText(group, source) }}</view>
                                 <text v-if="index < sourceGroup.sources.length - 1" class="item-origin__separator">、</text>
                               </template>
                             </view>
@@ -388,6 +410,8 @@ import { computed, reactive, ref, watch } from "vue";
 import { onHide, onLoad, onShareAppMessage, onShow } from "@dcloudio/uni-app";
 import emptyStateArt from "@/assets/empty.png";
 import type { UUID } from "@/apis/http";
+import { shoppingApi as mealShoppingApi, type ShoppingGapPreviewItem } from "@/apis/shopping";
+import { mealApi, type DiningEventSummary } from "@/pages_meal/apis/meal";
 import { recipeApi, type IngredientCategorySummary, type IngredientSummary } from "@/apis/recipe";
 import { fridgeApi, type FridgeTraceSummary } from "../apis/fridge";
 import Empty from "@/components/Empty/Empty.vue";
@@ -424,12 +448,18 @@ interface GroupView {
   key: string;
   id: string;
   items: ShoppingListDetailItem[];
+  ingredientId: UUID | null;
   name: string;
   categoryName: string | null;
   quantityText: string;
   fridgeHint: string;
   checkedAt: string | null;
   sources: ShoppingItemSourceSummary[];
+}
+
+interface EventPreparationState {
+  event: DiningEventSummary;
+  gapItems: ShoppingGapPreviewItem[];
 }
 
 const NAV_FADE_DISTANCE = 132;
@@ -452,6 +482,8 @@ const submitting = ref(false);
 const errorText = ref("");
 const detail = ref<ShoppingListDetail | null>(null);
 const fridgeStates = ref<FridgeTraceSummary[]>([]);
+const eventPreparationById = ref<Record<string, EventPreparationState>>({});
+const preparationPendingKey = ref("");
 
 const addSheetVisible = ref(false);
 const ingredientLoading = ref(false);
@@ -507,6 +539,8 @@ const groups = computed<GroupView[]>(() => {
   return [...bucket.entries()]
     .map(([key, items]) => buildGroupView(key, items));
 });
+const preparationEvents = computed(() => Object.values(eventPreparationById.value)
+  .sort((left, right) => left.event.scheduledAt.localeCompare(right.event.scheduledAt)));
 const ingredientSearchMode = computed(() => Boolean(ingredientKeyword.value.trim()));
 const ingredientSearchLoading = computed(() => ingredientSearchMode.value && (ingredientSearchPending.value || ingredientLoading.value));
 const ingredientSearchItems = computed(() => ingredientLoadedKeyword.value === ingredientKeyword.value.trim() ? ingredientOptions.value : []);
@@ -725,6 +759,7 @@ async function requestDetail(options?: { silent?: boolean }) {
       detail.value = nextDetail;
       retentionNow.value = Date.now();
       fridgeStates.value = nextFridgeStates;
+      await loadEventPreparationStates(nextDetail);
     syncGroupUiState(detail.value.items);
     handlePendingAction();
   } catch (error) {
@@ -736,6 +771,121 @@ async function requestDetail(options?: { silent?: boolean }) {
     if (!silent) {
       loading.value = false;
     }
+  }
+}
+
+async function loadEventPreparationStates(list: ShoppingListDetail) {
+  const eventIds = [...new Set(list.items
+    .filter(item => item.status !== "REMOVED")
+    .flatMap(item => item.sources
+      .filter(source => source.sourceType === "EVENT" && source.diningEventId !== null)
+      .map(source => source.diningEventId as UUID)))];
+  const states = await Promise.all(eventIds.map(async eventId => {
+    try {
+      const [event, gapItems] = await Promise.all([
+        mealApi.getDiningEvent(eventId),
+        mealShoppingApi.previewEventGap(eventId)
+      ]);
+      return [String(eventId), { event, gapItems }] as const;
+    } catch {
+      return null;
+    }
+  }));
+  eventPreparationById.value = Object.fromEntries(states.filter((state): state is NonNullable<typeof state> => state !== null));
+}
+
+function findEventPreparationItem(group: GroupView, eventId: UUID) {
+  const state = eventPreparationById.value[String(eventId)];
+  if (!state || state.event.ingredientsReadyAt || state.event.cookingStartedAt) return null;
+  const normalizedName = group.name.trim().toLocaleLowerCase();
+  return state.gapItems.find(item => group.ingredientId
+    ? item.ingredientId === group.ingredientId
+    : item.name.trim().toLocaleLowerCase() === normalizedName) ?? null;
+}
+
+function eventPreparationAction(group: GroupView, source: ShoppingItemSourceSummary) {
+  if (source.sourceType !== "EVENT" || !source.diningEventId) return null;
+  const state = eventPreparationById.value[String(source.diningEventId)];
+  if (!state || state.event.organizerUid !== sessionStore.uid || state.event.status !== "CONFIRMED") return null;
+  return findEventPreparationItem(group, source.diningEventId);
+}
+
+function eventPreparationActionText(group: GroupView, source: ShoppingItemSourceSummary) {
+  const item = eventPreparationAction(group, source);
+  if (!item || !source.diningEventId) return "";
+  const key = `item:${source.diningEventId}:${item.sourceKey ?? ""}`;
+  if (preparationPendingKey.value === key) return "保存中...";
+  return item.preparationStatus === "HOME" ? "撤销家里有" : "家里有";
+}
+
+function eventPreparationSummary(state: EventPreparationState) {
+  if (state.event.cookingStartedAt) return "已经开始做饭";
+  if (state.event.ingredientsReadyAt) return "食材已备齐";
+  const pendingCount = state.gapItems.filter(item => item.preparationStatus === "OPEN").length;
+  return pendingCount ? `还有 ${pendingCount} 样待准备` : "食材已准备好";
+}
+
+function canConfirmEventReady(state: EventPreparationState) {
+  return state.event.organizerUid === sessionStore.uid
+    && state.event.status === "CONFIRMED"
+    && !state.event.ingredientsReadyAt
+    && !state.event.cookingStartedAt
+    && !state.gapItems.some(item => item.preparationStatus === "OPEN");
+}
+
+async function toggleEventIngredientHome(group: GroupView, source: ShoppingItemSourceSummary) {
+  if (submitting.value || preparationPendingKey.value || source.sourceType !== "EVENT" || !source.diningEventId) return;
+  const item = eventPreparationAction(group, source);
+  if (!item?.sourceKey) return;
+  const eventId = source.diningEventId;
+  const pendingKey = `item:${eventId}:${item.sourceKey}`;
+  preparationPendingKey.value = pendingKey;
+  try {
+    await mealApi.setEventPreparation(
+      eventId,
+      item.sourceKey,
+      item.preparationStatus !== "HOME",
+      createOperationId()
+    );
+    const [event, gapItems] = await Promise.all([
+      mealApi.getDiningEvent(eventId),
+      mealShoppingApi.previewEventGap(eventId)
+    ]);
+    eventPreparationById.value = {
+      ...eventPreparationById.value,
+      [String(eventId)]: { event, gapItems }
+    };
+  } catch (error) {
+    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "更新失败", icon: "none" });
+  } finally {
+    preparationPendingKey.value = "";
+  }
+}
+
+async function markEventReady(state: EventPreparationState) {
+  if (submitting.value || preparationPendingKey.value || !canConfirmEventReady(state)) return;
+  const eventId = state.event.id;
+  preparationPendingKey.value = `ready:${eventId}`;
+  const confirmed = await uniPlatform.feedback.confirm({
+    title: "确认已备齐",
+    content: "确认这顿饭需要的食材都已准备好？"
+  });
+  if (!confirmed) {
+    preparationPendingKey.value = "";
+    return;
+  }
+
+  try {
+    const event = await mealApi.prepareDiningEvent(eventId, createOperationId());
+    eventPreparationById.value = {
+      ...eventPreparationById.value,
+      [String(eventId)]: { ...state, event }
+    };
+    await uniPlatform.feedback.toast({ title: "这顿饭已备齐", icon: "success" });
+  } catch (error) {
+    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "确认失败", icon: "none" });
+  } finally {
+    preparationPendingKey.value = "";
   }
 }
 
@@ -986,6 +1136,7 @@ function buildGroupView(key: string, items: ShoppingListDetailItem[]): GroupView
     key,
     id: key,
     items,
+    ingredientId: primary.ingredientId,
     name: primary.name,
     categoryName: primary.categoryName,
     quantityText,
@@ -2115,6 +2266,64 @@ defineExpose({
   color: var(--color-support-action);
 }
 
+.preparation-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+  margin: 0 28rpx 20rpx;
+}
+
+.preparation-list__heading {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+.preparation-event {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  padding: 18rpx 20rpx;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-soft-card);
+}
+
+.preparation-event__main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6rpx;
+  min-width: 0;
+}
+
+.preparation-event__title {
+  overflow: hidden;
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.preparation-event__status {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+}
+
+.preparation-event__action,
+.item-origin__preparation {
+  flex: 0 0 auto;
+  color: var(--color-support-action);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+}
+
+.preparation-event__action--disabled,
+.item-origin__preparation--disabled {
+  opacity: 0.5;
+}
+
 .store-card__title {
   display: block;
   flex: 1;
@@ -2559,6 +2768,10 @@ defineExpose({
 
 .item-origin__text--link {
   cursor: pointer;
+}
+
+.item-origin__preparation {
+  margin-left: 12rpx;
 }
 
 .item-origin__separator {

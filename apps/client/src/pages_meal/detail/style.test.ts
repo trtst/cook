@@ -3,7 +3,6 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 const source = readFileSync(resolve(__dirname, "index.vue"), "utf8");
-const fontSource = readFileSync(resolve(__dirname, "../../assets/fonts/font.scss"), "utf8");
 const footerSource = readFileSync(resolve(__dirname, "../../components/Meal/MealFooterActions.vue"), "utf8");
 
 function expectIncludes(snippet: string) {
@@ -59,23 +58,13 @@ expectSelectorIncludes(".meal-hero--plan", [
 expectSelectorIncludes(".meal-hero::before", [
   "background: var(--color-surface-primary-panel-strong);"
 ]);
-expectIncludes('class="cookfont icon-done meal-shopping-preview__prepared-icon"');
-assert.ok(fontSource.includes('.icon-done::before {\n    content: "\\e614";\n}'));
-expectExcludes("meal-shopping-preview__prepared-mark");
+expectExcludes("meal-shopping-preview__prepared-icon");
+expectExcludes("meal-shopping-preview__state");
 expectIncludes(".meal-shopping-preview__row {\n  position: relative;");
-expectSelectorIncludes(".meal-shopping-preview__state", [
-  "justify-content: flex-end;",
-  "color: var(--color-text-tertiary);"
-]);
 expectSelectorIncludes(".meal-shopping-preview__item-title", [
   "display: flex;",
   "align-items: center;",
-  "gap: 8rpx;",
   "color: var(--color-primary);"
-]);
-expectSelectorIncludes(".meal-shopping-preview__prepared-icon", [
-  "line-height: 1;",
-  "font-size: 24rpx;"
 ]);
 expectExcludes("wx-button[disabled]");
 expectExcludes("button[disabled]");

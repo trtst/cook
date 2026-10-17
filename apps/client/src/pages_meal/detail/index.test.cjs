@@ -566,14 +566,17 @@ if (!hasAutomatorRuntime && nodeTest) {
     nodeAssert.match(confirmActionSource, /if \(!confirmed\) return;[\s\S]*?mealApi\.confirmPlanMenu\(/);
   });
 
-  nodeTest("采购预览隐藏菜谱来源名并提供饭局准备状态操作", () => {
+  nodeTest("饭局详情隐藏逐项准备状态，但保留主理人已备齐快捷操作", () => {
     const eventShoppingStart = detailPageSource.indexOf('v-if="eventDetail && isEventOrganizer && !eventClosed"');
     const eventShoppingEnd = detailPageSource.indexOf('v-else-if="showShoppingPanel"', eventShoppingStart);
     const eventShoppingSource = detailPageSource.slice(eventShoppingStart, eventShoppingEnd);
 
     nodeAssert.doesNotMatch(eventShoppingSource, /recipeTitles|menu-confirm__item-recipes/);
-    nodeAssert.match(eventShoppingSource, /我已备好/);
-    nodeAssert.match(eventShoppingSource, /已备齐/);
+    nodeAssert.doesNotMatch(eventShoppingSource, /meal-shopping-preview__state|我已备好|preparationStatusText/);
+    nodeAssert.match(eventShoppingSource, /eventDetail\.status === 'CONFIRMED' && !eventDetail\.ingredientsReadyAt && !eventDetail\.cookingStartedAt/);
+    nodeAssert.match(eventShoppingSource, /@click="handlePrepareDiningEventAction"/);
+    nodeAssert.match(detailPageSource, /mealApi\.prepareDiningEvent\(eventDetail\.value\.id, createOperationId\(\)\)/);
+    nodeAssert.doesNotMatch(detailPageSource, /mealApi\.setEventPreparation/);
     nodeAssert.match(detailPageSource, /mealApi\.startCooking\(/);
   });
 
@@ -635,28 +638,13 @@ if (!hasAutomatorRuntime && nodeTest) {
     nodeAssert.match(detailPageSource, /async function confirmAddToShoppingList\(\)[\s\S]*shoppingApi\.addEventToList[\s\S]*shoppingApi\.addPlanToList/);
   });
 
-  nodeTest("饭局完成后可勾选食材并二次确认批量标记没有", () => {
-    nodeAssert.match(detailPageSource, /饭局结束啦，要不要顺手看看食材还有没有/);
-    nodeAssert.match(detailPageSource, /class="meal-sheet-actions__primary"[\s\S]*家里没有了/);
-    nodeAssert.match(detailPageSource, /completedIngredientSelectedKeys\.has\(item\.key\)/);
-    nodeAssert.match(detailPageSource, /title: "整理食材"[\s\S]*将选中的 \$\{selected\.length\} 种食材从家里食材中移除吗？/);
-    nodeAssert.match(detailPageSource, /fridgeApi\.removeBatch\(batch\.map/);
-    nodeAssert.doesNotMatch(detailPageSource, /全部确认有|全部跳过|skipCompletedIngredientUpdate|fridgeApi\.markPresent/);
+  nodeTest("饭局完成后只保留回忆入口，不显示更新食材操作", () => {
+    nodeAssert.doesNotMatch(detailPageSource, /饭局结束啦，要不要顺手看看食材还有没有|更新食材|家里没有了/);
+    nodeAssert.doesNotMatch(detailPageSource, /completedIngredient|openCompletedIngredientSheet|fridgeApi\.removeBatch/);
     nodeAssert.match(detailPageSource, /mealActuallyCompleted = computed/);
     nodeAssert.match(detailPageSource, /eventDetail\.value\.status === "COMPLETED"[\s\S]*planDetail\.value\?\.status === "COMPLETED"/);
-    nodeAssert.match(detailPageSource, /shoppingApi\.previewEventGap[\s\S]*shoppingApi\.previewPlanGap/);
-    nodeAssert.match(detailPageSource, /new Map<string, CompletedIngredientItem>/);
-    nodeAssert.match(detailPageSource, /\.meal-footer__memory,\s*\.meal-sheet-actions__primary\s*\{[\s\S]*min-height: 84rpx;[\s\S]*border-radius: var\(--radius-pill\);/);
-    nodeAssert.match(detailPageSource, /\.meal-sheet-actions__primary--disabled\s*\{[\s\S]*background: var\(--color-surface-muted\);[\s\S]*color: var\(--color-text-secondary\);/);
-    nodeAssert.doesNotMatch(detailPageSource, /button\.meal-sheet-actions__primary--disabled\[disabled\]/);
-    nodeAssert.match(
-      detailPageSource,
-      /async function removeSelectedCompletedIngredients\(\)\s*\{\s*if \(completedIngredientBusy\.value \|\| !completedIngredientSelectedKeys\.value\.size\) return;/
-    );
-    nodeAssert.match(detailPageSource, /\.completed-ingredient-row__select\s*\{[\s\S]*flex: 0 0 40rpx;[\s\S]*height: 40rpx;/);
-    nodeAssert.match(detailPageSource, /\.completed-ingredient-row__check-icon\s*\{[\s\S]*font-size: 30rpx;/);
-    nodeAssert.match(detailPageSource, /\.completed-ingredient-row__cut-line\s*\{[\s\S]*transform: translateY\(-50%\) scaleX\(0\);[\s\S]*transition: transform 300ms ease;/);
-    nodeAssert.match(detailPageSource, /\.completed-ingredient-row__text--checked \.completed-ingredient-row__cut-line\s*\{[\s\S]*scaleX\(1\)/);
+    nodeAssert.match(detailPageSource, /v-if="endedActionsVisible && endedMemoryAction"/);
+    nodeAssert.match(detailPageSource, /class="meal-footer__memory" @click="handleFooterAction\(endedMemoryAction\.key\)"/);
     const completeActionStart = detailPageSource.indexOf("async function handleCompleteEventAction()");
     const completeActionEnd = detailPageSource.indexOf("async function handleCompletePlanAction()", completeActionStart);
     nodeAssert.doesNotMatch(detailPageSource.slice(completeActionStart, completeActionEnd), /openMemory\(\)/);

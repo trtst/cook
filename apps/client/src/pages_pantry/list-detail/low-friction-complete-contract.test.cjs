@@ -65,3 +65,19 @@ nodeTest("食材分类随名称排列，状态与来源位于右侧，来源箭�
   nodeAssert.match(pageSource, /item-row__origin-arrow--open/);
   nodeAssert.match(pageSource, /\.item-row__origin-arrow--open\s*\{[^}]*transform:\s*rotate\(-90deg\)/);
 });
+
+nodeTest("饭局准备操作只允许主理人在菜单确认后执行", () => {
+  const itemActionStart = pageSource.indexOf("async function toggleEventIngredientHome(");
+  const readyActionStart = pageSource.indexOf("async function markEventReady(", itemActionStart);
+  const pendingActionStart = pageSource.indexOf("function handlePendingAction(", readyActionStart);
+  const itemAction = pageSource.slice(itemActionStart, readyActionStart);
+  const readyAction = pageSource.slice(readyActionStart, pendingActionStart);
+
+  nodeAssert.match(pageSource, /class="preparation-list"/);
+  nodeAssert.match(pageSource, /source\.sourceType !== "EVENT" \|\| !source\.diningEventId/);
+  nodeAssert.match(pageSource, /state\.event\.organizerUid !== sessionStore\.uid \|\| state\.event\.status !== "CONFIRMED"/);
+  nodeAssert.match(pageSource, /!state \|\| state\.event\.ingredientsReadyAt \|\| state\.event\.cookingStartedAt/);
+  nodeAssert.match(pageSource, /!state\.gapItems\.some\(item => item\.preparationStatus === "OPEN"\)/);
+  nodeAssert.match(itemAction, /mealApi\.setEventPreparation\([\s\S]*?finally \{\s*preparationPendingKey\.value = "";/);
+  nodeAssert.match(readyAction, /feedback\.confirm\([\s\S]*?mealApi\.prepareDiningEvent\([\s\S]*?finally \{\s*preparationPendingKey\.value = "";/);
+});
