@@ -17,7 +17,7 @@ test("weekly mini-code scene resolves and loads the selected topic", () => {
 });
 
 test("weekly cover slots preserve the 4:3 display contract", () => {
-  assert.match(topicPage, /\.topic-summary__cover\s*\{[^}]*width:\s*267rpx;[^}]*height:\s*200rpx;/s);
+  assert.match(topicPage, /\.topic-summary__cover\s*\{[^}]*width:\s*267rpx;[^}]*aspect-ratio:\s*4\s*\/\s*3;[^}]*height:\s*auto;/s);
   assert.match(topicPage, /\.history-card\s*\{[^}]*width:\s*400rpx;[^}]*height:\s*300rpx;/s);
   assert.match(topicPage, /\.history-card__cover\s*\{[^}]*aspect-ratio:\s*4\s*\/\s*3;/s);
 });

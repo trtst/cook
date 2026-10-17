@@ -192,14 +192,15 @@ const { navBarTotalHeight, systemInfo } = useSystemInfo();
 const sessionStore = useSessionStore();
 const loginModalStore = useLoginModalStore();
 const NAV_FADE_DISTANCE = 96;
+const HISTORY_PREVIEW_LIMIT = 5;
 const WEEKDAYS: { weekday: HomeTopicWeekday; name: string }[] = [
+  { weekday: "SUNDAY", name: "周日" },
   { weekday: "MONDAY", name: "周一" },
   { weekday: "TUESDAY", name: "周二" },
   { weekday: "WEDNESDAY", name: "周三" },
   { weekday: "THURSDAY", name: "周四" },
   { weekday: "FRIDAY", name: "周五" },
-  { weekday: "SATURDAY", name: "周六" },
-  { weekday: "SUNDAY", name: "周日" }
+  { weekday: "SATURDAY", name: "周六" }
 ];
 const WEEKDAY_ICON_CLASS: Record<HomeTopicWeekday, string> = {
   MONDAY: "icon-week-mon",
@@ -216,7 +217,7 @@ const errorText = ref("");
 const topic = ref<HomeTopicDetail | null>(null);
 const topicId = ref(0);
 const historyBrowse = ref(false);
-const selectedWeekday = ref<HomeTopicWeekday>("MONDAY");
+const selectedWeekday = ref<HomeTopicWeekday>("SUNDAY");
 const scrollAnchor = ref("");
 const scrollTop = ref(0);
 const planSheetVisible = ref(false);
@@ -241,12 +242,14 @@ const emptyStyle = computed(() => ({
 
 const navTitle = computed(() => topic.value?.title || "本周灵感");
 const navProgress = computed(() => Math.min(1, Math.max(0, scrollTop.value / NAV_FADE_DISTANCE)));
-const visibleHistory = computed(() => topic.value?.history.slice(0, 5) ?? []);
+const visibleHistory = computed(() => topic.value?.history.slice(0, HISTORY_PREVIEW_LIMIT) ?? []);
 const weekDays = computed(() => {
   const current = topic.value;
   if (!current) return [];
   const available = new Set(current.items.map(item => item.weekday));
-  return WEEKDAYS.flatMap((item, index) => {
+  const startDay = new Date(`${current.periodStartDate}T00:00:00.000Z`).getUTCDay();
+  const orderedDays = startDay === 1 ? [...WEEKDAYS.slice(1), WEEKDAYS[0]!] : WEEKDAYS;
+  return orderedDays.flatMap((item, index) => {
     if (!available.has(item.weekday)) return [];
     const date = addDays(current.periodStartDate, index);
     return date ? [{ ...item, date, dateText: formatDateLabel(date) }] : [];
@@ -413,12 +416,14 @@ function selectWeekday(weekday: HomeTopicWeekday) {
 
 function selectInitialWeekday(value: HomeTopicDetail) {
   const available = new Set(value.items.map(item => item.weekday));
+  const startDay = new Date(`${value.periodStartDate}T00:00:00.000Z`).getUTCDay();
+  const orderedDays = startDay === 1 ? [...WEEKDAYS.slice(1), WEEKDAYS[0]!] : WEEKDAYS;
   if (!available.size) {
-    selectedWeekday.value = "MONDAY";
+    selectedWeekday.value = orderedDays[0]!.weekday;
     return;
   }
-  const currentWeekday = historyBrowse.value ? "MONDAY" : weekdayForDate(beijingToday());
-  selectedWeekday.value = available.has(currentWeekday) ? currentWeekday : available.has("MONDAY") ? "MONDAY" : WEEKDAYS.find(day => available.has(day.weekday))!.weekday;
+  const currentWeekday = historyBrowse.value ? orderedDays[0]!.weekday : weekdayForDate(beijingToday());
+  selectedWeekday.value = available.has(currentWeekday) ? currentWeekday : orderedDays.find(day => available.has(day.weekday))!.weekday;
 }
 
 function beijingToday() {
@@ -428,7 +433,7 @@ function beijingToday() {
 function weekdayForDate(value: string): HomeTopicWeekday {
   const [year, month, day] = value.split("-").map(Number);
   const dayIndex = new Date(Date.UTC(year, month - 1, day)).getUTCDay();
-  return WEEKDAYS[(dayIndex + 6) % 7].weekday;
+  return WEEKDAYS[dayIndex]!.weekday;
 }
 
 function addDays(value: string, count: number) {
@@ -602,7 +607,8 @@ function formatWeekRange(value: { periodStartDate: string; periodEndDate: string
 
 .topic-summary__cover {
   width: 267rpx;
-  height: 200rpx;
+  aspect-ratio: 4 / 3;
+  height: auto;
   flex: 0 0 auto;
   border-radius: var(--radius-xs);
   overflow: hidden;
@@ -981,6 +987,7 @@ function formatWeekRange(value: { periodStartDate: string; periodEndDate: string
 .history-row {
   display: flex;
   gap: var(--space-page);
+  padding: 0 var(--space-page);
 }
 
 .history-card {
